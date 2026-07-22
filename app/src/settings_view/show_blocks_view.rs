@@ -211,7 +211,9 @@ impl UserOwnedBlock {
                 .finish(),
         )
         .finish();
-        let url_row = Container::new(
+        // No Warp server means the block has no shareable URL, so the whole
+        // link row is omitted rather than rendered empty.
+        let url_row = block_url.map(|block_url| Container::new(
             Flex::row()
                 .with_child(
                     Shrinkable::new(
@@ -235,7 +237,7 @@ impl UserOwnedBlock {
                 .with_cross_axis_alignment(CrossAxisAlignment::Center)
                 .finish(),
         )
-        .finish();
+        .finish());
         let timestamp_row = Container::new(
             appearance
                 .ui_builder()
@@ -263,11 +265,14 @@ impl UserOwnedBlock {
 
         Container::new(
             ConstrainedBox::new(
-                Flex::column()
-                    .with_child(Shrinkable::new(1.0, command_row).finish())
-                    .with_child(Shrinkable::new(1., url_row).finish())
-                    .with_child(timestamp_row)
-                    .finish(),
+                {
+                    let mut column = Flex::column()
+                        .with_child(Shrinkable::new(1.0, command_row).finish());
+                    if let Some(url_row) = url_row {
+                        column = column.with_child(Shrinkable::new(1., url_row).finish());
+                    }
+                    column.with_child(timestamp_row).finish()
+                },
             )
             .with_max_height(90.)
             .finish(),

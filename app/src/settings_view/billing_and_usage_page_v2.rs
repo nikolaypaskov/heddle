@@ -152,7 +152,9 @@ enum AddonCreditsPanelState {
 enum AddonCreditsRestriction {
     UpgradeToBuild {
         link_text: &'static str,
-        url: String,
+        /// [`None`] when this build has no Warp server and therefore no billing
+        /// page; the prompt renders as plain text instead of a dead link.
+        url: Option<String>,
     },
     ContactAccountExecutive,
     ContactTeamAdmin,
@@ -1226,7 +1228,7 @@ impl BillingAndUsagePageV2View {
             AddonCreditsRestriction::UpgradeToBuild { link_text, url } => {
                 FormattedTextElement::new(
                     FormattedText::new([FormattedTextLine::Line(vec![
-                        FormattedTextFragment::hyperlink(link_text, url),
+                        FormattedTextFragment::hyperlink_or_plain(link_text, url),
                         FormattedTextFragment::plain_text(" to purchase add-on credits."),
                     ])]),
                     appearance.ui_font_size(),

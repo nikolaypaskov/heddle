@@ -2691,7 +2691,7 @@ impl BillingAndUsagePageView {
             let admin_panel_url = AdminActions::admin_panel_link_for_team(team_uid);
             let text_fragments = vec![
                 FormattedTextFragment::plain_text(ENTERPRISE_USAGE_CALLOUT_BODY_ADMIN_PREFIX),
-                FormattedTextFragment::hyperlink(
+                FormattedTextFragment::hyperlink_or_plain(
                     ENTERPRISE_USAGE_CALLOUT_BODY_ADMIN_LINK,
                     admin_panel_url,
                 ),
@@ -3122,7 +3122,7 @@ impl BillingAndUsagePageView {
                 }
             } else if team.billing_metadata.is_on_build_plan() {
                 vec![
-                    FormattedTextFragment::hyperlink(
+                    FormattedTextFragment::hyperlink_or_plain(
                         "Upgrade to Max",
                         UserWorkspaces::upgrade_link_for_team(team.uid),
                     ),
@@ -3130,7 +3130,7 @@ impl BillingAndUsagePageView {
                 ]
             } else if team.billing_metadata.is_on_build_max_plan() {
                 vec![
-                    FormattedTextFragment::hyperlink(
+                    FormattedTextFragment::hyperlink_or_plain(
                         "Switch to Business",
                         UserWorkspaces::upgrade_link_for_team(team.uid),
                     ),

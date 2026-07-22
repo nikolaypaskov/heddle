@@ -411,7 +411,7 @@ impl AmbientAgentRunner {
             let upgrade_link = AuthStateProvider::as_ref(ctx)
                 .get()
                 .user_id()
-                .map(UserWorkspaces::upgrade_link);
+                .and_then(UserWorkspaces::upgrade_link);
 
             let cli_mcp_servers =
                 match super::mcp_config::build_mcp_servers_from_specs(&args.mcp_specs) {

@@ -1291,7 +1291,8 @@ impl UserWorkspaces {
     pub fn generate_upgrade_link(&mut self, team_uid: ServerId, ctx: &mut ModelContext<Self>) {
         Self::on_generate_upgrade_link(
             self,
-            Ok(UserWorkspaces::upgrade_link_for_team(team_uid)),
+            UserWorkspaces::upgrade_link_for_team(team_uid)
+                .ok_or_else(|| warp_core::channel::BackendUnavailable::WarpServer.into()),
             ctx,
         );
     }

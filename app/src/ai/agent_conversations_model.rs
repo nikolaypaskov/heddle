@@ -1434,7 +1434,7 @@ impl AgentConversationsModel {
             AgentConversationNavigationSubject::ServerToken(server_token) => model
                 .entry_for_server_token(&server_token, app)
                 .and_then(|entry| model.resolve_entry_copy_link(&entry))
-                .or_else(|| Some(server_token.conversation_link())),
+                .or_else(|| server_token.conversation_link()),
         }
     }
 
@@ -1550,7 +1550,7 @@ impl AgentConversationsModel {
             .identity
             .server_conversation_token
             .as_ref()
-            .map(ServerConversationToken::conversation_link)
+            .and_then(ServerConversationToken::conversation_link)
     }
 
     fn entry_for_server_token(

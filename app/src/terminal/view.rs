@@ -20184,13 +20184,17 @@ impl TerminalView {
                     memory_id,
                     ..
                 } => {
-                    let oz_root_url = ChannelState::require_oz_root_url()?;
-                    let url = format!(
-                        "{oz_root_url}/memory/{}/memories/{}",
-                        urlencoding::encode(memory_store_id),
-                        urlencoding::encode(memory_id)
-                    );
-                    ctx.open_url(&url);
+                    // Agent memory lives in Oz; with no Oz backend there is
+                    // nothing to open. Skip the citation rather than aborting
+                    // the whole event handler.
+                    if let Some(oz_root_url) = ChannelState::oz_root_url() {
+                        let url = format!(
+                            "{oz_root_url}/memory/{}/memories/{}",
+                            urlencoding::encode(memory_store_id),
+                            urlencoding::encode(memory_id)
+                        );
+                        ctx.open_url(&url);
+                    }
                 }
             },
             AIBlockEvent::OpenAIFactCollection { sync_id } => {

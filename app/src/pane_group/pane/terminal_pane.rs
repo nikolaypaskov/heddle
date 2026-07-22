@@ -573,8 +573,9 @@ impl PaneContent for TerminalPane {
                 .next()
                 && let Some(token) = conversation.server_conversation_token()
             {
-                let url_string = token.conversation_link();
-                if let Ok(url) = url::Url::parse(&url_string) {
+                if let Some(url_string) = token.conversation_link()
+                    && let Ok(url) = url::Url::parse(&url_string)
+                {
                     return Ok(ShareableLink::Pane { url });
                 }
             }

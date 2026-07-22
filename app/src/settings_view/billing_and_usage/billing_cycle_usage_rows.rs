@@ -475,12 +475,12 @@ fn render_row_card(
     // Service accounts with a known UID deep-link to their Oz agent page,
     // mirroring the web admin panel's `getOzAgentHref` behavior.
     let agent_href = if is_service_account {
-        row.subject_uid.as_deref().map(|uid| {
-            format!(
+        row.subject_uid.as_deref().and_then(|uid| {
+            Some(format!(
                 "{}/agents/{}",
                 ChannelState::oz_root_url()?,
                 urlencoding::encode(uid)
-            )
+            ))
         })
     } else {
         None

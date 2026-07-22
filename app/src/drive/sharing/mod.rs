@@ -58,12 +58,12 @@ impl ShareableObject {
                 // Use the unified helper that checks both loaded conversation and historical metadata
                 BlocklistAIHistoryModel::as_ref(app)
                     .get_server_conversation_metadata(id)
-                    .map(|m| {
-                        format!(
+                    .and_then(|m| {
+                        Some(format!(
                             "{}/conversation/{}",
                             ChannelState::server_root_url()?,
                             m.server_conversation_token.as_str()
-                        )
+                        ))
                     })
             }
         }

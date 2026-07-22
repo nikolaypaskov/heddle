@@ -3671,16 +3671,18 @@ impl TeamsWidget {
     ) -> Box<dyn Element> {
         let mut section = Flex::row().with_cross_axis_alignment(CrossAxisAlignment::Center);
 
-        let (link_text, button_enabled) = match &team_metadata.invite_code {
-            Some(invite_code) => {
-                let link = format!(
-                    "{}{}{}",
-                    ChannelState::server_root_url()?,
-                    INVITE_LINK_PREFIX,
-                    invite_code.code
-                );
-                (link, true)
-            }
+        // An invite link is hosted by Warp. With no server there is no link to
+        // render, so fall through to the existing disabled state.
+        let invite_link = team_metadata.invite_code.as_ref().and_then(|invite_code| {
+            Some(format!(
+                "{}{}{}",
+                ChannelState::server_root_url()?,
+                INVITE_LINK_PREFIX,
+                invite_code.code
+            ))
+        });
+        let (link_text, button_enabled) = match invite_link {
+            Some(link) => (link, true),
             None => ("Failed to load invite link.".into(), false),
         };
         let theme = appearance.theme();

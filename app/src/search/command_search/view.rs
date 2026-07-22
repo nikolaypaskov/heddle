@@ -659,8 +659,8 @@ impl CommandSearchView {
             .with_cross_axis_alignment(CrossAxisAlignment::Center);
 
         let upgrade_link = team_uid
-            .map(UserWorkspaces::upgrade_link_for_team)
-            .unwrap_or_else(|| UserWorkspaces::upgrade_link(user_id));
+            .and_then(UserWorkspaces::upgrade_link_for_team)
+            .or_else(|| UserWorkspaces::upgrade_link(user_id));
 
         let link = if AuthStateProvider::as_ref(app)
             .get()
@@ -684,9 +684,12 @@ impl CommandSearchView {
                     "Upgrade".into(),
                     None,
                     Some(Box::new(move |ctx| {
-                        ctx.dispatch_typed_action(CommandSearchAction::OpenUpgradeLink(
-                            upgrade_link.clone(),
-                        ));
+                        // No Warp server means no billing page to upgrade on.
+                        if let Some(upgrade_link) = upgrade_link.clone() {
+                            ctx.dispatch_typed_action(CommandSearchAction::OpenUpgradeLink(
+                                upgrade_link,
+                            ));
+                        }
                     })),
                     self.upgrade_link.clone(),
                 )

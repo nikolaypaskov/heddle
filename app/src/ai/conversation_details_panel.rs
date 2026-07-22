@@ -331,7 +331,7 @@ impl ConversationDetailsData {
 
         let copy_link_url = conversation_id
             .as_ref()
-            .map(|id| ServerConversationToken::new(id.clone()).conversation_link());
+            .and_then(|id| ServerConversationToken::new(id.clone()).conversation_link());
 
         let harness = conversation
             .server_metadata()
