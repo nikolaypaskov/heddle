@@ -43,9 +43,13 @@ where
                     GraphQLError::HttpError { status, .. } => {
                         *status == StatusCode::UNAUTHORIZED || *status == StatusCode::FORBIDDEN
                     }
+                    // NoServerConfigured is not an auth rejection: there is no
+                    // server to reject us. Retrying or re-authenticating would
+                    // be pointless.
                     GraphQLError::RequestError(_)
                     | GraphQLError::StagingAccessBlocked
                     | GraphQLError::IapChallengeBlocked
+                    | GraphQLError::NoServerConfigured
                     | GraphQLError::ResponseError(_) => false,
                 };
                 if !base_client.is_auth_refresh_allowed() && is_auth_rejection {

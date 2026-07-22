@@ -7,8 +7,24 @@
 
 ## Verdict
 
-**101 call sites.** Bounded, mechanical, and concentrated behind an accessor layer that already
-existed. The choke-point strategy in the design spec is sound and the migration should proceed.
+**101 call sites**, confirmed empirically at **92 compile errors** across 8 crates. Bounded,
+mechanical, and concentrated behind an accessor layer that already existed. The choke-point
+strategy in the design spec is sound and the migration should proceed.
+
+**77% of the remaining work is a single pattern.** Of the 70 errors in the `warp` app crate, 54 are
+`Option<Cow<str>> doesn't implement Display` — i.e. a URL being interpolated into a `format!`. Each
+needs the same shape of guard; only the *handling* differs.
+
+| Error class | Count | Nature |
+|---|---|---|
+| `Display` on `Option<Cow<str>>` | 54 | URL interpolation — the dominant pattern |
+| `mismatched types` | 8 | Direct assignment/return |
+| `no method` (`into_owned`, `contains`) | 5 | Method called on the `Option` |
+| **non-exhaustive match** | **2** | **The compiler forcing a decision on the new error variants** |
+
+Those last two are the design working as intended: adding `GraphQLError::NoServerConfigured` and
+`warp_multi_agent_client::Error::NoServerConfigured` made every error-handling site declare what
+"no Warp server" means, rather than silently falling into a catch-all.
 
 For contrast, the failure mode we were testing for was "thousands of call sites touching the config
 directly", which would have meant abandoning the compile-time guarantee in favour of a runtime-only
@@ -52,8 +68,38 @@ forced.
 | `warp_core` | 13 | Accessors return `Option`; `server_root_domain() -> Option<Origin>`; `uses_staging_server()` returns `false`; the three `override_*` setters became no-ops with no config |
 | `http_client` | 1 | `.flatten()` over the candidate origins |
 | `isolation_platform` | 1 | Workload-token issuance returns `Err` with no audience |
-| `graphql` | 1 | **Open** — see category C |
-| `remote_server` | 1 | **Open** — see category C |
+| `graphql` | 1 | New `NoServerConfigured` variant; `build_graphql_request` returns `Result<_, GraphQLError>` and **refuses to build a request** rather than substituting a URL |
+| `remote_server` | 1 | `download_url`/`install_script`/`download_tarball_url` return `Option` |
+| `warp_server_client` | 5 | OAuth device-flow client is `Option`; Firebase token fetch bails; public API bails; new `GraphQLError` variant handled |
+| `warp_multi_agent_client` | 1 | **The Oz endpoint.** `endpoint_url` returns `Option`; the call site returns `Error::NoServerConfigured` |
+| `warp` (app) | **70 remaining** | Not yet done — see below |
+
+The `warp_multi_agent_client` change deserves note: `endpoint_url` builds the address of Warp's
+proprietary multi-agent (Oz) backend. With `server_config: None` it returns `None`. The Oz
+integration is not disabled by a flag someone could flip — **it has no address to call.**
+
+### Remaining work, by file
+
+| File | Errors |
+|---|---|
+| `app/src/server/server_api.rs` | 16 |
+| `app/src/auth/auth_manager.rs` | 5 |
+| `app/src/remote_server/ssh_transport/installation/scp_fallback.rs` | 4 |
+| `app/src/ai/conversation_details_panel.rs` | 3 |
+| `app/src/ai/agent_sdk/ambient.rs` | 3 |
+| `app/src/workspaces/user_workspaces.rs` | 2 |
+| `app/src/settings_view/privacy_page.rs` | 2 |
+| `app/src/settings_view/show_blocks_view.rs` | 2 |
+| ~20 further files | 1–2 each |
+
+### A measurement trap worth recording
+
+`cargo check -p <crate>` standalone resolves Cargo features differently from checking the same
+crate through `warp_tui`. Checking `warp_multi_agent_client` in isolation produced a spurious
+`E0599: Instrumented<...> doesn't satisfy Stream` (the `tracing-futures/futures-03` feature is
+enabled elsewhere in the full graph). It vanishes under the full check. **Always verify a crate
+through the real binary target before "fixing" an error that appeared when you changed how you were
+looking.**
 
 ## Handling categories
 

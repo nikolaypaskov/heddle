@@ -575,7 +575,7 @@ const INSTALL_SCRIPT_TEMPLATE: &str = include_str!("install_remote_server.sh");
 /// the unversioned path used by `script/deploy_remote_server`); pinned to
 /// `&version={v}` / `-{v}` on every other channel, where `v` falls back
 /// to `CARGO_PKG_VERSION` when no release tag is baked in.
-pub fn install_script(staging_tarball_path: Option<&str>) -> String {
+pub fn install_script(staging_tarball_path: Option<&str>) -> Option<String> {
     let (vq, version_suffix) = match ChannelState::channel() {
         Channel::Local | Channel::Oss => (String::new(), String::new()),
         Channel::Stable | Channel::Preview | Channel::Dev | Channel::Integration => {
@@ -583,8 +583,9 @@ pub fn install_script(staging_tarball_path: Option<&str>) -> String {
             (format!("&version={v}"), format!("-{v}"))
         }
     };
-    INSTALL_SCRIPT_TEMPLATE
-        .replace("{download_base_url}", &download_url())
+    let download_base_url = download_url()?;
+    Some(INSTALL_SCRIPT_TEMPLATE
+        .replace("{download_base_url}", &download_base_url)
         .replace("{channel}", download_channel())
         .replace("{install_dir}", &remote_server_dir())
         .replace("{binary_name}", binary_name())
@@ -595,17 +596,19 @@ pub fn install_script(staging_tarball_path: Option<&str>) -> String {
             "{no_http_client_exit_code}",
             &NO_HTTP_CLIENT_EXIT_CODE.to_string(),
         )
-        .replace("{staging_tarball_path}", staging_tarball_path.unwrap_or(""))
+        .replace("{staging_tarball_path}", staging_tarball_path.unwrap_or("")))
 }
 
 /// Construct the download URL from the server root URL.
 ///
 /// For example, given `https://app.warp.dev`, returns
 /// `https://app.warp.dev/download/cli`.
-fn download_url() -> String {
-    let base = ChannelState::server_root_url();
+/// Returns [`None`] when this build has no Warp server: the remote-server
+/// artifact is hosted by Warp, so there is nowhere to download it from.
+fn download_url() -> Option<String> {
+    let base = ChannelState::server_root_url()?;
     let base = base.trim_end_matches('/');
-    format!("{base}/download/cli")
+    Some(format!("{base}/download/cli"))
 }
 
 /// Maps the client's [`Channel`] to the server's download channel parameter.
@@ -639,15 +642,15 @@ fn version_query() -> String {
 /// Returns the full download URL for the remote server tarball,
 /// parameterized by the remote platform. Used by the SCP upload
 /// fallback to download the same artifact the shell script would fetch.
-pub fn download_tarball_url(platform: &RemotePlatform) -> String {
-    format!(
+pub fn download_tarball_url(platform: &RemotePlatform) -> Option<String> {
+    Some(format!(
         "{}?package=tar&os={}&arch={}&channel={}{}",
-        download_url(),
+        download_url()?,
         platform.os.as_str(),
         platform.arch.as_str(),
         download_channel(),
         version_query(),
-    )
+    ))
 }
 
 /// Exit code the install script uses when neither curl nor wget is

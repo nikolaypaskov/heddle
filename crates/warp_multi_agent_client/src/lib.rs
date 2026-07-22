@@ -24,6 +24,11 @@ pub enum Error {
 
     #[error("Multi-agent eventsource stream failed: {0:?}")]
     EventSource(Box<reqwest_eventsource::Error>),
+
+    /// This build has no Warp server, so there is no multi-agent (Oz) endpoint.
+    /// Heddle's OSS build has no proprietary agent backend to talk to.
+    #[error("no Warp server is configured for this build")]
+    NoServerConfigured,
 }
 
 cfg_if::cfg_if! {
@@ -52,7 +57,7 @@ pub async fn generate_multi_agent_output(
         .await
         .map_err(Error::Authentication)?;
     let is_passive = is_passive_suggestion_request(request);
-    let url = endpoint_url(is_passive);
+    let url = endpoint_url(is_passive).ok_or(Error::NoServerConfigured)?;
 
     let mut request_builder = client
         .http_client()
@@ -131,10 +136,10 @@ fn is_passive_suggestion_request(request: &warp_multi_agent_api::Request) -> boo
     })
 }
 
-fn endpoint_url(is_passive: bool) -> String {
-    format!(
+fn endpoint_url(is_passive: bool) -> Option<String> {
+    Some(format!(
         "{}/{}/{}",
-        ChannelState::server_root_url(),
+        ChannelState::server_root_url()?,
         if cfg!(feature = "agent_mode_evals") {
             "agent-mode-evals"
         } else {
@@ -145,7 +150,7 @@ fn endpoint_url(is_passive: bool) -> String {
         } else {
             "multi-agent"
         }
-    )
+    ))
 }
 
 fn ambient_policy(is_passive: bool) -> AmbientHeaderPolicy {

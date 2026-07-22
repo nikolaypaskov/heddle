@@ -71,7 +71,9 @@ pub struct AuthSession {
     client: Arc<http_client::Client>,
     auth_state: Arc<AuthState>,
     event_sender: async_channel::Sender<AuthEvent>,
-    oauth_client: OAuth2Client,
+    /// [`None`] when this build has no Warp server: there is no OAuth endpoint
+    /// to authenticate against.
+    oauth_client: Option<OAuth2Client>,
 }
 
 impl AuthSession {
@@ -162,7 +164,7 @@ impl AuthSession {
     pub async fn request_device_code(
         &self,
     ) -> StdResult<oauth2::StandardDeviceAuthorizationResponse, UserAuthenticationError> {
-        self.oauth_client
+        self.oauth_client()?
             .exchange_device_code()
             .request_async(self.client.as_ref())
             .await
@@ -176,7 +178,7 @@ impl AuthSession {
         timeout: Duration,
     ) -> StdResult<FirebaseToken, UserAuthenticationError> {
         let result = self
-            .oauth_client
+            .oauth_client()?
             .exchange_device_access_token(details)
             .request_async(
                 self.client.as_ref(),
@@ -195,9 +197,9 @@ impl AuthSession {
         ))
     }
 
-    fn create_oauth_client() -> OAuth2Client {
+    fn create_oauth_client() -> Option<OAuth2Client> {
         let server_root =
-            Url::parse(&ChannelState::server_root_url()).expect("Server root URL must be valid");
+            Url::parse(&ChannelState::server_root_url()?).expect("Server root URL must be valid");
         let token_url = server_root
             .join("/api/v1/oauth/token")
             .expect("Invalid token URL");
@@ -205,9 +207,20 @@ impl AuthSession {
             .join("/api/v1/oauth/device/auth")
             .expect("Invalid device URL");
 
-        oauth2::basic::BasicClient::new(oauth2::ClientId::new("warp-cli".to_string()))
-            .set_token_uri(oauth2::TokenUrl::from_url(token_url))
-            .set_device_authorization_url(oauth2::DeviceAuthorizationUrl::from_url(device_url))
+        Some(
+            oauth2::basic::BasicClient::new(oauth2::ClientId::new("warp-cli".to_string()))
+                .set_token_uri(oauth2::TokenUrl::from_url(token_url))
+                .set_device_authorization_url(oauth2::DeviceAuthorizationUrl::from_url(device_url)),
+        )
+    }
+
+    /// The OAuth client, or an error when this build has no Warp server.
+    fn oauth_client(&self) -> StdResult<&OAuth2Client, UserAuthenticationError> {
+        self.oauth_client.as_ref().ok_or_else(|| {
+            UserAuthenticationError::Unexpected(anyhow::anyhow!(
+                "no Warp server is configured for this build"
+            ))
+        })
     }
 
     fn fetch_auth_tokens(
@@ -216,10 +229,17 @@ impl AuthSession {
     ) -> BoxFuture<'static, StdResult<FirebaseAuthTokens, UserAuthenticationError>> {
         let client = self.client.clone();
         Box::pin(async move {
-            let firebase_api_key = ChannelState::firebase_api_key();
+            let (Some(firebase_api_key), Some(server_root)) = (
+                ChannelState::firebase_api_key(),
+                ChannelState::server_root_url(),
+            ) else {
+                return Err(UserAuthenticationError::Unexpected(anyhow::anyhow!(
+                    "no Warp server is configured for this build"
+                )));
+            };
             let url = token.access_token_url(&firebase_api_key);
             let request_body = token.access_token_request_body();
-            let proxy_url = token.proxy_url(&ChannelState::server_root_url(), &firebase_api_key);
+            let proxy_url = token.proxy_url(&server_root, &firebase_api_key);
             let response = match client
                 .post(&url)
                 .form(&request_body)

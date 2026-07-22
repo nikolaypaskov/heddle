@@ -53,6 +53,11 @@ pub enum GraphQLError {
     HttpError { status: StatusCode, body: String },
     #[error("Failed to deserialize GraphQL response: {0:?}")]
     ResponseError(#[source] reqwest::Error),
+    /// This build has no Warp server configured, so there is no GraphQL
+    /// endpoint to address. Heddle's OSS build never reaches a Warp server;
+    /// the request is refused here rather than being sent somewhere.
+    #[error("no Warp server is configured for this build")]
+    NoServerConfigured,
 }
 
 /// Options for sending a GraphQL request.
@@ -77,7 +82,7 @@ pub(crate) fn build_graphql_request<Q, V>(
     client: &http_client::Client,
     operation: cynic::Operation<Q, V>,
     options: RequestOptions,
-) -> Result<Request, reqwest::Error>
+) -> Result<Request, GraphQLError>
 where
     Q: QueryFragment + DeserializeOwned,
     V: QueryVariables + Serialize,
@@ -88,9 +93,16 @@ where
         .map(Cow::into_owned)
         .unwrap_or_default();
 
+    // No server root means no endpoint to build. Refuse here rather than
+    // constructing a placeholder URL, which would hide the failure and could
+    // send the payload somewhere unintended.
+    let Some(server_root) = ChannelState::server_root_url() else {
+        return Err(GraphQLError::NoServerConfigured);
+    };
+
     let graphql_endpoint = format!(
         "{}{}/graphql/v2?op={}",
-        ChannelState::server_root_url(),
+        server_root,
         options.path_prefix.unwrap_or_default(),
         &operation_name
     );
@@ -108,7 +120,7 @@ where
     }
 
     Ok(Request {
-        req: req.build()?,
+        req: req.build().map_err(GraphQLError::RequestError)?,
         operation_name,
     })
 }
@@ -235,7 +247,7 @@ macro_rules! define_operation {
             where
                 Self: Sized,
             {
-                let req = $crate::client::build_graphql_request(&client, self, options).map_err($crate::client::GraphQLError::RequestError);
+                let req = $crate::client::build_graphql_request(&client, self, options);
                 Box::pin(async move { $crate::client::send_graphql_request(&client, req?).await })
             }
         }
