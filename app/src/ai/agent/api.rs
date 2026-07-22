@@ -50,20 +50,22 @@ impl ServerConversationToken {
         &self.0
     }
 
-    pub fn debug_link(&self) -> String {
-        format!(
+    /// [`None`] when this build has no Warp server: these are links into
+    /// Warp's hosted conversation UI.
+    pub fn debug_link(&self) -> Option<String> {
+        Some(format!(
             "{}/debug/maa/{}",
-            ChannelState::require_server_root_url()?,
+            ChannelState::server_root_url()?,
             self.as_str()
-        )
+        ))
     }
 
-    pub fn conversation_link(&self) -> String {
-        format!(
+    pub fn conversation_link(&self) -> Option<String> {
+        Some(format!(
             "{}/conversation/{}",
-            ChannelState::require_server_root_url()?,
+            ChannelState::server_root_url()?,
             self.as_str()
-        )
+        ))
     }
 }
 

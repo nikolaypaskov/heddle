@@ -849,7 +849,7 @@ impl ConversationDetailsPanel {
             ..
         } = &data.mode
         {
-            let oz_root_url = ChannelState::require_oz_root_url()?;
+            let oz_root_url = ChannelState::oz_root_url()?;
             Some(format!("{oz_root_url}/runs/{task_id}"))
         } else {
             None

@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# Verifies that a built Heddle binary contains NO Warp first-party endpoints,
+# credentials, or telemetry destinations.
+#
+# This is the cheapest and strongest enforcement of Heddle's core claim. Unlike
+# a runtime egress test, it cannot be fooled by a code path that simply did not
+# execute during the observation window: if the string is not in the binary,
+# there is nothing to connect to.
+#
+# Usage: script/heddle/verify-no-warp-endpoints [path-to-binary]
+#        defaults to target/debug/warp-tui-oss
+#
+# Exit codes: 0 = clean, 1 = forbidden strings found, 2 = inconclusive.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)"
+cd "${REPO_ROOT}"
+
+BINARY="${1:-target/debug/warp-tui-oss}"
+
+if [[ ! -f "${BINARY}" ]]; then
+    echo "INCONCLUSIVE: binary not found at ${BINARY}"
+    echo "Build it first: cargo build -p warp_tui --bin warp-tui-oss"
+    exit 2
+fi
+
+# Strings that must never appear in a Heddle binary. Each is a first-party Warp
+# endpoint, credential, or telemetry destination.
+FORBIDDEN=(
+    "app.warp.dev"
+    "rtc.app.warp.dev"
+    "sessions.app.warp.dev"
+    "staging.warp.dev"
+    "oz.warp.dev"
+    "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs"  # Firebase auth API key
+    "dataplane.rudderstack.com"
+    "rudderlabs.com"
+)
+
+# Extract once into a temp file rather than re-running `strings` per needle.
+#
+# Do NOT pipe `strings` into `grep -q`: grep exits on first match, `strings`
+# dies of SIGPIPE (141), and under `set -o pipefail` the pipeline reports
+# failure — so the check silently reports "clean" exactly when a forbidden
+# string IS present. That bug produced a false PASS on a binary that provably
+# contained app.warp.dev.
+DUMP="$(mktemp -t heddle-strings)"
+trap 'rm -f "${DUMP}"' EXIT
+strings -a "${BINARY}" > "${DUMP}" 2>/dev/null || true
+
+# Sanity-check the instrument before trusting a clean result: the binary must
+# contain SOME extractable strings, or every pattern would trivially "pass".
+EXTRACTED="$(wc -l < "${DUMP}" | tr -d ' ')"
+if [[ "${EXTRACTED}" -lt 1000 ]]; then
+    echo "INCONCLUSIVE: only ${EXTRACTED} strings extracted from ${BINARY}."
+    echo "The scan cannot be trusted; check that 'strings' works on this file."
+    exit 2
+fi
+
+echo "Scanning ${BINARY} (${EXTRACTED} strings)..."
+
+FOUND=0
+for needle in "${FORBIDDEN[@]}"; do
+    count="$(grep -cF -- "${needle}" "${DUMP}" || true)"
+    if [[ "${count}" -gt 0 ]]; then
+        echo "  FORBIDDEN: ${needle} (${count} occurrence(s))"
+        FOUND=1
+    fi
+done
+
+if [[ "${FOUND}" -ne 0 ]]; then
+    echo
+    echo "FAIL: Heddle binary contains Warp first-party endpoints or credentials."
+    echo "The build is NOT endpoint-free. Find the reference with:"
+    echo "  grep -rn '<the string>' app crates --include='*.rs'"
+    exit 1
+fi
+
+echo "PASS: no Warp endpoints, credentials, or telemetry destinations found."

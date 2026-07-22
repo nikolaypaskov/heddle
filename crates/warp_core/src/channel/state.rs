@@ -52,8 +52,17 @@ impl ChannelState {
             config: ChannelConfig {
                 app_id,
                 logfile_name: "".into(),
-                server_config: Some(WarpServerConfig::production()),
-                oz_config: Some(OzConfig::production()),
+                // Heddle: the default state must carry NO Warp endpoints.
+                //
+                // This is the lazy global's initial value, used before any
+                // binary calls `ChannelState::set()`. Defaulting it to
+                // `production()` would both embed Warp's endpoints and Firebase
+                // key in every binary AND hand production configuration to any
+                // pre-`set` access — defeating the entire point of the fork.
+                // Non-OSS binaries overwrite this via `set()` with their own
+                // config, so `None` is the correct default for all channels.
+                server_config: None,
+                oz_config: None,
                 telemetry_config: None,
                 autoupdate_config: None,
                 crash_reporting_config: None,
