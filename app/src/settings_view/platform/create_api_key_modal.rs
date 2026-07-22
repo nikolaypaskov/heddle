@@ -30,7 +30,6 @@ use crate::view_components::dropdown::{DROPDOWN_PADDING, TOP_MENU_BAR_HEIGHT};
 use crate::view_components::{Dropdown as DropdownView, DropdownItem, FilterableDropdown};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
-const OZ_AGENTS_URL: &str = "https://oz.warp.dev/agents?new=true";
 const API_KEY_DOCS_URL: &str =
     "https://docs.warp.dev/reference/cli/api-keys/#personal-vs-agent-keys";
 
@@ -897,7 +896,7 @@ impl TypedActionView for CreateApiKeyModal {
                 ctx.notify();
             }
             CreateApiKeyModalAction::CreateNewAgent => {
-                ctx.open_url(OZ_AGENTS_URL);
+                // Heddle: no Oz backend, so there is no agent dashboard to open.
             }
         }
     }

@@ -34,7 +34,6 @@ use crate::workflows::workflow::{Argument, ArgumentType, Workflow};
 const DOCS_URL: &str = "https://docs.warp.dev/agent-platform/cloud-agents/overview";
 const ENV_DOCS_URL: &str =
     "https://docs.warp.dev/reference/cli/integration-setup#creating-an-environment";
-const OZ_URL: &str = "https://oz.warp.dev";
 
 const CONTENT_MAX_WIDTH: f32 = 720.;
 
@@ -209,13 +208,13 @@ impl CloudSetupGuideView {
         header_container.finish()
     }
 
-    /// Render the quick start banner with link to oz.warp.dev.
+    /// Render the quick start banner.
     fn render_quick_start_banner(&self, appearance: &Appearance) -> Box<dyn Element> {
         let theme = appearance.theme();
         let font_size = 16.;
 
         let text = Text::new_inline(
-            "Quick start: Visit oz.warp.dev for a UI-based setup experience.",
+            "Quick start: use the setup steps below.",
             appearance.ui_font_family(),
             font_size,
         )
@@ -659,7 +658,7 @@ impl TypedActionView for CloudSetupGuideView {
                 ));
             }
             CloudSetupGuideAction::VisitOz => {
-                ctx.open_url(OZ_URL);
+                // Heddle: no Oz backend, so there is no dashboard to visit.
                 send_telemetry_from_ctx!(
                     AgentManagementTelemetryEvent::SetupGuideStepRun {
                         step: SetupGuideStep::VisitOz
