@@ -1,0 +1,88 @@
+# Heddle
+
+A de-commercialized fork of the [Warp](https://github.com/warpdotdev/Warp) terminal.
+**No account. No telemetry. No connection to Warp's infrastructure.**
+
+## Installing (Linux x86_64)
+
+```bash
+shasum -a 256 -c heddle-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf heddle-x86_64-unknown-linux-gnu.tar.gz
+cd heddle-x86_64-unknown-linux-gnu
+./heddle-tui
+```
+
+Verify the checksum *before* extracting, and cross-check it against the public
+CI build log for this release.
+
+## macOS: build from source
+
+Heddle does **not** ship macOS binaries, deliberately.
+
+Notarizing them requires a paid Apple Developer ID this project does not have.
+The alternative — shipping unsigned binaries with `xattr -d com.apple.quarantine`
+instructions — was rejected. It normalizes bypassing a security control, and it
+leaves you unable to tell a genuine Heddle download from a tampered one. A
+checksum published beside the artefact does not solve that.
+
+Building from source needs no such compromise:
+
+```bash
+xcodebuild -downloadComponent MetalToolchain   # separate Xcode component
+brew install protobuf pkgconf
+cargo build --release -p warp_tui --bin heddle-tui
+./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
+```
+
+If someone later accepts the cost and the duty of protecting signing keys,
+signed macOS builds can follow.
+
+## What is verified in this build
+
+Every release artefact passes the privacy gate before publication:
+
+- No `app.warp.dev`, `rtc.app.warp.dev`, `sessions.app.warp.dev`,
+  `staging.warp.dev`, or `oz.warp.dev`
+- No Firebase authentication key
+- No RudderStack telemetry destinations
+
+The scanner is self-tested on every run: CI plants a canary endpoint in a copy
+of the binary and fails the build if the scanner does not reject it. A clean
+result from an uninstrumented scanner would be meaningless.
+
+**Scope of the claim.** This proves those strings are absent from the artefact.
+It does not prove the binary opens no sockets — an endpoint could in principle
+be assembled at runtime, and nothing can stop you typing `curl app.warp.dev`
+into your own terminal. The defensible claim is that **Heddle's own code
+initiates no connection to Warp's infrastructure.**
+
+Observed on a logged-out cold start, versus the unmodified upstream build:
+
+| Upstream did | Heddle |
+|---|---|
+| Fetched channel versions from Warp's server | nothing |
+| Opened a Warp Drive websocket, retried on failure | listener never starts |
+| Fetched privacy preferences and set `telemetry=true` | nothing |
+
+## Known limitations
+
+- **This is a terminal, not an agentic environment.** Warp's built-in agent runs
+  on their proprietary server and cannot work here. ACP support — bridging to a
+  local agent process — is designed but not implemented. Heddle will not be
+  described as agentic until permission handling and cancellation work
+  end-to-end.
+- **Linux x86_64 only** for binaries. See above.
+- **No cloud sync.** Warp Drive is removed, not reimplemented.
+- **Paid Warp features are not unlocked.** Entitlements were enforced
+  server-side; there is no server here to grant them.
+- **The icon is a functional placeholder**, not a designed identity.
+
+## Licence
+
+AGPL-3.0, inherited from upstream. `warpui` and `warpui_core` remain MIT.
+
+© 2026 Denver Technologies, Inc. Modified work © 2026 Heddle contributors.
+
+"Warp" is a trademark of Denver Technologies, Inc. Heddle is an independent
+fork, **not** affiliated with or endorsed by them. Please do not report Heddle
+issues to Warp.

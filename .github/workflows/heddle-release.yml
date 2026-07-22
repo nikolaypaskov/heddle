@@ -1,0 +1,137 @@
+name: Heddle release
+
+# Builds Heddle release artefacts and publishes them to a GitHub Release.
+#
+# The privacy gate runs against EVERY artefact before anything is published.
+# A release that phones home would defeat the entire point of the fork, so the
+# scan is a publish blocker, not an advisory check.
+#
+# Security note: values derived from the GitHub event (tag names, matrix
+# targets) are passed to shell steps via `env:` and referenced as quoted shell
+# variables. Nothing from the event payload is interpolated into `run:` text.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (for manual runs)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: heddle-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          # macOS is deliberately absent. Notarization needs a paid Apple
+          # Developer ID this project does not have, and shipping unsigned
+          # binaries would mean publishing `xattr -d com.apple.quarantine` as
+          # the official install path. That normalizes bypassing a security
+          # control AND leaves users unable to distinguish a real Heddle
+          # download from a tampered one -- a checksum hosted beside the
+          # artefact does not fix that. macOS users build from source until
+          # someone accepts the cost and the duty of protecting signing keys.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config unzip \
+            libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
+            libfontconfig1-dev libasound2-dev libclang-dev
+
+      - name: Install protoc with well-known types (Linux)
+        if: runner.os == 'Linux'
+        env:
+          PROTOC_VERSION: "25.1"
+        run: |
+          set -euxo pipefail
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          protoc --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: heddle-release-${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release -p warp_tui --bin heddle-tui
+
+      # A release artefact that phones home is worse than no release at all.
+      - name: Privacy gate (self-test, then scan)
+        run: |
+          set -euo pipefail
+          cp target/release/heddle-tui /tmp/heddle-canary
+          printf 'oz.warp.dev' >> /tmp/heddle-canary
+          if ./script/heddle/verify-no-warp-endpoints /tmp/heddle-canary; then
+            echo "::error::Scanner passed a binary with a planted endpoint; it is broken."
+            exit 1
+          fi
+          rm -f /tmp/heddle-canary
+          ./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
+
+      - name: Package
+        env:
+          TARGET_NAME: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          name="heddle-${TARGET_NAME}"
+          mkdir -p "dist/${name}"
+          cp target/release/heddle-tui "dist/${name}/"
+          cp README.md LICENSE-AGPL LICENSE-MIT "dist/${name}/"
+          tar -czf "dist/${name}.tar.gz" -C dist "${name}"
+          shasum -a 256 "dist/${name}.tar.gz" > "dist/${name}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: heddle-${{ matrix.target }}
+          path: dist/*.tar.gz*
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 \
+              --title "Heddle $RELEASE_TAG" \
+              --notes-file docs/RELEASE_NOTES.md
+          fi
