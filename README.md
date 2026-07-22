@@ -111,6 +111,11 @@ Two honest caveats:
 - **Help links still point to upstream documentation** (`docs.warp.dev`) in around 46 files, because
   those pages document features Heddle inherited. Following one is a deliberate user action, not
   something Heddle initiates — but it is a connection to Warp, and you should know it exists.
+- **The string rebrand is incomplete.** Menu items, dialogs and notifications say Heddle, but
+  roughly 600 further strings — mostly log messages and internal diagnostics — still say "Warp".
+  Two categories are left alone deliberately: `Warp OSC` markers are a wire-protocol identifier
+  that shell hooks depend on, and "Warp Drive" names an upstream feature Heddle removed, so
+  renaming it would imply Heddle has it.
 - Observed behaviour on a logged-out cold start is below; it is evidence, not proof.
 
 | Unmodified upstream did | Heddle |

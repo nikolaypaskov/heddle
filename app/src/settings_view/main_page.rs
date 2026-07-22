@@ -905,7 +905,7 @@ impl VersionInfoWidget {
                             color: ansi_red,
                         }),
                         Some(CallToActionContent {
-                            text: "Update Warp manually",
+                            text: "Update Heddle manually",
                             // note: the handler for this action is a no-op
                             action: MainPageAction::DownloadUpdate,
                         }),
@@ -916,7 +916,7 @@ impl VersionInfoWidget {
                             color: ansi_red,
                         }),
                         Some(CallToActionContent {
-                            text: "Update Warp manually",
+                            text: "Update Heddle manually",
                             // note: the handler for this action is a no-op
                             action: MainPageAction::DownloadUpdate,
                         }),

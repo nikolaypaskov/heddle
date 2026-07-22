@@ -1858,7 +1858,7 @@ pub fn init(app: &mut AppContext) {
 
     app.register_editable_bindings([EditableBinding::new(
         "input:insert_network_logging_workflow",
-        "Show Warp network log",
+        "Show Heddle network log",
         WorkspaceAction::OpenNetworkLogPane,
     )
     .with_enabled(|| ContextFlag::NetworkLogConsole.is_enabled())]);

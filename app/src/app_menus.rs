@@ -210,7 +210,7 @@ fn make_new_app_menu(ctx: &AppContext) -> Menu {
     menu_items.push(MenuItem::Standard(StandardAction::ShowAllApps));
     menu_items.push(MenuItem::Separator);
     menu_items.push(MenuItem::Custom(CustomMenuItem::new(
-        "Set Warp as Default Terminal",
+        "Set Heddle as Default Terminal",
         move |ctx| {
             DefaultTerminal::handle(ctx).update(ctx, |default_terminal, ctx| {
                 default_terminal.make_warp_default(ctx)
