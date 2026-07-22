@@ -168,18 +168,39 @@ Create `docker/heddle-egress/Dockerfile`:
 ```dockerfile
 FROM rust:1.92.0-bookworm
 
-# Mirrors script/linux/install_build_deps. protobuf-compiler is REQUIRED:
-# crates/remote_server/build.rs calls prost_build::compile_protos()
-# unconditionally, and warp_tui pulls remote_server in through the warp crate.
-# Bookworm ships protoc 3.21, comfortably above the proto3-optional floor of
-# 3.15 that upstream's script works around on older Ubuntu.
+# Mirrors script/linux/install_build_deps.
+#
+# strace is the observation instrument; curl backs the positive control.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        strace curl git ca-certificates \
+        strace curl git ca-certificates unzip \
         build-essential cmake pkg-config \
-        protobuf-compiler \
         libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
         libfontconfig1-dev libasound2-dev libclang-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# VERIFIED REQUIRED 2026-07-22: protoc must come from the official release,
+# NOT from apt. Debian's protobuf-compiler ships the binary WITHOUT the
+# well-known type definitions, so the build fails with:
+#   protoc failed: google/protobuf/descriptor.proto: File not found.
+# Both crates/remote_server/build.rs and the warp_multi_agent_api git
+# dependency compile protos, and the latter imports descriptor.proto.
+# Upstream extracts 'include/*' for exactly this reason
+# (script/linux/install_build_deps:60). Note macOS is unaffected because
+# `brew install protobuf` bundles the includes — a platform difference that
+# only showed up on the first container run.
+ARG PROTOC_VERSION=25.1
+RUN set -eux; \
+    arch="$(uname -m)"; \
+    case "$arch" in \
+      x86_64)  zip="protoc-${PROTOC_VERSION}-linux-x86_64.zip" ;; \
+      aarch64) zip="protoc-${PROTOC_VERSION}-linux-aarch_64.zip" ;; \
+      *) echo "unsupported arch: $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/protoc.zip \
+      "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${zip}"; \
+    unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'; \
+    rm /tmp/protoc.zip; \
+    protoc --version
 
 WORKDIR /src
 ENTRYPOINT ["/bin/bash", "-c"]

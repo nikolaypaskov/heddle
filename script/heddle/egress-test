@@ -1,0 +1,149 @@
+#!/bin/bash
+#
+# Observes every outbound network syscall the OSS build attempts on a cold start
+# with no user configuration, in the configuration we actually ship. Exits
+# non-zero if any non-loopback destination is contacted. This is Heddle's core
+# privacy guarantee, enforced mechanically rather than asserted.
+#
+# Observation is at the syscall level deliberately: it sits below every client
+# abstraction, so an in-process bypass (e.g. the raw reqwest client in
+# crates/mcp/src/runtime.rs) cannot hide from it.
+#
+# Exit codes: 0 = no egress, 1 = egress observed, 2 = inconclusive.
+# An inconclusive run must NEVER be read as a pass.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)"
+cd "${REPO_ROOT}"
+
+IMAGE="heddle-egress:local"
+LOG="target/heddle-egress.log"
+CONTROL_LOG="target/heddle-egress-control.log"
+MARKER="target/heddle-egress-markers.txt"
+RUN_SECONDS="${HEDDLE_EGRESS_RUN_SECONDS:-20}"
+TAG="v0.0.0-heddle-egress-test"
+
+mkdir -p target
+rm -f "${LOG}" "${CONTROL_LOG}" "${MARKER}"
+
+echo "Building observation image..."
+docker build -q -t "${IMAGE}" docker/heddle-egress
+
+echo "Building and tracing warp-tui-oss in SHIPPED configuration..."
+# Three things make this test the real artifact rather than a convenient one:
+#
+#  1. GIT_RELEASE_TAG is baked in. ChannelState::app_version() reads
+#     option_env!("GIT_RELEASE_TAG") (channel/state.rs:346). Without it the TUI
+#     autoupdater disables itself with "no release version tag baked into this
+#     build" (autoupdate.rs:210) and its egress silently vanishes from the test.
+#  2. The binary is staged into <root>/versions/<ver>/ so InstallLayout::detect()
+#     recognises a managed install (autoupdate.rs:101). Otherwise the updater
+#     disables itself with "not running from a managed install".
+#  3. -t allocates a TTY. The TUI uses an alt screen and exits immediately
+#     without one, producing an empty trace and a meaningless PASS.
+#
+# Skipping any of these yields a test that passes while the shipped build
+# phones home. That is the failure mode this harness exists to prevent.
+#
+# The Linux target dir lives outside /src so a container build cannot leave
+# artifacts in the host repository.
+docker run --rm -t \
+    --cap-add=SYS_PTRACE \
+    -v "${REPO_ROOT}:/src" \
+    -v heddle-cargo-registry:/usr/local/cargo/registry \
+    -v heddle-target-linux:/build-target \
+    "${IMAGE}" \
+    "set -euo pipefail
+     export CARGO_TARGET_DIR=/build-target
+     export GIT_RELEASE_TAG=${TAG}
+     cargo build -p warp_tui --bin warp-tui-oss
+
+     # Stage into a managed install layout: <root>/versions/<version>/<binary>
+     STAGE=/tmp/heddle-install/versions/${TAG}
+     mkdir -p \$STAGE
+     cp \$CARGO_TARGET_DIR/debug/warp-tui-oss \$STAGE/
+
+     # Cargo does track option_env! for cache invalidation, so the tag should be
+     # rebuilt correctly. This check is cheap insurance rather than a fix for a
+     # known bug: if the tag is ever absent the autoupdater silently disables
+     # itself and its egress disappears from the measurement, so we would rather
+     # report INCONCLUSIVE than a hollow PASS.
+     if grep -aq '${TAG}' \$STAGE/warp-tui-oss; then
+       echo 'TAG_BAKED=yes' >> /src/${MARKER}
+     else
+       echo 'TAG_BAKED=no' >> /src/${MARKER}
+     fi
+
+     export HOME=/tmp/heddle-empty-home
+     mkdir -p \$HOME
+
+     # Positive control: prove the tracer actually observes egress in this
+     # container before we trust it to report the absence of egress.
+     RC=0
+     strace -f -qq -e trace=network -o /src/${CONTROL_LOG} \
+        curl -s -m 5 https://example.com >/dev/null 2>&1 || RC=\$?
+     echo \"CONTROL_EXIT=\$RC\" >> /src/${MARKER}
+
+     # Subject under test. 'set -e' would abort on timeout's non-zero exit
+     # before the marker is written, so capture the code explicitly. 124 means
+     # it was still running when the timeout fired.
+     RC=0
+     timeout ${RUN_SECONDS} strace -f -qq -e trace=network \
+        -o /src/${LOG} \
+        \$STAGE/warp-tui-oss || RC=\$?
+     echo \"SUBJECT_EXIT=\$RC\" >> /src/${MARKER}"
+
+echo
+echo "Validating that the observation is meaningful..."
+
+# Validate the instrument before trusting the measurement.
+if ! grep -qE 'AF_INET' "${CONTROL_LOG}" 2>/dev/null; then
+    echo "INCONCLUSIVE: the positive control observed no network syscalls."
+    echo "strace is not attached correctly, so a PASS would be meaningless."
+    exit 2
+fi
+
+if ! grep -q 'TAG_BAKED=yes' "${MARKER}"; then
+    echo "INCONCLUSIVE: GIT_RELEASE_TAG is not baked into the binary, so the"
+    echo "autoupdater disabled itself and its egress is invisible to this test."
+    echo "Force a rebuild: docker volume rm heddle-target-linux"
+    exit 2
+fi
+
+# NOTE: an empty subject trace is NOT inconclusive. Once the fork is clean that
+# is precisely the expected result, and treating it as a failure would make the
+# target state unreachable. The SUBJECT_EXIT=124 marker is what proves the
+# process actually ran; liveness and emptiness are separate questions.
+if ! grep -q 'SUBJECT_EXIT=124' "${MARKER}"; then
+    echo "INCONCLUSIVE: the process exited before the ${RUN_SECONDS}s timeout."
+    echo "A short-lived process cannot demonstrate absence of egress."
+    echo "Markers: $(tr '\n' ' ' < "${MARKER}")"
+    exit 2
+fi
+
+echo "Analysing observed egress..."
+
+# trace=network covers connect/sendto/sendmsg, so UDP egress is caught too.
+# Anchor on the syscalls that carry a DESTINATION. Matching AF_INET anywhere
+# would flag socket(AF_INET, SOCK_STREAM, ...) -- merely creating a socket, with
+# nowhere to send -- as egress, producing false FAILs.
+# Loopback and AF_UNIX are expected; anything else is egress.
+VIOLATIONS="$(grep -E '(^|[0-9] +)(connect|sendto|sendmsg)\(' "${LOG}" 2>/dev/null \
+    | grep -E 'AF_INET' \
+    | grep -vE 'inet_addr\("127\.|inet_pton\(AF_INET6, "::1"' \
+    || true)"
+
+if [[ -n "${VIOLATIONS}" ]]; then
+    echo "FAIL: the OSS build attempted outbound network activity:"
+    echo "${VIOLATIONS}" | sed 's/^/  /' | head -40
+    echo
+    echo "Distinct destinations:"
+    echo "${VIOLATIONS}" | grep -oE 'inet_addr\("[0-9.]+"\)|sin6_addr=inet_pton\(AF_INET6, "[^"]+"' \
+        | sort -u | sed 's/^/  /'
+    echo
+    echo "Full trace: ${LOG}"
+    exit 1
+fi
+
+echo "PASS: zero non-loopback egress in ${RUN_SECONDS}s, shipped configuration."
