@@ -405,7 +405,10 @@ fn is_warp_server_origin(url: &reqwest::Url) -> bool {
         ChannelState::server_root_url(),
         ChannelState::rtc_http_url(),
     ]
-    .iter()
+    .into_iter()
+    // A build with no server config has no Warp origin, so nothing matches and
+    // no Warp headers or IAP tokens are ever attached.
+    .flatten()
     .filter_map(|candidate| reqwest::Url::parse(candidate.as_ref()).ok())
     .any(|candidate| candidate.origin() == url.origin())
 }

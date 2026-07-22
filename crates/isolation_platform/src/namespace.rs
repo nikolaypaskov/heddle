@@ -19,12 +19,20 @@ pub fn is_in_namespace_instance() -> bool {
 pub async fn issue_workload_token(
     duration: Option<Duration>,
 ) -> Result<WorkloadToken, IsolationPlatformError> {
+    // A build with no Warp server has no audience to issue a token for, so fail
+    // cleanly rather than inventing one.
+    let Some(audience) = ChannelState::workload_audience_url() else {
+        return Err(IsolationPlatformError::Other(anyhow::anyhow!(
+            "no workload audience URL: this build has no Warp server configured"
+        )));
+    };
+
     let mut nsc_command = Command::new("nsc");
     nsc_command
         .arg("auth")
         .arg("issue-id-token")
         .arg("--audience")
-        .arg(&*ChannelState::workload_audience_url())
+        .arg(&*audience)
         .arg("--output")
         .arg("json");
 

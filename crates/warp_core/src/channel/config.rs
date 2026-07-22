@@ -12,10 +12,13 @@ pub struct ChannelConfig {
     /// The name of the file to which logs should be written.
     pub logfile_name: Cow<'static, str>,
 
-    /// Configuration for talking to Warp's servers.
-    pub server_config: WarpServerConfig,
-    /// Configuration for Oz/ambient agents.
-    pub oz_config: OzConfig,
+    /// Configuration for talking to Warp's servers, or [`None`] if this build
+    /// has no Warp server to talk to. Heddle's OSS build passes [`None`] so the
+    /// endpoints are absent from the binary entirely.
+    pub server_config: Option<WarpServerConfig>,
+    /// Configuration for Oz/ambient agents, or [`None`] if this build has no Oz
+    /// backend.
+    pub oz_config: Option<OzConfig>,
     /// Configuration for telemetry sending, or [`None`] if telemetry should be
     /// disabled for this build.
     pub telemetry_config: Option<TelemetryConfig>,
