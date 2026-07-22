@@ -517,7 +517,9 @@ fn task_env_vars_include_parent_run_id_when_present() {
             .is_some_and(|value| !value.is_empty())
     );
 
-    let server_root_url = ChannelState::server_root_url().unwrap().into_owned();
+    let server_root_url = ChannelState::server_root_url()
+        .map(|url| url.into_owned())
+        .unwrap_or_default();
     if overrides_allowed && !server_root_url.is_empty() {
         assert_eq!(
             env_vars.get(&OsString::from(SERVER_ROOT_URL_OVERRIDE_ENV)),
@@ -527,7 +529,11 @@ fn task_env_vars_include_parent_run_id_when_present() {
         assert!(!env_vars.contains_key(&OsString::from(SERVER_ROOT_URL_OVERRIDE_ENV)));
     }
 
-    let ws_server_url = ChannelState::ws_server_url().unwrap().into_owned();
+    // None in a build with no Warp server: the override is then absent, which
+    // the else-branch below asserts.
+    let ws_server_url = ChannelState::ws_server_url()
+        .map(|url| url.into_owned())
+        .unwrap_or_default();
     if overrides_allowed && !ws_server_url.is_empty() {
         assert_eq!(
             env_vars.get(&OsString::from(WS_SERVER_URL_OVERRIDE_ENV)),
@@ -576,11 +582,12 @@ fn task_env_vars_omit_parent_run_id_when_absent() {
     )));
     assert_eq!(
         env_vars.contains_key(&OsString::from(SERVER_ROOT_URL_OVERRIDE_ENV)),
-        overrides_allowed && !ChannelState::server_root_url().unwrap().is_empty()
+        overrides_allowed
+            && ChannelState::server_root_url().is_some_and(|url| !url.is_empty())
     );
     assert_eq!(
         env_vars.contains_key(&OsString::from(WS_SERVER_URL_OVERRIDE_ENV)),
-        overrides_allowed && !ChannelState::ws_server_url().unwrap().is_empty()
+        overrides_allowed && ChannelState::ws_server_url().is_some_and(|url| !url.is_empty())
     );
 }
 

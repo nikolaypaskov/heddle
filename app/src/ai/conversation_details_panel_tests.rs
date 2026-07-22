@@ -438,13 +438,13 @@ fn test_oz_run_url_present_for_task_and_absent_for_conversation() {
         let task = create_test_task(task_id);
 
         app.update(|ctx| {
-            // Task mode → the chip should link to the Oz run view.
+            // Heddle: Oz is proprietary and absent from this build, so there is
+            // no run view to link to even for a task that has a task_id.
+            // Upstream asserted a URL ending in /runs/<task_id> here.
             let task_data = ConversationDetailsData::from_task(&task, None, None, ctx);
-            let url = ConversationDetailsPanel::oz_run_url(&task_data)
-                .expect("a task with a task_id should produce an Oz run URL");
             assert!(
-                url.ends_with(&format!("/runs/{task_id}")),
-                "unexpected Oz run URL: {url}"
+                ConversationDetailsPanel::oz_run_url(&task_data).is_none(),
+                "with no Oz backend configured, a task must not produce a run URL"
             );
         });
 
