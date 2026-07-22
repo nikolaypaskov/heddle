@@ -81,8 +81,16 @@ requires sudo, switches your active Xcode, and installs a large toolchain we do 
 
 ```bash
 cd /Users/npaskov/Development/warp
-cargo build --bin warp-tui-oss 2>&1 | tail -30
+set -o pipefail
+cargo build -p warp_tui --bin warp-tui-oss 2>&1 | tail -30
 ```
+
+`-p warp_tui` is REQUIRED. `crates/warp_tui` is not in the workspace's `default-members`
+(`Cargo.toml:11`), so a bare `cargo build --bin warp-tui-oss` does not select the package and
+fails to find the binary.
+
+`set -o pipefail` is REQUIRED wherever a build is piped into `tail`, or a failing build exits 0 and
+you will believe it succeeded.
 
 Expected: `Finished` with exit 0. This is a cold build of a very large workspace — allow 20–60
 minutes. If it fails, STOP and record the exact error; the whole plan depends on this.
@@ -131,8 +139,17 @@ Create `docker/heddle-egress/Dockerfile`:
 ```dockerfile
 FROM rust:1.92.0-bookworm
 
+# Mirrors script/linux/install_build_deps. protobuf-compiler is REQUIRED:
+# crates/remote_server/build.rs calls prost_build::compile_protos()
+# unconditionally, and warp_tui pulls remote_server in through the warp crate.
+# Bookworm ships protoc 3.21, comfortably above the proto3-optional floor of
+# 3.15 that upstream's script works around on older Ubuntu.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        strace ca-certificates pkg-config libssl-dev cmake \
+        strace curl git ca-certificates \
+        build-essential cmake pkg-config \
+        protobuf-compiler \
+        libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
+        libfontconfig1-dev libasound2-dev libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -146,9 +163,13 @@ Create `script/heddle/egress-test`:
 ```bash
 #!/bin/bash
 #
-# Observes every outbound connect() the OSS build attempts on a cold start with
-# no user configuration. Exits non-zero if any non-loopback destination is
-# contacted. This is Heddle's core privacy guarantee, enforced mechanically.
+# Observes every outbound network syscall the OSS build attempts on a cold start
+# with no user configuration, in the configuration we actually ship. Exits
+# non-zero if any non-loopback destination is contacted. This is Heddle's core
+# privacy guarantee, enforced mechanically rather than asserted.
+#
+# Exit codes: 0 = no egress, 1 = egress observed, 2 = inconclusive (do not
+# interpret an inconclusive run as a pass).
 
 set -euo pipefail
 
@@ -157,77 +178,107 @@ cd "${REPO_ROOT}"
 
 IMAGE="heddle-egress:local"
 LOG="target/heddle-egress.log"
+CONTROL_LOG="target/heddle-egress-control.log"
+MARKER="target/heddle-egress-markers.txt"
 RUN_SECONDS="${HEDDLE_EGRESS_RUN_SECONDS:-20}"
 
 mkdir -p target
+rm -f "${LOG}" "${CONTROL_LOG}" "${MARKER}"
 
 echo "Building observation image..."
 docker build -q -t "${IMAGE}" docker/heddle-egress >/dev/null
 
-echo "Building and tracing warp-tui-oss (cold start, empty HOME)..."
-# -t allocates a TTY: the TUI uses an alt screen and exits immediately without
-# one, which would produce an empty trace and a meaningless PASS.
+echo "Building and tracing warp-tui-oss in SHIPPED configuration..."
+# Three things make this test the real artifact rather than a convenient one:
+#
+#  1. GIT_RELEASE_TAG is baked in. ChannelState::app_version() reads
+#     option_env!("GIT_RELEASE_TAG") (channel/state.rs:346). Without it the TUI
+#     autoupdater disables itself with "no release version tag baked into this
+#     build" (autoupdate.rs:210) and its egress silently vanishes from the test.
+#  2. The binary is staged into <root>/versions/<ver>/ so InstallLayout::detect()
+#     recognises a managed install (autoupdate.rs:101). Otherwise the updater
+#     disables itself with "not running from a managed install".
+#  3. -t allocates a TTY. The TUI uses an alt screen and exits immediately
+#     without one, producing an empty trace and a meaningless PASS.
+#
+# Skipping any of these yields a test that passes while the shipped build
+# phones home. That is the failure mode this harness exists to prevent.
 docker run --rm -t \
     --cap-add=SYS_PTRACE \
     -v "${REPO_ROOT}:/src" \
     -v heddle-cargo-registry:/usr/local/cargo/registry \
     -v heddle-target-linux:/src/target-linux \
     "${IMAGE}" \
-    "set -e
+    "set -euo pipefail
      export CARGO_TARGET_DIR=/src/target-linux
-     cargo build --bin warp-tui-oss
+     export GIT_RELEASE_TAG=v0.0.0-heddle-egress-test
+     cargo build -p warp_tui --bin warp-tui-oss
+
+     # Stage into a managed install layout: <root>/versions/<version>/<binary>
+     STAGE=/tmp/heddle-install/versions/v0.0.0-heddle-egress-test
+     mkdir -p \$STAGE
+     cp \$CARGO_TARGET_DIR/debug/warp-tui-oss \$STAGE/
+
      export HOME=/tmp/heddle-empty-home
      mkdir -p \$HOME
-     # 'set -e' would abort on timeout's non-zero exit before the marker is
-     # written, so capture the code explicitly. 124 means it was still running
-     # when the timeout fired, which is exactly what we need to trust a PASS.
+
+     # Positive control: prove the tracer actually observes egress in this
+     # container before we trust it to report the absence of egress.
      RC=0
-     timeout ${RUN_SECONDS} strace -f -qq -e trace=connect \
+     strace -f -qq -e trace=network -o /src/${CONTROL_LOG} \
+        curl -s -m 5 https://example.com >/dev/null 2>&1 || RC=\$?
+     echo \"CONTROL_EXIT=\$RC\" > /src/${MARKER}
+
+     # Subject under test. 'set -e' would abort on timeout's non-zero exit
+     # before the marker is written, so capture the code explicitly. 124 means
+     # it was still running when the timeout fired.
+     RC=0
+     timeout ${RUN_SECONDS} strace -f -qq -e trace=network \
         -o /src/${LOG} \
-        \$CARGO_TARGET_DIR/debug/warp-tui-oss || RC=\$?
-     echo \"HEDDLE_EXIT=\$RC\" >> /src/${LOG}" \
-    2>&1 | tail -20
+        \$STAGE/warp-tui-oss || RC=\$?
+     echo \"SUBJECT_EXIT=\$RC\" >> /src/${MARKER}"
 
 echo
 echo "Validating that the observation is meaningful..."
 
-# A test that cannot fail proves nothing. Before trusting a PASS, confirm the
-# process actually ran long enough to phone home.
-if [[ ! -s "${LOG}" ]]; then
-    echo "INCONCLUSIVE: trace file is empty — the binary never started."
+# A test that cannot fail proves nothing. Validate the instrument before the
+# measurement. Markers live in their own file so an empty trace stays empty.
+if ! grep -qE 'AF_INET' "${CONTROL_LOG}" 2>/dev/null; then
+    echo "INCONCLUSIVE: the positive control observed no network syscalls."
+    echo "strace is not attached correctly, so a PASS would be meaningless."
     exit 2
 fi
 
-if ! grep -q 'HEDDLE_EXIT=124' "${LOG}"; then
+if [[ ! -s "${LOG}" ]]; then
+    echo "INCONCLUSIVE: subject trace is empty — the binary never started."
+    exit 2
+fi
+
+if ! grep -q 'SUBJECT_EXIT=124' "${MARKER}"; then
     echo "INCONCLUSIVE: the process exited before the ${RUN_SECONDS}s timeout."
     echo "A short-lived process cannot demonstrate absence of egress."
-    echo "Exit marker: $(grep -o 'HEDDLE_EXIT=[0-9]*' "${LOG}" || echo 'none')"
+    echo "Markers: $(tr '\n' ' ' < "${MARKER}")"
     exit 2
 fi
 
-if ! grep -qE 'connect\(' "${LOG}"; then
-    echo "INCONCLUSIVE: no connect() calls of any kind were traced, not even"
-    echo "loopback. strace is probably not attached correctly."
-    exit 2
-fi
+echo "Analysing observed egress..."
 
-echo "Analysing observed connections..."
-
-# strace renders AF_INET/AF_INET6 destinations with an inet_addr/inet_pton field.
-# Loopback and AF_UNIX are expected and ignored; anything else is egress.
-VIOLATIONS="$(grep -E 'connect\(.*(AF_INET|AF_INET6)' "${LOG}" 2>/dev/null \
+# trace=network covers connect/sendto/sendmsg, so UDP egress is caught too.
+# strace renders destinations with inet_addr/inet_pton. Loopback and AF_UNIX
+# are expected; anything else is egress.
+VIOLATIONS="$(grep -E '(AF_INET|AF_INET6)' "${LOG}" 2>/dev/null \
     | grep -vE 'inet_addr\("127\.|inet_pton\(AF_INET6, "::1"' \
     || true)"
 
 if [[ -n "${VIOLATIONS}" ]]; then
-    echo "FAIL: the OSS build attempted outbound connections:"
+    echo "FAIL: the OSS build attempted outbound network activity:"
     echo "${VIOLATIONS}" | sed 's/^/  /' | head -40
     echo
     echo "Full trace: ${LOG}"
     exit 1
 fi
 
-echo "PASS: zero non-loopback connections observed in ${RUN_SECONDS}s cold start."
+echo "PASS: zero non-loopback egress in ${RUN_SECONDS}s, shipped configuration."
 ```
 
 Then:
@@ -307,9 +358,16 @@ fn oss_channel_permits_loopback() {
 }
 
 #[test]
-fn oss_channel_permits_user_configured_third_party() {
+fn oss_channel_denies_third_party_until_user_opts_in() {
+    // Deny by default: even a benign host is blocked until registered.
+    let url = reqwest::Url::parse("https://api.example-provider.test/v1/messages").unwrap();
+    assert!(
+        !crate::is_egress_permitted_for_channel(&url, warp_core::channel::Channel::Oss),
+        "unregistered hosts must be denied by default"
+    );
+
     // A user's own model provider is their choice, not a phone-home.
-    let url = reqwest::Url::parse("https://api.anthropic.com/v1/messages").unwrap();
+    crate::allow_host("api.example-provider.test");
     assert!(crate::is_egress_permitted_for_channel(
         &url,
         warp_core::channel::Channel::Oss
@@ -338,20 +396,33 @@ Expected: FAIL — `cannot find function `is_egress_permitted_for_channel` in th
 
 Add to `crates/http_client/src/lib.rs`, immediately before `impl Client {` at line 138:
 
+Add `use std::collections::BTreeSet;` and `use std::sync::RwLock;` to the imports at the top of the
+file, then:
+
 ```rust
-/// Hosts that Heddle's OSS build must never contact. These are Warp's own
-/// first-party services; contacting any of them would defeat the point of the
-/// fork. Third-party hosts are permitted because they are only ever reached as
-/// a result of explicit user configuration (e.g. the user's own model provider).
-const DENIED_OSS_HOST_SUFFIXES: &[&str] = &[
-    "warp.dev",
-    "rudderstack.com",
-    "rudderlabs.com",
-    "sentry.io",
-    "firebaseio.com",
-    "googleapis.com",
-    "identitytoolkit.googleapis.com",
-];
+/// Hosts the user has explicitly opted into contacting — their own model
+/// provider, their MCP servers. Deny-by-default means nothing reaches the
+/// network unless it was either loopback or registered here.
+///
+/// An allowlist rather than a denylist is deliberate: a denylist silently fails
+/// open the moment upstream adds a new endpoint, which is precisely the drift
+/// this fork has to survive.
+static ALLOWED_HOSTS: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
+
+/// Registers a host the user has configured. Call this when loading user
+/// settings, not from anywhere that could be influenced by a server response.
+pub fn allow_host(host: impl Into<String>) {
+    if let Ok(mut hosts) = ALLOWED_HOSTS.write() {
+        hosts.insert(host.into());
+    }
+}
+
+fn is_host_allowed(host: &str) -> bool {
+    ALLOWED_HOSTS
+        .read()
+        .map(|hosts| hosts.contains(host))
+        .unwrap_or(false)
+}
 
 /// Whether `url` may be contacted from `channel`.
 ///
@@ -362,11 +433,13 @@ pub fn is_egress_permitted_for_channel(url: &reqwest::Url, channel: Channel) -> 
         return true;
     }
     let Some(host) = url.host_str() else {
+        // No host means no network egress (e.g. a data: URL).
         return true;
     };
-    !DENIED_OSS_HOST_SUFFIXES
-        .iter()
-        .any(|denied| host == *denied || host.ends_with(&format!(".{denied}")))
+    if host == "localhost" || host == "::1" || host.starts_with("127.") {
+        return true;
+    }
+    is_host_allowed(host)
 }
 
 /// Whether `url` may be contacted from the running channel.
@@ -389,43 +462,50 @@ In `crates/http_client/src/lib.rs`, add this helper inside `impl Client` (immedi
 `pub fn get` at line 216):
 
 ```rust
-    /// Panics in debug builds and logs in release builds when a request would
-    /// violate the OSS egress policy. Returns whether the request may proceed.
-    fn check_egress<U: IntoUrl + Clone>(url: U) -> bool {
-        let Ok(parsed) = url.into_url() else {
-            return true;
-        };
-        if is_egress_permitted(&parsed) {
-            return true;
+    /// Resolves the URL a request should actually target under the egress
+    /// policy. A denied request is redirected to a closed loopback port so it
+    /// fails fast and *nothing leaves the machine* — in release builds as well
+    /// as debug ones. Returning a bool and ignoring it would let release builds
+    /// keep sending, which is the failure mode this whole harness exists to
+    /// prevent.
+    fn egress_checked_url<U: IntoUrl + Clone>(url: U) -> reqwest::Url {
+        // RFC 863 discard port, on loopback, with nothing listening.
+        fn blocked() -> reqwest::Url {
+            reqwest::Url::parse("http://127.0.0.1:9/heddle-blocked")
+                .expect("static URL is valid")
         }
-        debug_assert!(
-            false,
-            "OSS egress policy violation: {}",
-            parsed.host_str().unwrap_or("<no host>")
-        );
-        log::error!(
-            "Blocked OSS egress to {}",
-            parsed.host_str().unwrap_or("<no host>")
-        );
-        false
+
+        match url.into_url() {
+            Ok(parsed) if is_egress_permitted(&parsed) => parsed,
+            Ok(parsed) => {
+                let host = parsed.host_str().unwrap_or("<no host>").to_owned();
+                debug_assert!(false, "OSS egress policy violation: {host}");
+                log::error!("Blocked OSS egress to {host}");
+                blocked()
+            }
+            // An unparseable URL could never have succeeded anyway.
+            Err(_) => blocked(),
+        }
     }
 ```
 
-Then in each of `get`, `post`, `put`, `patch`, and `delete` (lines 216–244), insert this as the
-first line of the body. Shown for `get`; repeat verbatim in the other four:
+Then rewrite each of `get`, `post`, `put`, `patch`, and `delete` (lines 216–244) to route through
+it. Shown for `get`; repeat the identical shape for the other four, changing only the verb:
 
 ```rust
     pub fn get<U: IntoUrl + Clone>(&self, url: U) -> RequestBuilder<'_> {
-        let _permitted = Self::check_egress(url.clone());
+        let url = Self::egress_checked_url(url);
         let include_warp_headers = Self::include_warp_http_headers(url.clone());
         let iap_token = self.iap_token_for(url.clone());
         self.builder(self.wrapped.get(url), include_warp_headers, iap_token)
     }
 ```
 
-Note: this logs and asserts but does not yet abort the request, because `RequestBuilder` has no
-error variant. Hard blocking arrives with the `Option` migration, which removes the URLs entirely.
-This step exists so violations are *loud* during development.
+`reqwest::Url` implements `IntoUrl + Clone`, so `include_warp_http_headers` and `iap_token_for`
+accept it unchanged.
+
+This is defence in depth, not the primary guarantee. The hard guarantee is the `ChannelConfig`
+`Option` migration in the follow-up plan, which deletes the endpoints from the binary entirely.
 
 - [ ] **Step 6: Verify the workspace still builds and lints clean**
 
@@ -790,6 +870,7 @@ remove it. Known candidates to check explicitly:
 - [ ] **Step 4: Run full presubmit**
 
 ```bash
+set -o pipefail
 ./script/presubmit 2>&1 | tail -30
 ```
 
@@ -816,6 +897,22 @@ input. Phases 4–6 (rebrand, release, ACP) → out of scope, separate plans.
 
 **Not covered by this plan, by design:** the CI merge gate. It belongs with release engineering
 (Phase 5) and would be premature while the egress test is still expected to fail.
+
+**Known residual gaps, to be closed by the follow-up plan.** Tasks 5 and 6 stop the *behaviour*
+but not the *lifecycle*, and that distinction matters:
+
+- Task 5 stops the collector's background work, but `TelemetryCollector` is still constructed and
+  registered (`app/src/lib.rs:1916`), and the shutdown path still calls flushing
+  (`app/src/lib.rs:1124`). Neither should exist on OSS.
+- Task 6 stops experiments being *applied*, but `ServerExperiments` still caches membership and
+  emits update events (`app/src/server/experiments/model.rs:46`), and production code still reads
+  that cached state (`app/src/workspaces/user_workspaces.rs:1617`). Remote state therefore still
+  reaches the client even though it no longer flips flags.
+- The egress harness covers the **TUI** only. The GUI needs its own headless approach (Xvfb or
+  equivalent) before Heddle can claim the guarantee for the app it actually ships.
+
+These are recorded rather than fixed here because each depends on the `ChannelConfig` `Option`
+migration, which removes the server clients that feed them.
 
 **Type consistency.** `is_egress_permitted_for_channel(&Url, Channel) -> bool` and
 `is_egress_permitted(&Url) -> bool` (Task 3); `should_disable_telemetry_for_channel(&self, Channel)
