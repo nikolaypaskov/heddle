@@ -8,7 +8,7 @@ use crate::ChannelState;
 fn url_for_font(family_name: &str, font_file: &str) -> String {
     format!(
         "{}/assets/client/static/fallback-fonts/{}/{}",
-        ChannelState::server_root_url(),
+        ChannelState::require_server_root_url()?,
         family_name,
         font_file
     )

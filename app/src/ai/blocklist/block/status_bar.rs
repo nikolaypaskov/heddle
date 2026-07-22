@@ -1176,7 +1176,7 @@ fn should_send_agent_tip_shown_analytics_event(app: &AppContext) -> bool {
         return true;
     }
 
-    ChannelState::server_root_url().contains("staging")
+    ChannelState::require_server_root_url()?.contains("staging")
 }
 
 fn send_agent_tip_shown_analytics_event(tip: String, app: &AppContext) {

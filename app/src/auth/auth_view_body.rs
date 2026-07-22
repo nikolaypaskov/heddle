@@ -848,8 +848,9 @@ impl TypedActionView for AuthViewBody {
                 self.auth_step = AuthStep::BrowserOpen;
 
                 AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                    let sign_in_url = auth_manager.sign_in_url();
-                    ctx.open_url(&sign_in_url);
+                    if let Some(sign_in_url) = auth_manager.sign_in_url() {
+                        ctx.open_url(&sign_in_url);
+                    }
                 });
             }
             AuthViewBodyAction::InitiateLoginLater => {
@@ -891,12 +892,13 @@ impl TypedActionView for AuthViewBody {
                     });
                 } else {
                     AuthManager::handle(ctx).update(ctx, |auth_manager, inner_ctx| {
-                        let sign_in_url = auth_manager.sign_in_url();
-                        inner_ctx.clipboard().write(ClipboardContent {
-                            plain_text: sign_in_url.clone(),
-                            paths: Some(vec![sign_in_url]),
-                            ..Default::default()
-                        });
+                        if let Some(sign_in_url) = auth_manager.sign_in_url() {
+                            inner_ctx.clipboard().write(ClipboardContent {
+                                plain_text: sign_in_url.clone(),
+                                paths: Some(vec![sign_in_url]),
+                                ..Default::default()
+                            });
+                        }
                     });
                 }
             }
@@ -907,8 +909,9 @@ impl TypedActionView for AuthViewBody {
                 self.auth_step = AuthStep::BrowserOpen;
 
                 AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                    let sign_up_url = auth_manager.sign_up_url();
-                    ctx.open_url(&sign_up_url);
+                    if let Some(sign_up_url) = auth_manager.sign_up_url() {
+                        ctx.open_url(&sign_up_url);
+                    }
                 });
             }
             AuthViewBodyAction::SignupAnonymousUser => {

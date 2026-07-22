@@ -88,15 +88,14 @@ const DATA_MANAGEMENT_LINK_TEXT: &str = "Visit the data management page";
 const PRIVACY_POLICY_TITLE: &str = "Privacy policy";
 const PRIVACY_POLICY_LINK_TEXT: &str = "Read Warp's privacy policy";
 
-pub fn data_management_url(custom_token: Option<&str>) -> String {
-    match custom_token {
-        Some(token) => format!(
-            "{}/data_management?customToken={}",
-            ChannelState::server_root_url(),
-            token
-        ),
-        None => format!("{}/data_management", ChannelState::server_root_url(),),
-    }
+/// [`None`] when this build has no Warp server: there is no hosted data
+/// management page to link to.
+pub fn data_management_url(custom_token: Option<&str>) -> Option<String> {
+    let server_root = ChannelState::server_root_url()?;
+    Some(match custom_token {
+        Some(token) => format!("{server_root}/data_management?customToken={token}"),
+        None => format!("{server_root}/data_management"),
+    })
 }
 
 pub struct PrivacyPageView {

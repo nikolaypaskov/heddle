@@ -1279,7 +1279,7 @@ impl UpdateEnvironmentForm {
     }
 
     fn github_connect_fallback_url(&self) -> String {
-        let base_url = format!("{}/oauth/connect/github", ChannelState::server_root_url());
+        let base_url = format!("{}/oauth/connect/github", ChannelState::require_server_root_url()?);
         self.auth_url_with_next(&base_url)
     }
 

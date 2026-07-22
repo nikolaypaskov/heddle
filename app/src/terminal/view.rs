@@ -20184,7 +20184,7 @@ impl TerminalView {
                     memory_id,
                     ..
                 } => {
-                    let oz_root_url = ChannelState::oz_root_url();
+                    let oz_root_url = ChannelState::require_oz_root_url()?;
                     let url = format!(
                         "{oz_root_url}/memory/{}/memories/{}",
                         urlencoding::encode(memory_store_id),

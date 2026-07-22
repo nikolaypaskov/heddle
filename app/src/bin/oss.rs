@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use warp_core::AppId;
-use warp_core::channel::{Channel, ChannelConfig, ChannelState, OzConfig, WarpServerConfig};
+use warp_core::channel::{Channel, ChannelConfig, ChannelState};
 
 // Simple wrapper around warp::run() for Warp OSS builds.
 fn main() -> Result<()> {
@@ -13,8 +13,11 @@ fn main() -> Result<()> {
         ChannelConfig {
             app_id: AppId::new("dev", "warp", "WarpOss"),
             logfile_name: "warp-oss.log".into(),
-            server_config: WarpServerConfig::production(),
-            oz_config: OzConfig::production(),
+            // Heddle: no Warp server, no Oz. These endpoints are absent from
+            // the binary entirely -- not disabled by a flag that could be
+            // flipped, and not reachable by any server-pushed configuration.
+            server_config: None,
+            oz_config: None,
             telemetry_config: None,
             crash_reporting_config: None,
             autoupdate_config: None,

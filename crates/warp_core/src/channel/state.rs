@@ -17,6 +17,14 @@ lazy_static! {
     static ref CHANNEL_STATE: Mutex<ChannelState> = Mutex::new(ChannelState::init());
 }
 
+/// Message used whenever an operation needs a Warp server that this build does
+/// not have. Heddle's OSS build carries no Warp endpoints at all.
+pub const NO_SERVER_CONFIGURED: &str = "no Warp server is configured for this build";
+
+/// Message used whenever an operation needs the Oz backend, which is
+/// proprietary and absent from this build.
+pub const NO_OZ_CONFIGURED: &str = "no Oz backend is configured for this build";
+
 #[cfg(feature = "test-util")]
 lazy_static! {
     static ref MOCK_SERVER: Mutex<mockito::ServerGuard> = Mutex::new(mockito::Server::new());
@@ -308,6 +316,31 @@ impl ChannelState {
                     .map(|config| config.server_root_url.clone())
             }
         }
+    }
+
+    /// The Warp server root, or an error when this build has no Warp server.
+    ///
+    /// Use this at call sites that can propagate an error, so "no server" is a
+    /// handled failure rather than a fabricated endpoint. `?` is a valid
+    /// expression inside `format!` arguments, so most call sites become
+    /// `ChannelState::require_server_root_url()?`.
+    pub fn require_server_root_url() -> anyhow::Result<Cow<'static, str>> {
+        Self::server_root_url().ok_or_else(|| anyhow::anyhow!(NO_SERVER_CONFIGURED))
+    }
+
+    /// The RTC HTTP root, or an error when this build has no Warp server.
+    pub fn require_rtc_http_url() -> anyhow::Result<Cow<'static, str>> {
+        Self::rtc_http_url().ok_or_else(|| anyhow::anyhow!(NO_SERVER_CONFIGURED))
+    }
+
+    /// The websocket server URL, or an error when this build has no Warp server.
+    pub fn require_ws_server_url() -> anyhow::Result<Cow<'static, str>> {
+        Self::ws_server_url().ok_or_else(|| anyhow::anyhow!(NO_SERVER_CONFIGURED))
+    }
+
+    /// The Oz root URL, or an error when this build has no Oz backend.
+    pub fn require_oz_root_url() -> anyhow::Result<Cow<'static, str>> {
+        Self::oz_root_url().ok_or_else(|| anyhow::anyhow!(NO_OZ_CONFIGURED))
     }
 
     pub fn workload_audience_url() -> Option<Cow<'static, str>> {

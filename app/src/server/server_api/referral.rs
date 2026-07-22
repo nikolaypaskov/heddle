@@ -50,7 +50,7 @@ impl ReferralsClient for ServerApi {
                 Ok(ReferralInfo {
                     url: format!(
                         "{}/referral/{}",
-                        ChannelState::server_root_url(),
+                        ChannelState::require_server_root_url()?,
                         user_output.user.referrals.referral_code
                     ),
                     code: user_output.user.referrals.referral_code,

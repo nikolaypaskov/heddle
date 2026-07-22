@@ -1339,7 +1339,7 @@ use crate::code::editor_management::CodeSource;
 
 /// Constructs the Oz dashboard URL for a given run ID.
 fn run_url(run_id: &str) -> String {
-    let oz_root_url = ChannelState::oz_root_url();
+    let oz_root_url = ChannelState::require_oz_root_url()?;
     format!("{oz_root_url}/runs/{run_id}")
 }
 

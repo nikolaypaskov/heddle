@@ -514,7 +514,7 @@ impl AmbientAgentRunner {
             };
 
             let should_open = args.open;
-            let oz_root_url = ChannelState::oz_root_url();
+            let oz_root_url = ChannelState::require_oz_root_url()?;
             let ai_client_clone = ai_client.clone();
             let spawn_future = async move {
                 let mut stream = Box::pin(spawn_task(request, ai_client_clone, Some(TASK_STATUS_POLLING_DURATION)));
@@ -841,7 +841,7 @@ impl AmbientAgentRunner {
             println!("\nAgent Runs ({}):", tasks.len());
         }
 
-        let oz_root_url = ChannelState::oz_root_url();
+        let oz_root_url = ChannelState::require_oz_root_url()?;
         for task in tasks {
             let state_emoji = Self::get_state_emoji(&task.state);
 
@@ -936,7 +936,7 @@ impl AmbientAgentRunner {
                     if let Some(id) = notebook_uid {
                         lines.push(format!(
                             "    Link: {}/drive/notebook/{}",
-                            ChannelState::server_root_url(),
+                            ChannelState::require_server_root_url()?,
                             id
                         ));
                     }

@@ -71,7 +71,13 @@ pub(super) async fn install(socket_path: &Path) -> Result<(), Error> {
     .map_err(Error::Other)?;
 
     log::info!("Running extraction via install script with tarball at {remote_tarball_path}");
-    let script = remote_server::setup::install_script(Some(&remote_tarball_path));
+    let script = remote_server::setup::install_script(Some(&remote_tarball_path)).ok_or_else(
+        || {
+            Error::Other(anyhow::anyhow!(
+                "no Warp server is configured for this build"
+            ))
+        },
+    )?;
 
     let output = remote_server::ssh::run_ssh_script(socket_path, &script, timeout)
         .await
@@ -137,7 +143,8 @@ async fn cached_remote_server_tarball(platform: &RemotePlatform) -> anyhow::Resu
         let _ = async_fs::remove_file(&cache_path).await;
     }
 
-    let url = remote_server::setup::download_tarball_url(platform);
+    let url = remote_server::setup::download_tarball_url(platform)
+        .context("no Warp server is configured for this build")?;
     log::info!(
         "Downloading remote-server tarball from {url} into cache at {}",
         cache_path.display()

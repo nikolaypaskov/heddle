@@ -189,23 +189,25 @@ impl UserWorkspaces {
         }
     }
 
-    pub fn upgrade_link(user_id: UserUid) -> String {
-        format!(
+    /// [`None`] when this build has no Warp server: there is no subscription
+    /// to upgrade and no billing page to send anyone to.
+    pub fn upgrade_link(user_id: UserUid) -> Option<String> {
+        Some(format!(
             "{}{}/{}/{}",
-            ChannelState::server_root_url(),
+            ChannelState::server_root_url()?,
             STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX,
             "user",
             user_id.as_str()
-        )
+        ))
     }
 
-    pub fn upgrade_link_for_team(team_uid: ServerId) -> String {
-        format!(
+    pub fn upgrade_link_for_team(team_uid: ServerId) -> Option<String> {
+        Some(format!(
             "{}{}/{}",
-            ChannelState::server_root_url(),
+            ChannelState::server_root_url()?,
             STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX,
             team_uid
-        )
+        ))
     }
 
     pub fn team_from_uid(&self, team_uid: ServerId) -> Option<&Team> {

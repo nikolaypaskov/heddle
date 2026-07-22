@@ -100,7 +100,7 @@ impl BlockClient for ServerApi {
         match response.share_block {
             ShareBlockResult::ShareBlockOutput(output) => {
                 let mut created_url =
-                    format!("{}{}", ChannelState::server_root_url(), output.url_ending);
+                    format!("{}{}", ChannelState::require_server_root_url()?, output.url_ending);
 
                 // If this is a preview build, ensure the link routes to a preview build.
                 if matches!(ChannelState::channel(), Channel::Preview) {
@@ -145,7 +145,7 @@ impl BlockClient for ServerApi {
         let auth_token = self.get_or_refresh_access_token().await?;
         let request_builder = self.base_client.http_client().post(format!(
             "{}/ai/generate_block_title",
-            ChannelState::server_root_url()
+            ChannelState::require_server_root_url()?
         ));
         let response = if let Some(token) = auth_token.as_bearer_token() {
             request_builder.bearer_auth(token)

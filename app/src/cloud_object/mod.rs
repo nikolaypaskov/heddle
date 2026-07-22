@@ -715,7 +715,7 @@ where
 
                 let mut link = format!(
                     "{}/drive/{}/{}-{}",
-                    ChannelState::server_root_url(),
+                    ChannelState::require_server_root_url()?,
                     object_type_for_link,
                     link_safe_name,
                     id.uid()

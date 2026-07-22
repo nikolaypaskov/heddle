@@ -24,7 +24,7 @@ pub const MAX_BYTES_SHAREABLE: usize = 5000;
 
 #[test]
 fn maybe_rewrite_web_url_to_shared_session_intent_rewrites_matching_web_url() {
-    let server_root = ChannelState::server_root_url();
+    let server_root = ChannelState::require_server_root_url()?;
     let web_url = Url::parse(&format!(
         "{server_root}/session/00000000-0000-0000-0000-000000000000?pwd=secret&preview=true"
     ))
@@ -52,7 +52,7 @@ fn maybe_rewrite_web_url_to_shared_session_intent_ignores_non_matching_host() {
 
 #[test]
 fn maybe_rewrite_web_url_to_shared_session_intent_ignores_invalid_session_id() {
-    let server_root = ChannelState::server_root_url();
+    let server_root = ChannelState::require_server_root_url()?;
     let web_url = Url::parse(&format!(
         "{server_root}/session/not-a-valid-session-id?pwd=secret&preview=true",
     ))

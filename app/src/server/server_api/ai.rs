@@ -2926,7 +2926,7 @@ impl AIClient for ServerApi {
         let auth_token = self.get_or_refresh_access_token().await?;
         let request_builder = self.base_client.http_client().post(format!(
             "{}/ai/generate_code_review_content",
-            ChannelState::server_root_url()
+            ChannelState::require_server_root_url()?
         ));
         let response = if let Some(token) = auth_token.as_bearer_token() {
             request_builder.bearer_auth(token)

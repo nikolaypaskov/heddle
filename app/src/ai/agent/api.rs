@@ -53,7 +53,7 @@ impl ServerConversationToken {
     pub fn debug_link(&self) -> String {
         format!(
             "{}/debug/maa/{}",
-            ChannelState::server_root_url(),
+            ChannelState::require_server_root_url()?,
             self.as_str()
         )
     }
@@ -61,7 +61,7 @@ impl ServerConversationToken {
     pub fn conversation_link(&self) -> String {
         format!(
             "{}/conversation/{}",
-            ChannelState::server_root_url(),
+            ChannelState::require_server_root_url()?,
             self.as_str()
         )
     }

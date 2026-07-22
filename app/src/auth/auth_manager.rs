@@ -775,57 +775,57 @@ impl AuthManager {
         state
     }
 
-    pub fn sign_up_url(&mut self) -> String {
+    pub fn sign_up_url(&mut self) -> Option<String> {
         let state = self.generate_auth_state();
-        format!(
+        Some(format!(
             // TODO: we should probably be able to remove the public_beta flag
             "{}/signup/remote?scheme={}&state={}&public_beta=true",
-            ChannelState::server_root_url(),
+            ChannelState::server_root_url()?,
             ChannelState::url_scheme(),
             state,
-        )
+        ))
     }
 
-    pub fn sign_in_url(&mut self) -> String {
+    pub fn sign_in_url(&mut self) -> Option<String> {
         let state = self.generate_auth_state();
-        format!(
+        Some(format!(
             "{}/login/remote?scheme={}&state={}",
-            ChannelState::server_root_url(),
+            ChannelState::server_root_url()?,
             ChannelState::url_scheme(),
             state,
-        )
+        ))
     }
 
     /// The upgrade confirmation page will kick the user back to the app with a refresh token
     /// if we send a `state` query param to /upgrade
-    pub fn upgrade_url(&mut self) -> String {
+    pub fn upgrade_url(&mut self) -> Option<String> {
         let state = self.generate_auth_state();
-        format!(
+        Some(format!(
             "{}/upgrade?scheme={}&state={}",
-            ChannelState::server_root_url(),
+            ChannelState::server_root_url()?,
             ChannelState::url_scheme(),
             state,
-        )
+        ))
     }
 
-    pub fn login_options_url(&mut self, custom_token: &str) -> String {
+    pub fn login_options_url(&mut self, custom_token: &str) -> Option<String> {
         let state = self.generate_auth_state();
-        format!(
+        Some(format!(
             "{}/login_options/{}?state={}",
-            ChannelState::server_root_url(),
+            ChannelState::server_root_url()?,
             custom_token,
             state,
-        )
+        ))
     }
 
-    pub fn link_sso_url(&mut self, email: &str) -> String {
+    pub fn link_sso_url(&mut self, email: &str) -> Option<String> {
         let state = self.generate_auth_state();
-        format!(
+        Some(format!(
             "{}/link_sso?email={}&state={}",
-            ChannelState::server_root_url(),
+            ChannelState::server_root_url()?,
             email,
             state,
-        )
+        ))
     }
 
     /// Validates and consumes the pending auth state token. Returns `true` if the

@@ -23554,7 +23554,7 @@ impl Workspace {
             update_browser_url(
                 Url::parse(&format!(
                     "{}/login?redirect_to={}",
-                    ChannelState::server_root_url(),
+                    ChannelState::require_server_root_url()?,
                     current_url.path()
                 ))
                 .ok(),
@@ -23562,7 +23562,7 @@ impl Workspace {
             );
         } else {
             update_browser_url(
-                Url::parse(&format!("{}/login", ChannelState::server_root_url())).ok(),
+                Url::parse(&format!("{}/login", ChannelState::require_server_root_url()?)).ok(),
                 true,
             );
         }
@@ -23738,7 +23738,7 @@ impl Workspace {
             // even if they have the app installed.
             let toast_message = format!(
                 "Have Warp installed but redirecting to download page?\nEnable Local Network Access for {} in your browser.",
-                ChannelState::server_root_url()
+                ChannelState::require_server_root_url()?
             );
             self.toast_stack.update(ctx, |toast_stack, ctx| {
                 toast_stack.add_persistent_toast(DismissibleToast::default(toast_message), ctx)

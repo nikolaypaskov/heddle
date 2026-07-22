@@ -251,7 +251,7 @@ impl ServerApi {
             .await
             .context("Failed to get access token for API request")?;
 
-        let url = format!("{}/api/v1/{}", crate::ChannelState::server_root_url(), path);
+        let url = format!("{}/api/v1/{}", crate::ChannelState::require_server_root_url()?, path);
 
         let mut request = self.base_client.http_client().get(&url);
         if let Some(token) = auth_token.as_bearer_token() {
@@ -288,7 +288,7 @@ impl ServerApi {
             .await
             .context("Failed to get access token for API request")?;
 
-        let url = format!("{}/api/v1/{}", crate::ChannelState::server_root_url(), path);
+        let url = format!("{}/api/v1/{}", crate::ChannelState::require_server_root_url()?, path);
 
         let mut request = self.base_client.http_client().post(&url).json(body);
         if let Some(token) = auth_token.as_bearer_token() {

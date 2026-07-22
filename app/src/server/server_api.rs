@@ -523,7 +523,7 @@ impl ServerApi {
     /// responsible for reading the stream and handling reconnection.
     ///
     /// The stream is served by warp-server-rtc (not the main warp-server pool),
-    /// so the URL is built from `ChannelState::rtc_http_url()` rather than
+    /// so the URL is built from `ChannelState::require_rtc_http_url()?` rather than
     /// `server_root_url()`.
     pub async fn stream_agent_events(
         &self,
@@ -543,7 +543,7 @@ impl ServerApi {
             .join("&");
         let url = format!(
             "{}/api/v1/agent/events/stream?{run_ids_param}&since={since_sequence}",
-            ChannelState::rtc_http_url()
+            ChannelState::require_rtc_http_url()?
         );
 
         let mut request = self.base_client.http_client().get(&url);
@@ -581,7 +581,7 @@ impl ServerApi {
         };
         let url = format!(
             "{}/api/v1/agent/events/stream?ancestor_run_id={}&since={since_sequence}{include_self_param}",
-            ChannelState::rtc_http_url(),
+            ChannelState::require_rtc_http_url()?,
             urlencoding::encode(ancestor_run_id),
         );
 
@@ -616,7 +616,7 @@ impl ServerApi {
             .join("&");
         let url = format!(
             "{}/api/v1/agent/events/stream?{run_ids_param}&since={since_sequence}",
-            ChannelState::rtc_http_url()
+            ChannelState::require_rtc_http_url()?
         );
 
         let mut request = self.base_client.http_client().get(&url);
@@ -645,7 +645,7 @@ impl ServerApi {
             .await
             .context("Failed to get access token for API request")?;
 
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
+        let url = format!("{}/api/v1/{}", ChannelState::require_server_root_url()?, path);
 
         let mut request = self.base_client.http_client().post(&url).json(body);
         if let Some(token) = auth_token.as_bearer_token() {
@@ -742,7 +742,7 @@ impl ServerApi {
             .await
             .context("Failed to get access token for API request")?;
 
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
+        let url = format!("{}/api/v1/{}", ChannelState::require_server_root_url()?, path);
 
         let mut request = self.base_client.http_client().put(&url).json(body);
         if let Some(token) = auth_token.as_bearer_token() {
@@ -795,7 +795,7 @@ impl ServerApi {
             .await
             .context("Failed to get access token for API request")?;
 
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
+        let url = format!("{}/api/v1/{}", ChannelState::require_server_root_url()?, path);
 
         let mut request = self.base_client.http_client().delete(&url);
         if let Some(token) = auth_token.as_bearer_token() {
@@ -828,7 +828,7 @@ impl ServerApi {
             .await
             .context("Failed to get access token for API request")?;
 
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
+        let url = format!("{}/api/v1/{}", ChannelState::require_server_root_url()?, path);
 
         let mut request = self.base_client.http_client().patch(&url).json(body);
         if let Some(token) = auth_token.as_bearer_token() {
@@ -856,7 +856,7 @@ impl ServerApi {
     pub async fn notify_login(&self) {
         match self.get_or_refresh_access_token().await {
             Ok(auth_token) => {
-                let url = format!("{}/client/login", ChannelState::server_root_url());
+                let url = format!("{}/client/login", ChannelState::require_server_root_url()?);
                 let mut request = self.base_client.http_client().post(&url);
                 if let Some(token) = auth_token.as_bearer_token() {
                     request = request.bearer_auth(token);
@@ -907,7 +907,7 @@ impl ServerApi {
             .context("Failed to get access token for API request")?;
         let url = format!(
             "{}/analytics/agent-tip-shown",
-            ChannelState::server_root_url()
+            ChannelState::require_server_root_url()?
         );
         let mut request = self
             .base_client
@@ -983,7 +983,7 @@ impl ServerApi {
 
         let request_builder = self.base_client.http_client().post(format!(
             "{}/ai/generate_input_suggestions",
-            ChannelState::server_root_url()
+            ChannelState::require_server_root_url()?
         ));
         let response = if let Some(token) = auth_token.as_bearer_token() {
             request_builder.bearer_auth(token)
@@ -1008,7 +1008,7 @@ impl ServerApi {
 
         let request_builder = self.base_client.http_client().post(format!(
             "{}/ai/relevant_files",
-            ChannelState::server_root_url()
+            ChannelState::require_server_root_url()?
         ));
         let response = if let Some(token) = auth_token.as_bearer_token() {
             request_builder.bearer_auth(token)
@@ -1037,12 +1037,12 @@ impl ServerApi {
             if #[cfg(feature = "agent_mode_evals")] {
                 let url = format!(
                     "{}/agent-mode-evals/generate_am_query_suggestions",
-                    ChannelState::server_root_url()
+                    ChannelState::require_server_root_url()?
                 );
             } else {
                 let url = format!(
                     "{}/ai/generate_am_query_suggestions",
-                    ChannelState::server_root_url()
+                    ChannelState::require_server_root_url()?
                 );
             }
         }
@@ -1070,7 +1070,7 @@ impl ServerApi {
         let auth_token = self.get_or_refresh_access_token().await?;
         let request_builder = self.base_client.http_client().post(format!(
             "{}/ai/predict_am_queries",
-            ChannelState::server_root_url()
+            ChannelState::require_server_root_url()?
         ));
         let response = if let Some(token) = auth_token.as_bearer_token() {
             request_builder.bearer_auth(token)
@@ -1097,7 +1097,7 @@ impl ServerApi {
         let request_builder = self
             .base_client
             .http_client()
-            .post(format!("{}/ai/transcribe", ChannelState::server_root_url()));
+            .post(format!("{}/ai/transcribe", ChannelState::require_server_root_url()?));
         let response = if let Some(token) = auth_token.as_bearer_token() {
             request_builder.bearer_auth(token)
         } else {
@@ -1155,7 +1155,7 @@ impl ServerApi {
             return Ok(cached);
         }
 
-        let time_endpoint = format!("{}/current_time", ChannelState::server_root_url());
+        let time_endpoint = format!("{}/current_time", ChannelState::require_server_root_url()?);
         log::info!("Sending server time request to {}", &time_endpoint);
         let res = self
             .base_client
@@ -1201,7 +1201,7 @@ impl ServerApi {
         include_changelogs: bool,
         is_daily: bool,
     ) -> Result<ChannelVersions> {
-        let mut url = Url::parse(&ChannelState::server_root_url())
+        let mut url = Url::parse(&ChannelState::require_server_root_url()?)
             .expect("Should not fail to parse server root URL");
         if is_daily {
             url.set_path("/client_version/daily");

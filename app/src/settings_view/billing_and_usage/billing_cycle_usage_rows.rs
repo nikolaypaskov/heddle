@@ -478,7 +478,7 @@ fn render_row_card(
         row.subject_uid.as_deref().map(|uid| {
             format!(
                 "{}/agents/{}",
-                ChannelState::oz_root_url(),
+                ChannelState::require_oz_root_url()?,
                 urlencoding::encode(uid)
             )
         })

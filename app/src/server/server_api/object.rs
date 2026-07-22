@@ -688,7 +688,7 @@ impl ObjectClient for ServerApi {
         let subscription = GetWarpDriveUpdates::build(());
 
         let result = start_graphql_streaming_operation(
-            &ChannelState::ws_server_url(),
+            &ChannelState::require_ws_server_url()?,
             init_payload,
             subscription,
             |res| {

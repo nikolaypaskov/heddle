@@ -80,24 +80,23 @@ impl UserOwnedBlock {
         !matches!(self.unshare_request_status, UnshareBlockRequestState::Done)
     }
 
-    fn block_url(&self) -> String {
+    /// [`None`] when this build has no Warp server: shared blocks are hosted by
+    /// Warp, so there is no URL to show.
+    fn block_url(&self) -> Option<String> {
+        let server_root = ChannelState::server_root_url()?;
         // New block IDs are 22 characters long and are accessible at /block/{id}, whereas as old
         // (hashId) block IDs are 6 characters long and are accessible at /{id}.
         let mut url = if self.id.len() == 22 {
-            format!(
-                "{}/block/{}",
-                ChannelState::server_root_url(),
-                self.id.as_str()
-            )
+            format!("{server_root}/block/{}", self.id.as_str())
         } else {
-            format!("{}/{}", ChannelState::server_root_url(), self.id.as_str())
+            format!("{server_root}/{}", self.id.as_str())
         };
 
         // If this is a preview build, ensure the link routes to a preview build.
         if matches!(ChannelState::channel(), Channel::Preview) {
             url.push_str("?preview=true");
         }
-        url
+        Some(url)
     }
 
     fn render_overflow_icon(&self, appearance: &Appearance, index: usize) -> Box<dyn Element> {

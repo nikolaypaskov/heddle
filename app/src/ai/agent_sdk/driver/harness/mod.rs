@@ -385,12 +385,12 @@ fn task_env_vars_for_harness_name(
         insert_non_empty_task_env_var(
             &mut env_vars,
             SERVER_ROOT_URL_OVERRIDE_ENV,
-            ChannelState::server_root_url().into_owned(),
+            ChannelState::require_server_root_url()?.into_owned(),
         );
         insert_non_empty_task_env_var(
             &mut env_vars,
             WS_SERVER_URL_OVERRIDE_ENV,
-            ChannelState::ws_server_url().into_owned(),
+            ChannelState::require_ws_server_url()?.into_owned(),
         );
         if let Some(url) = ChannelState::session_sharing_server_url()
             .map(Cow::into_owned)

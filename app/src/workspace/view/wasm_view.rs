@@ -24,7 +24,7 @@ const TRANSCRIPT_PANEL_WIDTH: f32 = 280.0;
 
 /// Builds the OZ runs URL for viewing all cloud runs.
 fn build_oz_runs_url() -> String {
-    format!("{}/runs", ChannelState::oz_root_url())
+    format!("{}/runs", ChannelState::require_oz_root_url()?)
 }
 
 impl Workspace {

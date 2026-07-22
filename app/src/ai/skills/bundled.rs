@@ -469,7 +469,7 @@ pub(crate) fn build_bundled_skill_context(
     [
         (
             "warp_server_url".to_owned(),
-            ChannelState::server_root_url().into_owned(),
+            ChannelState::require_server_root_url()?.into_owned(),
         ),
         (
             "warp_cli_binary_name".to_owned(),

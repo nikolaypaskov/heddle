@@ -294,7 +294,7 @@ pub(crate) fn should_disable_snapshot(ctx: &AppContext) -> bool {
 /// Builds the Oz web URL for a server-assigned agent run ID.
 #[cfg_attr(not(feature = "tui"), allow(dead_code))]
 pub fn oz_run_url(run_id: &str) -> String {
-    format!("{}/runs/{run_id}", ChannelState::oz_root_url())
+    format!("{}/runs/{run_id}", ChannelState::require_oz_root_url()?)
 }
 
 fn resolve_runtime_skills(

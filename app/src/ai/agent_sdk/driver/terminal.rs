@@ -235,7 +235,7 @@ impl TerminalDriver {
         // When sharing is disabled (or running against ngrok), leave both halves
         // as None so that `wait_for_session_shared` returns immediately.
         let sharing_expected =
-            should_share && !warp_core::channel::ChannelState::server_root_url().contains("ngrok");
+            should_share && !warp_core::channel::ChannelState::require_server_root_url()?.contains("ngrok");
         let (mut session_share_tx, session_share_rx) = if sharing_expected {
             if !FeatureFlag::CreatingSharedSessions.is_enabled() {
                 // Session sharing was requested but the feature is not enabled for this

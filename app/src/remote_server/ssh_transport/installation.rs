@@ -76,7 +76,12 @@ pub(super) async fn install_binary(socket_path: &Path) -> InstallOutcome {
 /// Runs the install script on the remote host to download and install the
 /// binary directly from the CDN.
 async fn install_on_server(socket_path: &Path) -> Result<(), Error> {
-    let script = remote_server::setup::install_script(None);
+    // No Warp server means no CDN to install the remote server from.
+    let script = remote_server::setup::install_script(None).ok_or_else(|| {
+        Error::Other(anyhow::anyhow!(
+            "no Warp server is configured for this build"
+        ))
+    })?;
     match remote_server::ssh::run_ssh_script(
         socket_path,
         &script,

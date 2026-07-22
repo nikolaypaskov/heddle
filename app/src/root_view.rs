@@ -2267,18 +2267,23 @@ impl RootView {
                 ctx.notify();
             }
             AgentOnboardingEvent::UpgradeRequested => {
-                let upgrade_url = AuthManager::handle(ctx)
-                    .update(ctx, |auth_manager, _| auth_manager.upgrade_url());
-                ctx.open_url(&upgrade_url);
+                // Heddle: no Warp server means no upgrade flow.
+                if let Some(upgrade_url) = AuthManager::handle(ctx)
+                    .update(ctx, |auth_manager, _| auth_manager.upgrade_url())
+                {
+                    ctx.open_url(&upgrade_url);
+                }
             }
             AgentOnboardingEvent::UpgradeCopyUrlRequested => {
-                let upgrade_url = AuthManager::handle(ctx)
-                    .update(ctx, |auth_manager, _| auth_manager.upgrade_url());
-                ctx.clipboard().write(ClipboardContent {
-                    plain_text: upgrade_url.clone(),
-                    paths: Some(vec![upgrade_url]),
-                    ..Default::default()
-                });
+                if let Some(upgrade_url) = AuthManager::handle(ctx)
+                    .update(ctx, |auth_manager, _| auth_manager.upgrade_url())
+                {
+                    ctx.clipboard().write(ClipboardContent {
+                        plain_text: upgrade_url.clone(),
+                        paths: Some(vec![upgrade_url]),
+                        ..Default::default()
+                    });
+                }
             }
             AgentOnboardingEvent::UpgradePasteTokenFromClipboardRequested => {
                 let modal = ctx.add_typed_action_view(PasteAuthTokenModalView::new);
@@ -2370,8 +2375,9 @@ impl RootView {
 
                 // Open the sign-in URL in the browser for existing users.
                 AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                    let sign_in_url = auth_manager.sign_in_url();
-                    ctx.open_url(&sign_in_url);
+                    if let Some(sign_in_url) = auth_manager.sign_in_url() {
+                        ctx.open_url(&sign_in_url);
+                    }
                 });
 
                 let login_slide_view = ctx.add_typed_action_view(|ctx| {

@@ -61,7 +61,7 @@ impl ShareableObject {
                     .map(|m| {
                         format!(
                             "{}/conversation/{}",
-                            ChannelState::server_root_url(),
+                            ChannelState::require_server_root_url()?,
                             m.server_conversation_token.as_str()
                         )
                     })
