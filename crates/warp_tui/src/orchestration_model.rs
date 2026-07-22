@@ -419,7 +419,12 @@ impl TuiOrchestrationModel {
             Ok(response) => {
                 let run_url = oz_run_url(&response.run_id);
                 cloud_run_state.update(ctx, |state, ctx| {
-                    state.set_spawned(response.task_id, response.run_id.clone(), run_url, ctx);
+                    state.set_spawned(
+                        response.task_id,
+                        response.run_id.clone(),
+                        run_url.unwrap_or_default(),
+                        ctx,
+                    );
                 });
                 BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
                     history.assign_run_id_for_conversation(

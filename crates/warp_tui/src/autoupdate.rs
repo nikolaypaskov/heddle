@@ -487,9 +487,13 @@ fn current_points_at(layout: &InstallLayout, version: &str) -> bool {
 /// `/client_version` endpoint, falling back to the channel-versions JSON in
 /// GCP storage (mirroring the GUI autoupdater's fallback).
 async fn fetch_latest_version(client: &http_client::Client) -> Result<String> {
+    // Heddle: no Warp server means no version endpoint to query. Bail before
+    // constructing a URL so the updater cannot reach out at all.
+    let server_root = ChannelState::server_root_url()
+        .ok_or(warp_core::channel::BackendUnavailable::WarpServer)?;
     let server_url = format!(
         "{}/client_version?include_changelogs=false",
-        ChannelState::server_root_url().trim_end_matches('/')
+        server_root.trim_end_matches('/')
     );
     let from_server: Result<ChannelVersions> = async {
         let response = client
@@ -590,9 +594,12 @@ async fn download_and_stage(
     } else {
         "x86_64"
     };
+    // Downloads are hosted by Warp; without a server there is nothing to fetch.
+    let server_root = ChannelState::server_root_url()
+        .ok_or(warp_core::channel::BackendUnavailable::WarpServer)?;
     let url = format!(
         "{}/download/tui?os={os}&arch={arch}&channel={}&version={version}",
-        ChannelState::server_root_url().trim_end_matches('/'),
+        server_root.trim_end_matches('/'),
         download_channel(),
     );
 

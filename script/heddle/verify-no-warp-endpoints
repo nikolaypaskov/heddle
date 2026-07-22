@@ -26,6 +26,21 @@ if [[ ! -f "${BINARY}" ]]; then
     exit 2
 fi
 
+# Refuse to scan a stale artifact.
+#
+# A failed build leaves the previous binary in place, so scanning it reports on
+# code that is no longer the source. That has already happened once here: a
+# build failed, and the scan dutifully analysed an hours-old binary as though it
+# were the current one. A verification tool that can describe an artifact which
+# does not reflect the source is worse than no tool.
+NEWER_SOURCES="$(find app/src crates -name '*.rs' -newer "${BINARY}" -print -quit 2>/dev/null || true)"
+if [[ -n "${NEWER_SOURCES}" ]]; then
+    echo "INCONCLUSIVE: ${BINARY} is older than the sources."
+    echo "At least one file changed after it was built: ${NEWER_SOURCES}"
+    echo "Rebuild before scanning: cargo build -p warp_tui --bin warp-tui-oss"
+    exit 2
+fi
+
 # Strings that must never appear in a Heddle binary. Each is a first-party Warp
 # endpoint, credential, or telemetry destination.
 FORBIDDEN=(
