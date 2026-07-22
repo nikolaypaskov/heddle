@@ -301,6 +301,16 @@ impl Listener {
     }
 
     fn get_warp_drive_updates(&mut self, ctx: &mut ModelContext<Self>) {
+        // Heddle: Warp Drive is hosted by Warp. With no server configured there
+        // is nothing to subscribe to, and starting the listener would spin a
+        // retry loop against an endpoint that does not exist.
+        if warp_core::channel::ChannelState::ws_server_url().is_none() {
+            log::info!(
+                "CloudObjects::Listener not started: no Warp server is configured for this build"
+            );
+            return;
+        }
+
         let object_client = self.cloud_objects_client.clone();
         let (message_sender, message_receiver) = async_channel::unbounded();
         let subscription_ready_tx = self.subscription_ready_tx.clone();
