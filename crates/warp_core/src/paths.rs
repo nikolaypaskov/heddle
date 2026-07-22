@@ -26,7 +26,14 @@ use crate::channel::{Channel, ChannelState};
 ///
 /// This should be used, for example, as the base directory under which
 /// repository workflows would be stored (in "./.warp/workflows").
-pub const WARP_CONFIG_DIR: &str = ".warp";
+/// Heddle: the on-disk config directory. Renamed from ".warp" so the fork does
+/// not share, or appear to be, Warp's user data.
+pub const WARP_CONFIG_DIR: &str = ".heddle";
+
+/// The TUI's sibling config directory. Kept as a named constant rather than a
+/// literal so the GUI and TUI directory names stay in step when rebranding.
+#[cfg(target_os = "macos")]
+pub const HEDDLE_CLI_CONFIG_DIR: &str = ".heddle_cli";
 
 /// The name of the folder that stores Warp execution logs and network logs.
 /// This is currently only used on Windows to maintain backwards compatibility.
@@ -188,13 +195,13 @@ pub fn gui_mcp_config_file_path() -> Option<PathBuf> {
 /// Returns the macOS config directory name for the TUI front-end (`warp-tui`)
 /// for the current channel.
 ///
-/// This mirrors [`macos_config_dir_name`] but under a `.warp_cli*` directory so
-/// the TUI keeps its settings separate from the GUI's `.warp*` directory. Like
-/// the GUI names, these are persisted on disk as directory names and must not be
-/// changed once established.
+/// This mirrors [`macos_config_dir_name`] but under a `.heddle_cli*` directory
+/// so the TUI keeps its settings separate from the GUI's `.heddle*` directory.
+/// Like the GUI names, these are persisted on disk as directory names and must
+/// not be changed once established.
 #[cfg(target_os = "macos")]
 fn macos_tui_config_dir_name() -> String {
-    macos_config_dir_name().replacen(WARP_CONFIG_DIR, ".warp_cli", 1)
+    macos_config_dir_name().replacen(WARP_CONFIG_DIR, HEDDLE_CLI_CONFIG_DIR, 1)
 }
 
 /// Returns the path to the directory where non-portable configuration files for
@@ -202,7 +209,7 @@ fn macos_tui_config_dir_name() -> String {
 ///
 /// This is intentionally distinct from [`config_local_dir`] so the GUI and the
 /// TUI never share (and clobber) a settings file. On macOS it is a sibling
-/// `.warp_cli*` directory (mirroring the GUI's `.warp*`); on other platforms —
+/// `.heddle_cli*` directory (mirroring the GUI's `.heddle*`); on other platforms —
 /// whose config dirs are already app-id based — it nests under a `cli`
 /// subdirectory of the standard config dir.
 pub fn tui_config_local_dir() -> PathBuf {

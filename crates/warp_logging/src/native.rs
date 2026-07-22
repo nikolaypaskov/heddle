@@ -17,7 +17,9 @@ use crate::{LogConfig, LogDestination};
 
 const MAX_FILES_IN_GUI_ROTATION: usize = 5;
 const MAX_FILES_IN_CLI_ROTATION: usize = 10;
-const CLI_LOG_SUBDIRECTORY: &str = "oz";
+// Heddle: upstream named this after Oz, its proprietary agent orchestration
+// layer. Heddle has no Oz, so the CLI log subdirectory carries the fork's name.
+const CLI_LOG_SUBDIRECTORY: &str = "heddle";
 const TEMP_LOG_FILE_SUFFIX: &str = "old.temp";
 
 /// Runtime logging state, computed from `LogConfig` during initialization.
@@ -289,7 +291,7 @@ pub fn init_for_crash_recovery_process() -> Result<()> {
 
 /// Initializes the global logger for the application.
 /// If `config.log_destination` is `Some`, always use the specified destination regardless of
-/// environment. If `config.is_cli` is true, logs are written to a separate "oz" subdirectory with
+/// environment. If `config.is_cli` is true, logs are written to a separate "heddle" subdirectory with
 /// a higher rotation limit so that CLI invocations don't evict GUI application logs.
 pub fn init(config: LogConfig) -> Result<()> {
     init_internal(
