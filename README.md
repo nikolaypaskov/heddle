@@ -70,15 +70,23 @@ enforced by the type system rather than by a runtime check that could be bypasse
 ## Building
 
 ```bash
-./script/bootstrap          # platform deps (macOS also needs the Xcode Metal Toolchain)
-cargo build -p warp_tui --bin heddle-tui
+cargo build --release -p warp_tui --bin heddle-tui
+./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
 ```
 
-On macOS the Metal Toolchain is a separate Xcode component and the build fails without it:
+On macOS the Metal Toolchain is a separate Xcode component and the build fails without it.
+Note that `xcrun -f metal` resolves even when the component is absent, so its presence proves
+nothing — only a build does:
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
 ```
+
+**Binaries are published for Linux x86_64 only.** macOS is built from source deliberately:
+notarization needs a paid Apple Developer ID this project does not have, and shipping unsigned
+binaries would mean publishing `xattr -d com.apple.quarantine` as the official install path. That
+normalizes bypassing a security control and leaves users unable to distinguish a genuine download
+from a tampered one.
 
 ## Verification
 
@@ -109,16 +117,26 @@ agents, updates and shutdown; that work is in progress.
 
 | Area | State |
 |---|---|
-| Endpoint removal | Verified — scanner passes |
+| Endpoint removal | Verified — scanner passes, enforced in CI |
 | Telemetry / experiments / Drive | Removed |
-| Rebrand | In progress |
-| Release builds | Not started |
-| Agent support (ACP) | Not started — see below |
+| Rebrand | Done — own name, icon, bundle ID, paths |
+| Release builds | Linux x86_64; macOS builds from source |
+| Agent support (ACP) | Designed, **not implemented** — see below |
 
 Warp's built-in agent runs on their proprietary server and cannot work here. The intended
-replacement is [ACP](https://agentclientprotocol.com/), bridging to local CLI agents such as
-Claude Code, Codex and Gemini CLI — which the codebase already detects
-(`app/src/terminal/cli_agent.rs`). Until then, Heddle is a terminal, not an agentic environment.
+replacement is [ACP](https://agentclientprotocol.com/), bridging to a local agent process. The
+design is written up in `docs/superpowers/specs/2026-07-22-acp-agent-bridge-design.md`.
+
+It is deliberately **not** implemented in v0.1. An agent that streams tool calls without working
+permission prompts and cancellation can execute commands the user never agreed to, so a
+half-finished bridge is worse than none. Heddle will not be described as agentic until the
+acceptance criteria in that spec are demonstrably met.
+
+Note that `app/src/terminal/cli_agent.rs` recognising Claude Code, Codex and Gemini CLI is
+*presentation logic, not protocol compatibility* — recognising a binary name is not the same as
+speaking ACP to it.
+
+**Until then, Heddle is a terminal, not an agentic environment.**
 
 ## Licence
 
