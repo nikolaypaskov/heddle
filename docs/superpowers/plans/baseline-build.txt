@@ -1,0 +1,21 @@
+# Heddle baseline build environment
+Recorded: 2026-07-22T08:38:04Z
+Host: Darwin 25.5.0 arm64
+
+## Toolchain
+rustc 1.92.0 (ded5c06cf 2025-12-08)
+cargo 1.92.0 (344c4567c 2025-10-21)
+libprotoc 35.1
+xcodebuild: Xcode 26.6
+Metal Toolchain: 17F109 (xcodebuild -downloadComponent MetalToolchain, 688 MB)
+docker: Docker version 29.6.1, build 8900f1d330
+
+## Result
+cargo build -p warp_tui --bin warp-tui-oss  =>  exit 0
+artifact: target/debug/warp-tui-oss (768M)
+
+## Blocker found during execution
+First attempt failed at crates/warpui/build.rs:113 -- missing Xcode Metal
+Toolchain component. 'xcrun -f metal' resolves even when it is absent, so
+tool presence is not a valid precondition check. Fixed by:
+  xcodebuild -downloadComponent MetalToolchain
