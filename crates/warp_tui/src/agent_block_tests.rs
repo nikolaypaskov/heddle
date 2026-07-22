@@ -307,7 +307,7 @@ fn out_of_credits_failure_uses_shared_copy_warning_style_and_tui_actions() {
             &*opened_urls.borrow(),
             &[
                 "https://github.com/nikolaypaskov/warp#readme".to_owned(),
-                "https://docs.warp.dev/agent-platform/inference/bring-your-own-api-key/".to_owned(),
+                "https://github.com/nikolaypaskov/warp#readme".to_owned(),
             ]
         );
     });

@@ -306,7 +306,7 @@ impl PromptAlertView {
                     } else {
                         text_fragments.push(FormattedTextFragment::hyperlink(
                             CONTACT_SUPPORT_TEXT,
-                            "mailto:support@warp.dev".to_owned(),
+                            "https://github.com/nikolaypaskov/warp/issues".to_owned(),
                         ));
                     }
                 } else {

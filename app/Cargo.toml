@@ -1,5 +1,5 @@
 [package]
-authors = ["Warp Team <dev@warp.dev>"]
+authors = ["Heddle contributors"]
 default-run = "heddle"
 description = "A terminal with no account, no telemetry, and no vendor backend."
 edition = "2024"

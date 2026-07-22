@@ -92,9 +92,9 @@ const CLAIMED_REFERRAL_COUNT_LEFT_MARGIN: f32 = 40.;
 const CLAIMED_REFERRAL_CLIP: usize = 999;
 
 const TERMS_LINK_TEXT: &str = "Certain restrictions apply.";
-const TERMS_URL: &str = "https://docs.warp.dev/support-and-community/community/refer-a-friend#referral-program-terms-and-conditions";
+const TERMS_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
 const TERMS_CONTACT_TEXT: &str =
-    " If you have any questions about the referral program, please contact referrals@warp.dev.";
+    " If you have any questions about the referral program, please open an issue at https://github.com/nikolaypaskov/warp/issues.";
 
 enum ApiState {
     Loading,

@@ -143,7 +143,7 @@ fn test_resolve_bare_url() {
         );
         assert_eq!(
             resolve(&app, &links, "warp.dev").await,
-            url("http://warp.dev")
+            url("https://github.com/nikolaypaskov/warp#readme")
         );
         assert_eq!(
             resolve(&app, &links, "bbc.co.uk").await,
@@ -252,12 +252,12 @@ fn test_resolve_valid_url() {
         let links = init_link_model(&mut app, None);
 
         assert_eq!(
-            resolve(&app, &links, "https://warp.dev").await,
-            url("https://warp.dev")
+            resolve(&app, &links, "https://github.com/nikolaypaskov/warp#readme").await,
+            url("https://github.com/nikolaypaskov/warp#readme")
         );
         assert_eq!(
-            resolve(&app, &links, "mailto:test@warp.dev").await,
-            url("mailto:test@warp.dev")
+            resolve(&app, &links, "mailto:user@heddle.invalid").await,
+            url("mailto:user@heddle.invalid")
         );
     });
 }

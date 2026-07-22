@@ -788,7 +788,7 @@ fn adapter_stability_sort_func(
         log::warn!(
             "Deprioritizing Vulkan-backed Nvidia adapter due to version < {} (unsupported).\nSee \
             the \"Graphics\" secion of our docs here: \
-            https://docs.warp.dev/help/known-issues#linux-1",
+            https://github.com/nikolaypaskov/warp#readme",
             *MIN_SUPPORTED_NVIDIA_VERSION
         );
         AdapterSupport::Unsupported

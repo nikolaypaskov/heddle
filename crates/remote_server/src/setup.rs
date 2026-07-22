@@ -601,8 +601,8 @@ pub fn install_script(staging_tarball_path: Option<&str>) -> Option<String> {
 
 /// Construct the download URL from the server root URL.
 ///
-/// For example, given `https://app.warp.dev`, returns
-/// `https://app.warp.dev/download/cli`.
+/// For example, given `https://github.com/nikolaypaskov/warp#readme, returns
+/// `https://github.com/nikolaypaskov/warp#readme
 /// Returns [`None`] when this build has no Warp server: the remote-server
 /// artifact is hosted by Warp, so there is nowhere to download it from.
 fn download_url() -> Option<String> {

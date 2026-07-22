@@ -850,12 +850,12 @@ fn test_parse_link_in_tag() {
         ])]
     );
 
-    let source = "a [https://google.com](https://warp.dev) link";
+    let source = "a [https://google.com](https://github.com/nikolaypaskov/warp#readme) link";
     assert_eq!(
         test_parse_markdown(source),
         vec![FormattedTextLine::Line(vec![
             FormattedTextFragment::plain_text("a "),
-            FormattedTextFragment::hyperlink("https://google.com", "https://warp.dev"),
+            FormattedTextFragment::hyperlink("https://google.com", "https://github.com/nikolaypaskov/warp#readme"),
             FormattedTextFragment::plain_text(" link")
         ])]
     );
@@ -1065,14 +1065,14 @@ fn test_parse_escapes() {
 
 #[test]
 fn test_parse_escape_in_style() {
-    let source = "Some *styled \\* escaped* [te\\]xt\\^](https://warp.dev)";
+    let source = "Some *styled \\* escaped* [te\\]xt\\^](https://github.com/nikolaypaskov/warp#readme)";
     assert_eq!(
         test_parse_markdown(source),
         vec![FormattedTextLine::Line(vec![
             FormattedTextFragment::plain_text("Some "),
             FormattedTextFragment::italic("styled * escaped"),
             FormattedTextFragment::plain_text(" "),
-            FormattedTextFragment::hyperlink("te]xt^", "https://warp.dev")
+            FormattedTextFragment::hyperlink("te]xt^", "https://github.com/nikolaypaskov/warp#readme")
         ])]
     );
 }
@@ -1430,10 +1430,10 @@ fn test_parse_inline() {
 #[test]
 fn test_parse_inline_link() {
     assert_eq!(
-        parse_all("[basic](https://warp.dev)", parse_inline),
+        parse_all("[basic](https://github.com/nikolaypaskov/warp#readme)", parse_inline),
         vec![FormattedTextFragment::hyperlink(
             "basic",
-            "https://warp.dev"
+            "https://github.com/nikolaypaskov/warp#readme"
         )]
     );
 
@@ -2862,7 +2862,7 @@ fn test_parse_table_with_empty_cells() {
 
 #[test]
 fn test_parse_table_with_links() {
-    let source = "| Link | Text |\n| --- | --- |\n| [Warp](https://warp.dev) | normal |\n";
+    let source = "| Link | Text |\n| --- | --- |\n| [Warp](https://github.com/nikolaypaskov/warp#readme) | normal |\n";
     let result = test_parse_markdown_with_gfm_tables(source);
     assert_eq!(result.len(), 1);
 
@@ -2873,7 +2873,7 @@ fn test_parse_table_with_links() {
         assert_eq!(link_cell[0].text, "Warp");
         assert!(matches!(
             &link_cell[0].styles.hyperlink,
-            Some(Hyperlink::Url(url)) if url == "https://warp.dev"
+            Some(Hyperlink::Url(url)) if url == "https://github.com/nikolaypaskov/warp#readme"
         ));
     } else {
         panic!("Expected table");

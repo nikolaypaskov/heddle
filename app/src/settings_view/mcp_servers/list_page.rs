@@ -1133,7 +1133,7 @@ impl MCPServersListPageView {
                 ),
                 FormattedTextFragment::hyperlink(
                     "See supported providers.",
-                    "https://docs.warp.dev/agent-platform/capabilities/mcp#file-based-mcp-servers",
+                    "https://github.com/nikolaypaskov/warp#readme",
                 ),
             ]
         });
@@ -1171,7 +1171,7 @@ impl MCPServersListPageView {
             FormattedTextFragment::plain_text(DESCRIPTION_TEXT),
             FormattedTextFragment::hyperlink(
                 "Learn more.",
-                "https://docs.warp.dev/agent-platform/capabilities/mcp",
+                "https://github.com/nikolaypaskov/warp#readme",
             ),
         ];
 

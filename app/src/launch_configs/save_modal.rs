@@ -527,7 +527,7 @@ impl LaunchConfigSaveModal {
                     .link(
                         "Link to Documentation".to_string(),
                         Some(
-                            "https://docs.warp.dev/terminal/sessions/launch-configurations"
+                            "https://github.com/nikolaypaskov/warp#readme"
                                 .to_string(),
                         ),
                         None,

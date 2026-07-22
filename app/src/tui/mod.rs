@@ -152,7 +152,16 @@ fn activate_global_mcp_servers(ctx: &mut AppContext) {
 }
 
 /// Logs out the current TUI user and starts a fresh device-authorization flow.
+///
+/// No-op when this build has no Warp server. Logging out would delete local
+/// auth persistence and then start a device-authorization flow that can never
+/// complete, stranding the user on a login placeholder until they restart.
+/// With no account system there is nothing to log out of.
 pub fn log_out_tui(ctx: &mut AppContext) {
+    if warp_core::channel::ChannelState::server_root_url().is_none() {
+        log::info!("Ignoring logout: this build has no account system to log out of");
+        return;
+    }
     auth::log_out(ctx);
     set_logged_out_phase(ctx);
     authorize_device(ctx);

@@ -809,7 +809,7 @@ pub fn extract_server_id_and_object_type_from_warp_drive_link(
 
     let object_type = url.path_segments().and_then(|mut segments| segments.nth(1));
 
-    // Parse the object portion of the path segment (warp.dev/drive/{object})
+    // Parse the object portion of the path segment (heddle.invalid/drive/{object})
     // into an object type
     let object_type = match object_type {
         Some("notebook") => ObjectType::Notebook,
@@ -890,7 +890,7 @@ pub trait CloudObjectMetadataExt {
     /// Returns None if the revision and last_editor are None.
     fn semantic_editing_history(&self, app: &AppContext) -> Option<String>;
 
-    /// Returns a semantic summary of the object's creator. For example, "Alice" or "joan@warp.dev".
+    /// Returns a semantic summary of the object's creator. For example, "Alice" or "user@heddle.invalid".
     #[cfg_attr(target_family = "wasm", expect(dead_code))]
     fn semantic_creator(&self, app: &AppContext) -> Option<String>;
 
@@ -903,7 +903,7 @@ impl CloudObjectMetadataExt for CloudObjectMetadata {
     fn semantic_editing_history(&self, app: &AppContext) -> Option<String> {
         let user_profiles = UserProfiles::as_ref(app);
 
-        // First, the editor. For example, "Joan Didion" or "joan@warp.dev".
+        // First, the editor. For example, "Joan Didion" or "user@heddle.invalid".
         let editor_string = self
             .last_editor_uid
             .as_ref()

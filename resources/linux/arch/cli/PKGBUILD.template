@@ -3,7 +3,7 @@ pkgver=@@VERSION@@
 pkgrel=@@RELEASE@@
 pkgdesc="The orchestration platform for cloud agents"
 arch=('@@ARCH@@')
-url="https://warp.dev"
+url="https://github.com/nikolaypaskov/warp#readme"
 license=('custom')
 depends=(
 	'curl'

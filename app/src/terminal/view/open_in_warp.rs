@@ -31,8 +31,8 @@ use crate::util::openable_file_type::{
 mod tests;
 
 const LEARN_MORE_MARKDOWN_URL: &str =
-    "https://docs.warp.dev/terminal/more-features/markdown-viewer";
-const LEARN_MORE_CODE_URL: &str = "https://docs.warp.dev/code/overview#built-in-code-editor";
+    "https://github.com/nikolaypaskov/warp#readme";
+const LEARN_MORE_CODE_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
 
 /// A path to a file that can be opened in Warp, along with its type.
 #[derive(Debug, Clone, PartialEq, Eq)]

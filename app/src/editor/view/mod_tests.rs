@@ -529,7 +529,7 @@ fn test_smart_select_with_drag() {
 
         app.add_window(WindowStyle::NotStealFocus, |ctx| {
             let mut editor = EditorView::new_with_base_text(
-                "word ~/.warp/themes/foo-bar.yaml andy@warp.dev",
+                "word ~/.warp/themes/foo-bar.yaml user@heddle.invalid",
                 Default::default(),
                 ctx,
             );

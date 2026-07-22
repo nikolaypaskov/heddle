@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn qr_matrix_for_url_returns_square_matrix_with_dark_modules() {
-    let matrix = match qr_matrix_for_url("https://app.warp.dev/session/test-session") {
+    let matrix = match qr_matrix_for_url("https://github.com/nikolaypaskov/warp#readme") {
         Ok(matrix) => matrix,
         Err(error) => panic!("failed to generate QR matrix: {error}"),
     };

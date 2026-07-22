@@ -2,7 +2,7 @@
 
 A de-commercialized fork of the [Warp](https://github.com/warpdotdev/Warp) terminal.
 
-**No account. No telemetry. Heddle's own code never connects to Warp's infrastructure.**
+**No account. No telemetry. No `warp.dev` anywhere in the binary.**
 
 A heddle is the loom component that lifts and separates the warp threads — the part that
 controls the warp.
@@ -35,6 +35,8 @@ change. Read [Verification](#verification) for exactly what that does and does n
 | **Hosted auth** | Sign-in, sign-up, SSO and device-authorization flows have no endpoint |
 | **Billing surfaces** | Upgrade links, Stripe pages, plan-comparison and pricing links removed |
 | **Warp's legal pages** | Terms of Service and privacy policy no longer linked as if they govern Heddle |
+| **Warp support contacts** | `support@`, `sales@`, `feedback@` and `referrals@warp.dev` replaced with Heddle's issue tracker |
+| **All `warp.dev` links** | Every URL, mailto and documentation link — the scanner forbids the apex domain |
 
 ### The finding that shaped the design
 
@@ -106,11 +108,8 @@ binary can stop a user typing `curl app.warp.dev` into their own terminal. Fully
 claim additionally requires syscall-level tracing across startup, onboarding, agents, updates and
 shutdown. **That work is not done.**
 
-Two honest caveats:
+One honest caveat:
 
-- **Help links still point to upstream documentation** (`docs.warp.dev`) in around 46 files, because
-  those pages document features Heddle inherited. Following one is a deliberate user action, not
-  something Heddle initiates — but it is a connection to Warp, and you should know it exists.
 - **The string rebrand is incomplete.** Menu items, dialogs and notifications say Heddle, but
   roughly 600 further strings — mostly log messages and internal diagnostics — still say "Warp".
   Two categories are left alone deliberately: `Warp OSC` markers are a wire-protocol identifier

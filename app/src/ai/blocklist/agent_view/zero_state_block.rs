@@ -48,7 +48,7 @@ use crate::terminal::view::ambient_agent::{AmbientAgentViewModel, AmbientAgentVi
 use crate::terminal::{self, TerminalModel, prompt};
 use crate::util::time_format::format_approx_duration_from_now_utc;
 
-const CLOUD_AGENT_DOCS_URL: &str = "https://docs.warp.dev/agent-platform/cloud-agents/overview";
+const CLOUD_AGENT_DOCS_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
 const OZ_UPDATES_SECTION_HEADER: &str = "What's new in Oz";
 
 // The maximum number of Oz updates from the changelog rendered in-line in the 'What's new in Oz section'.
@@ -1143,7 +1143,7 @@ fn render_oz_updates(props: OzUpdatesProps<'_>, app: &AppContext) -> Option<Box<
                         })
                         .with_reset_cursor_after_click()
                         .on_click(|_, app, _| {
-                            const CHANGELOG_URL: &str = "https://docs.warp.dev/changelog";
+                            const CHANGELOG_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
                             app.open_url(CHANGELOG_URL);
                         })
                         .with_cursor(Cursor::PointingHand)

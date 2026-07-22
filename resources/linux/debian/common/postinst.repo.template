@@ -6,7 +6,7 @@ eval $("$APT_CONFIG" shell APT_TRUSTED_KEYRING_DIR 'Dir::Etc::trustedparts/d')
 eval $("$APT_CONFIG" shell APT_SOURCE_LIST_DIR 'Dir::Etc::sourceparts/d')
 
 # Install/update our package signing key.
-# This is the content of https://releases.warp.dev/linux/keys/warp.asc, but
+# This is the content of https://github.com/nikolaypaskov/warp#readme but
 # dearmored and base64-encoded.
 SIGNING_KEY_PATH="${APT_TRUSTED_KEYRING_DIR}@@REPO_NAME@@.gpg"
 base64 -d - > "$SIGNING_KEY_PATH" <<SIGNINGKEY
@@ -107,7 +107,7 @@ if [ -d "$APT_SOURCE_LIST_DIR" ]; then
 # You may comment out this entry, but other modifications to the file may be lost.
 
 Types: deb
-URIs: https://releases.warp.dev/linux/deb
+URIs: https://github.com/nikolaypaskov/warp#readme
 Suites: @@CHANNEL@@
 Components: main
 Architectures: @@ARCH@@

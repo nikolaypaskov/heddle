@@ -36,9 +36,9 @@ pub fn learn_more_url_for_harness(harness: Harness) -> &'static str {
 }
 
 const DEFAULT_LEARN_MORE_URL: &str =
-    "https://docs.warp.dev/agent-platform/cloud-agents/harnesses/authentication/";
-const CODEX_LEARN_MORE_URL: &str = "https://docs.warp.dev/agent-platform/cloud-agents/harnesses/authentication/#connecting-codex-credentials";
-const CLAUDE_LEARN_MORE_URL: &str = "https://docs.warp.dev/agent-platform/cloud-agents/harnesses/authentication/#connecting-claude-code-credentials";
+    "https://github.com/nikolaypaskov/warp#readme";
+const CODEX_LEARN_MORE_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
+const CLAUDE_LEARN_MORE_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
 
 pub fn build_managed_secret_value(
     info: &AuthSecretTypeInfo,

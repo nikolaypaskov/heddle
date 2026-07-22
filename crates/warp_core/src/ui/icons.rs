@@ -402,8 +402,9 @@ impl From<Icon> for &'static str {
             Icon::CloudOffline => "bundled/svg/cloud-offline.svg",
             Icon::Compass => "bundled/svg/compass-3.svg",
             Icon::CreateTeam => "bundled/svg/create-team.svg",
-            Icon::WarpDrive => "bundled/svg/warp.svg",
-            Icon::Warp => "bundled/svg/warp-drive.svg",
+            // Heddle: these mapped Warp's trademarked logo assets.
+            Icon::WarpDrive => "bundled/svg/heddle-mark.svg",
+            Icon::Warp => "bundled/svg/heddle-mark.svg",
             Icon::WarpLogoLight => "bundled/svg/heddle-logo.svg",
             Icon::ArrowLeft => "bundled/svg/arrow-left.svg",
             Icon::ArrowBlockLeft => "bundled/svg/arrow-block-left.svg",

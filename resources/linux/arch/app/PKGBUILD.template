@@ -3,7 +3,7 @@ pkgver=@@VERSION@@
 pkgrel=@@RELEASE@@
 pkgdesc="Warp, the Rust-based terminal for developers and teams"
 arch=('@@ARCH@@')
-url="https://warp.dev"
+url="https://github.com/nikolaypaskov/warp#readme"
 license=('custom')
 depends=(
 	'curl'
