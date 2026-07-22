@@ -510,7 +510,8 @@ This is defence in depth, not the primary guarantee. The hard guarantee is the `
 - [ ] **Step 6: Verify the workspace still builds and lints clean**
 
 ```bash
-cargo build --bin warp-tui-oss 2>&1 | tail -5
+set -o pipefail
+cargo build -p warp_tui --bin warp-tui-oss 2>&1 | tail -5
 cargo clippy -p http_client --all-targets --tests -- -D warnings 2>&1 | tail -5
 ./script/format
 ```
