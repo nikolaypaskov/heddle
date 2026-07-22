@@ -186,7 +186,7 @@ const GIT_OPERATIONS_AUTOGEN_DESCRIPTION: &str =
 const WISPR_FLOW_URL: &str = "https://wisprflow.ai/";
 const CUSTOM_INFERENCE_LEARN_MORE_URL: &str =
     "https://docs.warp.dev/agent-platform/inference/custom-inference-endpoint/";
-const CUSTOM_INFERENCE_TERMS_URL: &str = "https://www.warp.dev/legal/terms-of-service";
+const CUSTOM_INFERENCE_TERMS_URL: &str = "https://github.com/nikolaypaskov/warp/blob/master/LICENSE-AGPL";
 const CUSTOM_INFERENCE_INFO_TOOLTIP_MAX_WIDTH: f32 = 320.;
 const CUSTOM_ENDPOINT_MODAL_MAX_HEIGHT_PERCENTAGE: f32 = 0.8;
 

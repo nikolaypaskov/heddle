@@ -66,7 +66,17 @@ impl SingletonEntity for TuiLoginModel {}
 /// Registers the [`TuiLoginModel`], mounts the TUI immediately, and runs the
 /// device-authorization login flow when the user isn't already logged in.
 pub(crate) fn init(mount: TuiMountFn, ctx: &mut AppContext) {
-    let logged_in = AuthStateProvider::as_ref(ctx).get().is_logged_in();
+    // Heddle: with no Warp server there is no account system, so "logged out"
+    // is the normal, complete state rather than a condition to resolve.
+    //
+    // Upstream gates the terminal session behind `TuiLoginEvent::LoggedIn` and
+    // starts device authorization when not signed in. In a build with no
+    // server that authorization can never succeed, so the user would sit on a
+    // login placeholder forever and never reach a terminal. Treat this build
+    // as already past authentication.
+    let requires_login = warp_core::channel::ChannelState::server_root_url().is_some();
+    let logged_in =
+        !requires_login || AuthStateProvider::as_ref(ctx).get().is_logged_in();
 
     let initial_phase = if logged_in {
         TuiLoginPhase::LoggedIn
@@ -120,6 +130,10 @@ pub(crate) fn init(mount: TuiMountFn, ctx: &mut AppContext) {
 
     if logged_in {
         activate_global_mcp_servers(ctx);
+        // No explicit LoggedIn event is needed: the phase is already
+        // `LoggedIn` when `mount` runs, and session.rs creates the first
+        // terminal session on that condition ("Already authenticated at
+        // mount"). See crates/warp_tui/src/session.rs.
     } else {
         authorize_device(ctx);
     }

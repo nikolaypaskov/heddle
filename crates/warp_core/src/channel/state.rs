@@ -238,14 +238,21 @@ impl ChannelState {
         CHANNEL_STATE.lock().config.crash_reporting_config.is_some()
     }
 
-    pub fn releases_base_url() -> Cow<'static, str> {
+    /// The release-artefact base URL, or [`None`] when this build has no
+    /// autoupdate configuration.
+    ///
+    /// This previously returned an empty string via `unwrap_or_default()`. That
+    /// silently produced relative URLs like "/channel_versions.json", which
+    /// merely *happened* to fail as "relative URL without a base". Returning
+    /// `Option` makes the absence explicit so callers skip the fetch instead of
+    /// relying on a malformed URL to protect them.
+    pub fn releases_base_url() -> Option<Cow<'static, str>> {
         CHANNEL_STATE
             .lock()
             .config
             .autoupdate_config
             .as_ref()
             .map(|ac| ac.releases_base_url.clone())
-            .unwrap_or_default()
     }
 
     pub fn firebase_api_key() -> Option<Cow<'static, str>> {

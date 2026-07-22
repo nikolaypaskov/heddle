@@ -63,11 +63,10 @@ impl SettingsWidget for AboutPageWidget {
         let theme = appearance.theme();
         let ui_builder = appearance.ui_builder();
 
-        let image_path = if theme.inferred_color_scheme() == ColorScheme::LightOnDark {
-            "bundled/svg/warp-logo-with-light-title.svg"
-        } else {
-            "bundled/svg/warp-logo-with-dark-title.svg"
-        };
+        // Heddle: upstream rendered Warp's logo here. Those are trademarked
+        // brand assets and must not appear in a fork's About page.
+        let _ = theme.inferred_color_scheme();
+        let image_path = "bundled/svg/heddle-logo.svg";
 
         let version = ChannelState::app_version().unwrap_or("v#.##.###");
 
@@ -115,7 +114,7 @@ impl SettingsWidget for AboutPageWidget {
                 .with_child(version_row.finish())
                 .with_child(
                     ui_builder
-                        .span("Copyright 2026 Warp")
+                        .span("Heddle — AGPL-3.0. © 2026 Denver Technologies, Inc. Modified work © 2026 Heddle contributors.")
                         .build()
                         .with_margin_top(16.)
                         .finish(),

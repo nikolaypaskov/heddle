@@ -1142,7 +1142,8 @@ pub fn is_incoming_version_past_current(version: Option<&str>) -> bool {
 /// Returns the base URL that contains release assets for the given version
 /// of this app bundle.
 fn release_assets_directory_url(channel: Channel, version: &str) -> String {
-    let releases_base_url = ChannelState::releases_base_url();
+    let releases_base_url = ChannelState::releases_base_url()
+        .expect("release assets URL requested on a build with no autoupdate config");
     match channel {
         Channel::Stable => {
             format!("{releases_base_url}/stable/{version}")

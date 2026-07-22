@@ -56,16 +56,14 @@ async fn fetch_channel_versions_from_json_storage(
     client: &http_client::Client,
     nonce: &str,
 ) -> Result<ChannelVersions> {
-    log::info!("Fetching channel versions from GCP JSON storage");
+    // No autoupdate configuration means no release storage to query. Bail
+    // before constructing a request rather than emitting a malformed URL.
+    let Some(releases_base_url) = ChannelState::releases_base_url() else {
+        anyhow::bail!("no release storage is configured for this build");
+    };
+    log::info!("Fetching channel versions from release storage");
     let res = client
-        .get(
-            format!(
-                "{}/channel_versions.json?r={}",
-                ChannelState::releases_base_url(),
-                nonce
-            )
-            .as_str(),
-        )
+        .get(format!("{releases_base_url}/channel_versions.json?r={nonce}").as_str())
         .timeout(FETCH_CHANNEL_VERSIONS_TIMEOUT)
         .send()
         .await?;

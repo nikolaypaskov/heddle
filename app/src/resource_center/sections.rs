@@ -75,7 +75,7 @@ pub fn sections(ctx: &mut ViewContext<ResourceCenterMainView>) -> Vec<Section> {
             ContentItem {
                 title: "How Warp uses Warp",
                 description: "Learn how Warp's engineering team uses their favorite features",
-                url: "https://www.warp.dev/blog/how-warp-uses-warp",
+                url: "https://github.com/nikolaypaskov/warp#readme",
                 button_label: "Read article",
             },
         ],

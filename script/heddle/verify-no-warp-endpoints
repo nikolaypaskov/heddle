@@ -63,6 +63,10 @@ FORBIDDEN=(
     "sessions.app.warp.dev"
     "staging.warp.dev"
     "oz.warp.dev"
+    # Marketing, pricing, and legal pages. Warp's Terms of Service and privacy
+    # policy do not govern Heddle, and pointing users at them implies a
+    # relationship and obligations that do not exist.
+    "www.warp.dev"
     "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs"  # Firebase auth API key
     "dataplane.rudderstack.com"
     "rudderlabs.com"

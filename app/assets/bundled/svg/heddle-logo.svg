@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 64" width="220" height="64" role="img" aria-label="Heddle">
+  <!-- Heddle mark: warp threads with alternate threads lifted through eyelets,
+       crossed by the heddle shaft. Original work, not derived from Warp's marks. -->
+  <g transform="translate(6,8)">
+    <rect x="0" y="0" width="48" height="48" rx="11" fill="#1a1d23"/>
+    <g stroke-linecap="round">
+      <line x1="11" y1="9"  x2="11" y2="39" stroke="#e8e2d6" stroke-width="2.6"/>
+      <line x1="19" y1="6"  x2="19" y2="36" stroke="#d68a4a" stroke-width="2.6"/>
+      <line x1="27" y1="9"  x2="27" y2="39" stroke="#e8e2d6" stroke-width="2.6"/>
+      <line x1="35" y1="6"  x2="35" y2="36" stroke="#d68a4a" stroke-width="2.6"/>
+      <line x1="5"  y1="22" x2="43" y2="22" stroke="#7a8494" stroke-width="4"/>
+    </g>
+    <circle cx="19" cy="22" r="2.4" fill="#1a1d23"/>
+    <circle cx="35" cy="22" r="2.4" fill="#1a1d23"/>
+  </g>
+  <text x="68" y="41" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"
+        font-size="26" font-weight="600" fill="currentColor" letter-spacing="0.5">Heddle</text>
+</svg>

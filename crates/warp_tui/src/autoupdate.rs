@@ -509,10 +509,11 @@ async fn fetch_latest_version(client: &http_client::Client) -> Result<String> {
     let versions = match from_server {
         Ok(versions) => versions,
         Err(error) => {
-            let releases_base_url = ChannelState::releases_base_url();
-            if releases_base_url.is_empty() {
+            let Some(releases_base_url) =
+                ChannelState::releases_base_url().filter(|url| !url.is_empty())
+            else {
                 return Err(error.context("failed to fetch channel versions from the Warp server"));
-            }
+            };
             log::warn!(
                 "Failed to fetch channel versions from the Warp server ({error:#}); \
                  falling back to GCP JSON storage"

@@ -54,11 +54,9 @@ use crate::tui_markdown::{
 };
 use crate::tui_permission_prompt::TuiPermissionPrompt;
 use crate::tui_plan_view::{TuiPlanView, TuiPlanViewEvent};
-const PLANS_URL: &str = "https://www.warp.dev/pricing";
-const BYOK_DOCS_URL: &str =
-    "https://docs.warp.dev/agent-platform/inference/bring-your-own-api-key/";
-const COMPARE_PLANS_LABEL: &str = "Compare plans";
-const USE_YOUR_OWN_API_KEYS_LABEL: &str = "Use your own API keys";
+// Heddle: upstream linked "Compare plans" to warp.dev/pricing and "Use your
+// own API keys" to Warp's docs. Both were live warp.dev destinations, so the
+// affordances are removed rather than pointed somewhere else.
 const FAILURE_WARNING_PREFIX: &str = "⚠ ";
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -222,35 +220,10 @@ fn render_failure_section(
             let primary_style = builder.primary_text_style();
             let link_style = primary_style.add_modifier(Modifier::UNDERLINED);
             let (title, detail) = message.split_once("\n\n").unwrap_or((message.as_str(), ""));
-            let compare_plans = TuiHoverable::new(
-                compare_plans_hover_state.clone(),
-                TuiText::new(COMPARE_PLANS_LABEL)
-                    .with_style(link_style)
-                    .finish(),
-            )
-            .on_click(|_, app| app.open_url(PLANS_URL))
-            .finish();
-            let mut actions = TuiFlex::row()
-                .child(TuiText::new("  ").with_style(primary_style).finish())
-                .child(compare_plans);
-            if *can_use_own_api_keys {
-                actions = actions
-                    .child(
-                        TuiText::new("  or  ")
-                            .with_style(builder.muted_text_style())
-                            .finish(),
-                    )
-                    .child(
-                        TuiHoverable::new(
-                            byok_hover_state.clone(),
-                            TuiText::new(USE_YOUR_OWN_API_KEYS_LABEL)
-                                .with_style(link_style)
-                                .finish(),
-                        )
-                        .on_click(|_, app| app.open_url(BYOK_DOCS_URL))
-                        .finish(),
-                    );
-            }
+            let _ = (&compare_plans_hover_state, &byok_hover_state, can_use_own_api_keys);
+            let _ = link_style;
+            // No plan-comparison or BYOK links: both pointed at warp.dev.
+            let actions = TuiFlex::row();
             let mut content = TuiFlex::column().child(
                 TuiText::from_spans([
                     (FAILURE_WARNING_PREFIX.to_owned(), error_style),
@@ -295,12 +268,10 @@ fn failure_text(presentation: &FailedOutputPresentation) -> String {
             message,
             can_use_own_api_keys,
         } => {
-            let actions = if *can_use_own_api_keys {
-                format!("{COMPARE_PLANS_LABEL}  or  {USE_YOUR_OWN_API_KEYS_LABEL}")
-            } else {
-                COMPARE_PLANS_LABEL.to_owned()
-            };
-            format!("{message}\n\n{actions}")
+            // Heddle: no plan-comparison or BYOK links -- both were warp.dev
+            // destinations. The message stands on its own.
+            let _ = can_use_own_api_keys;
+            message.clone()
         }
         FailedOutputPresentation::InvalidApiKey { title, detail } => {
             format!("{title}\n{detail}")
