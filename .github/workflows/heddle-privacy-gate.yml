@@ -1,0 +1,89 @@
+name: Heddle privacy gate
+
+# The guarantee Heddle exists to make, enforced on every change.
+#
+# This is deliberately narrow and fast: it builds the OSS binary and asserts
+# that no Warp first-party endpoint, credential, or telemetry destination is
+# present in the artifact. It is the regression defence for a fork that tracks a
+# fast-moving upstream, where a merge can silently reintroduce a hardcoded URL.
+#
+# What it does NOT do is prove the binary makes no network connections. See
+# script/heddle/verify-no-warp-endpoints for the honest scope of the claim.
+#
+# Security note: no untrusted event data (PR titles, branch names, commit
+# messages) is interpolated into any `run:` block here.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heddle-privacy-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-warp-endpoints:
+    name: Binary contains no Warp endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup show   # installs the version pinned by rust-toolchain.toml
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config unzip \
+            libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
+            libfontconfig1-dev libasound2-dev libclang-dev
+
+      # protoc must come from the official release, NOT apt. Debian/Ubuntu's
+      # protobuf-compiler ships the binary without the well-known type
+      # definitions, so the build fails on
+      # `google/protobuf/descriptor.proto: File not found`. Upstream extracts
+      # include/* for the same reason (script/linux/install_build_deps).
+      - name: Install protoc with well-known types
+        env:
+          PROTOC_VERSION: "25.1"
+        run: |
+          set -euxo pipefail
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          protoc --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: heddle-privacy-gate
+
+      - name: Build the OSS binary
+        run: cargo build -p warp_tui --bin heddle-tui
+
+      # Prove the scanner CAN fail before trusting it to pass. A verification
+      # tool that cannot distinguish "checked and clean" from "did not really
+      # check" converts uncertainty into false confidence. That has bitten this
+      # project four separate times, so the gate self-tests every run.
+      - name: Self-test the scanner against a planted canary
+        run: |
+          set -euo pipefail
+          cp target/debug/heddle-tui /tmp/heddle-canary
+          printf 'oz.warp.dev' >> /tmp/heddle-canary
+          if ./script/heddle/verify-no-warp-endpoints /tmp/heddle-canary; then
+            echo "::error::Scanner PASSED a binary containing a planted endpoint."
+            echo "The scanner is broken; a clean result from it would be meaningless."
+            exit 1
+          fi
+          echo "Scanner correctly rejected the canary."
+          rm -f /tmp/heddle-canary
+
+      - name: Verify no Warp endpoints in the binary
+        run: ./script/heddle/verify-no-warp-endpoints
