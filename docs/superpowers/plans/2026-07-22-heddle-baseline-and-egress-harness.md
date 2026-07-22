@@ -70,8 +70,12 @@ Expected: `rustup show` reports active toolchain `1.92.0`, read from `rust-toolc
 - [ ] **Step 2: Install build prerequisites**
 
 ```bash
-brew install jq clang-format pkgconf llvm
+brew install jq clang-format pkgconf llvm protobuf
 ```
+
+`protobuf` is REQUIRED on the host too, not just in the container:
+`crates/remote_server/build.rs:4` calls `prost_build::compile_protos()` unconditionally, and
+`warp_tui` pulls `remote_server` in through the `warp` crate.
 
 Skip `sentry-cli`, `create-dmg`, `multitime`, `powershell`, and Docker Desktop for now — they are
 needed for bundling and linting, not for `cargo build`. Do NOT run `./script/bootstrap`: it
@@ -118,9 +122,9 @@ git commit -m "chore: record baseline OSS build environment"
 
 ### Task 2: Egress observation harness (must FAIL against unmodified OSS)
 
-Observes `connect()` syscalls directly, so it catches every egress path — HTTP, websockets,
-Sentry, Firebase — not just `http_client`. Runs in a Linux container so it works identically on
-your Mac and in CI.
+Observes network syscalls (`connect`/`sendto`/`sendmsg`) directly, so it catches every egress path
+— HTTP, websockets, Sentry, Firebase, UDP — below any client abstraction that could bypass an
+in-process check. Runs in a Linux container so it behaves identically on your Mac and in CI.
 
 **Files:**
 - Create: `script/heddle/egress-test`
@@ -128,9 +132,12 @@ your Mac and in CI.
 - Test: the script IS the test.
 
 **Interfaces:**
-- Consumes: `target/debug/warp-tui-oss` from Task 1 (rebuilt inside the container for Linux).
-- Produces: `script/heddle/egress-test`, exit 0 when zero non-loopback connections are observed,
-  exit 1 otherwise. Writes observed destinations to `target/heddle-egress.log`.
+- Consumes: Task 1's proof that the workspace compiles (the container rebuilds for Linux itself).
+- Produces: `script/heddle/egress-test`, exiting **0** when no non-loopback egress is observed,
+  **1** when egress is observed, and **2** when the run was inconclusive. An inconclusive run must
+  never be read as a pass. Writes the subject trace to `target/heddle-egress.log`, the positive
+  control to `target/heddle-egress-control.log`, and run markers to
+  `target/heddle-egress-markers.txt`.
 
 - [ ] **Step 1: Write the container that observes syscalls**
 
@@ -238,7 +245,7 @@ docker run --rm -t \
      RC=0
      strace -f -qq -e trace=network -o /src/${CONTROL_LOG} \
         curl -s -m 5 https://example.com >/dev/null 2>&1 || RC=\$?
-     echo \"CONTROL_EXIT=\$RC\" > /src/${MARKER}
+     echo \"CONTROL_EXIT=\$RC\" >> /src/${MARKER}
 
      # Subject under test. 'set -e' would abort on timeout's non-zero exit
      # before the marker is written, so capture the code explicitly. 124 means
@@ -267,10 +274,10 @@ if ! grep -q 'TAG_BAKED=yes' "${MARKER}"; then
     exit 2
 fi
 
-if [[ ! -s "${LOG}" ]]; then
-    echo "INCONCLUSIVE: subject trace is empty — the binary never started."
-    exit 2
-fi
+# NOTE: an empty subject trace is NOT inconclusive. Once the fork is clean that
+# is precisely the expected result, and treating it as a failure would make the
+# target state unreachable. The SUBJECT_EXIT=124 marker below is what proves the
+# process actually ran; liveness and emptiness are separate questions.
 
 if ! grep -q 'SUBJECT_EXIT=124' "${MARKER}"; then
     echo "INCONCLUSIVE: the process exited before the ${RUN_SECONDS}s timeout."
@@ -282,9 +289,12 @@ fi
 echo "Analysing observed egress..."
 
 # trace=network covers connect/sendto/sendmsg, so UDP egress is caught too.
-# strace renders destinations with inet_addr/inet_pton. Loopback and AF_UNIX
-# are expected; anything else is egress.
-VIOLATIONS="$(grep -E '(AF_INET|AF_INET6)' "${LOG}" 2>/dev/null \
+# Anchor on the syscalls that carry a DESTINATION. Matching AF_INET anywhere
+# would flag socket(AF_INET, SOCK_STREAM, ...) — merely creating a socket, with
+# nowhere to send — as egress, producing false FAILs.
+# Loopback and AF_UNIX are expected; anything else is egress.
+VIOLATIONS="$(grep -E '(^|[0-9] +)(connect|sendto|sendmsg)\(' "${LOG}" 2>/dev/null \
+    | grep -E 'AF_INET' \
     | grep -vE 'inet_addr\("127\.|inet_pton\(AF_INET6, "::1"' \
     || true)"
 
@@ -358,16 +368,22 @@ Append to `crates/http_client/src/lib_tests.rs`:
 
 ```rust
 #[test]
-fn oss_channel_denies_warp_infrastructure() {
-    let url = reqwest::Url::parse("https://app.warp.dev/graphql/v2").unwrap();
-    assert!(
-        !crate::is_egress_permitted_for_channel(&url, warp_core::channel::Channel::Oss),
-        "OSS builds must not contact Warp infrastructure"
-    );
+fn egress_oss_denies_warp_infrastructure() {
+    for host in [
+        "https://app.warp.dev/graphql/v2",
+        "https://oz.warp.dev/api",
+        "wss://rtc.app.warp.dev/graphql/v2",
+    ] {
+        let url = reqwest::Url::parse(host).unwrap();
+        assert!(
+            !crate::is_egress_permitted_for_channel(&url, warp_core::channel::Channel::Oss),
+            "OSS builds must not contact Warp infrastructure: {host}"
+        );
+    }
 }
 
 #[test]
-fn oss_channel_permits_loopback() {
+fn egress_oss_permits_loopback() {
     let url = reqwest::Url::parse("http://127.0.0.1:8080/health").unwrap();
     assert!(crate::is_egress_permitted_for_channel(
         &url,
@@ -376,24 +392,24 @@ fn oss_channel_permits_loopback() {
 }
 
 #[test]
-fn oss_channel_denies_third_party_until_user_opts_in() {
-    // Deny by default: even a benign host is blocked until registered.
-    let url = reqwest::Url::parse("https://api.example-provider.test/v1/messages").unwrap();
-    assert!(
-        !crate::is_egress_permitted_for_channel(&url, warp_core::channel::Channel::Oss),
-        "unregistered hosts must be denied by default"
-    );
-
-    // A user's own model provider is their choice, not a phone-home.
-    crate::allow_host("api.example-provider.test");
-    assert!(crate::is_egress_permitted_for_channel(
-        &url,
-        warp_core::channel::Channel::Oss
-    ));
+fn egress_oss_permits_unrelated_third_party() {
+    // The tripwire targets Warp's own infrastructure. It must NOT break
+    // legitimate user-directed traffic such as LSP server downloads from
+    // GitHub (crates/lsp/src/install.rs:59) or a user's own model provider.
+    for host in [
+        "https://github.com/some/lsp-release.tar.gz",
+        "https://api.example-provider.test/v1/messages",
+    ] {
+        let url = reqwest::Url::parse(host).unwrap();
+        assert!(
+            crate::is_egress_permitted_for_channel(&url, warp_core::channel::Channel::Oss),
+            "tripwire must not block unrelated traffic: {host}"
+        );
+    }
 }
 
 #[test]
-fn non_oss_channels_are_unaffected() {
+fn egress_non_oss_channels_are_unaffected() {
     let url = reqwest::Url::parse("https://app.warp.dev/graphql/v2").unwrap();
     assert!(crate::is_egress_permitted_for_channel(
         &url,
@@ -405,7 +421,8 @@ fn non_oss_channels_are_unaffected() {
 - [ ] **Step 2: Run it and verify it fails**
 
 ```bash
-cargo test -p http_client is_egress 2>&1 | tail -20
+set -o pipefail
+cargo test -p http_client egress 2>&1 | tail -20
 ```
 
 Expected: FAIL — `cannot find function `is_egress_permitted_for_channel` in this scope`.
@@ -414,38 +431,32 @@ Expected: FAIL — `cannot find function `is_egress_permitted_for_channel` in th
 
 Add to `crates/http_client/src/lib.rs`, immediately before `impl Client {` at line 138:
 
-Add `use std::collections::BTreeSet;` and `use std::sync::RwLock;` to the imports at the top of the
-file, then:
-
 ```rust
-/// Hosts the user has explicitly opted into contacting — their own model
-/// provider, their MCP servers. Deny-by-default means nothing reaches the
-/// network unless it was either loopback or registered here.
-///
-/// An allowlist rather than a denylist is deliberate: a denylist silently fails
-/// open the moment upstream adds a new endpoint, which is precisely the drift
-/// this fork has to survive.
-static ALLOWED_HOSTS: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
-
-/// Registers a host the user has configured. Call this when loading user
-/// settings, not from anywhere that could be influenced by a server response.
-pub fn allow_host(host: impl Into<String>) {
-    if let Ok(mut hosts) = ALLOWED_HOSTS.write() {
-        hosts.insert(host.into());
-    }
-}
-
-fn is_host_allowed(host: &str) -> bool {
-    ALLOWED_HOSTS
-        .read()
-        .map(|hosts| hosts.contains(host))
-        .unwrap_or(false)
-}
+/// Warp's own first-party infrastructure. Contacting any of it from an OSS
+/// build defeats the point of the fork.
+const WARP_INFRASTRUCTURE_SUFFIXES: &[&str] = &[
+    "warp.dev",
+    "rudderstack.com",
+    "rudderlabs.com",
+    "sentry.io",
+    "firebaseio.com",
+    "identitytoolkit.googleapis.com",
+];
 
 /// Whether `url` may be contacted from `channel`.
 ///
-/// Only [`Channel::Oss`] is restricted; all other channels are upstream's
-/// concern and are left untouched so their tests keep passing.
+/// This is a **tripwire, not the guarantee.** A deny-by-default allowlist here
+/// would be both leaky and harmful: leaky because `crates/mcp/src/runtime.rs:428`
+/// builds a raw `reqwest` client that never passes through this type, and
+/// harmful because it would block legitimate user-directed traffic such as LSP
+/// server downloads (`crates/lsp/src/install.rs:59`). Narrowly targeting Warp's
+/// own hosts is what this layer can actually do correctly.
+///
+/// The real guarantees live elsewhere: the `ChannelConfig` `Option` migration
+/// removes the endpoints at compile time, and `script/heddle/egress-test`
+/// observes the process at the syscall level, below every bypass.
+///
+/// Only [`Channel::Oss`] is restricted; other channels are upstream's concern.
 pub fn is_egress_permitted_for_channel(url: &reqwest::Url, channel: Channel) -> bool {
     if channel != Channel::Oss {
         return true;
@@ -454,10 +465,9 @@ pub fn is_egress_permitted_for_channel(url: &reqwest::Url, channel: Channel) -> 
         // No host means no network egress (e.g. a data: URL).
         return true;
     };
-    if host == "localhost" || host == "::1" || host.starts_with("127.") {
-        return true;
-    }
-    is_host_allowed(host)
+    !WARP_INFRASTRUCTURE_SUFFIXES
+        .iter()
+        .any(|denied| host == *denied || host.ends_with(&format!(".{denied}")))
 }
 
 /// Whether `url` may be contacted from the running channel.
@@ -469,7 +479,8 @@ pub fn is_egress_permitted(url: &reqwest::Url) -> bool {
 - [ ] **Step 4: Run the tests and verify they pass**
 
 ```bash
-cargo test -p http_client is_egress 2>&1 | tail -20
+set -o pipefail
+cargo test -p http_client egress 2>&1 | tail -20
 ```
 
 Expected: PASS, 4 tests.
@@ -497,7 +508,9 @@ In `crates/http_client/src/lib.rs`, add this helper inside `impl Client` (immedi
             Ok(parsed) if is_egress_permitted(&parsed) => parsed,
             Ok(parsed) => {
                 let host = parsed.host_str().unwrap_or("<no host>").to_owned();
-                debug_assert!(false, "OSS egress policy violation: {host}");
+                // Deliberately NOT debug_assert!(false): a policy violation
+                // should be loud, not fatal. Panicking would crash debug builds
+                // on any stray call site and break existing upstream tests.
                 log::error!("Blocked OSS egress to {host}");
                 blocked()
             }
@@ -603,6 +616,7 @@ mod tests;
 - [ ] **Step 2: Run it and verify it fails**
 
 ```bash
+set -o pipefail
 cargo test -p warp --lib settings::privacy 2>&1 | tail -20
 ```
 
@@ -640,6 +654,7 @@ In `app/src/settings/privacy.rs`, replace `should_disable_telemetry` (lines 202�
 - [ ] **Step 4: Run the tests and verify they pass**
 
 ```bash
+set -o pipefail
 cargo test -p warp --lib settings::privacy 2>&1 | tail -20
 ```
 
@@ -705,6 +720,7 @@ mod tests;
 - [ ] **Step 2: Run it and verify it fails**
 
 ```bash
+set -o pipefail
 cargo test -p warp --lib server::telemetry::collector 2>&1 | tail -20
 ```
 
@@ -736,6 +752,7 @@ body:
 - [ ] **Step 4: Run the tests and verify they pass**
 
 ```bash
+set -o pipefail
 cargo test -p warp --lib server::telemetry::collector 2>&1 | tail -20
 ```
 
@@ -794,6 +811,7 @@ mod tests;
 - [ ] **Step 2: Run it and verify it fails**
 
 ```bash
+set -o pipefail
 cargo test -p warp --lib server::experiments 2>&1 | tail -20
 ```
 
@@ -828,6 +846,7 @@ Then insert as the first line of `on_added_to`'s body:
 - [ ] **Step 4: Run the tests and verify they pass**
 
 ```bash
+set -o pipefail
 cargo test -p warp --lib server::experiments 2>&1 | tail -20
 ```
 
