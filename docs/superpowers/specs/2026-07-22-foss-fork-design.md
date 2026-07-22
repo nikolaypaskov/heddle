@@ -109,7 +109,9 @@ Rejected alternatives:
 | Concern | Location | Change |
 |---|---|---|
 | Server + Oz endpoints | `crates/warp_core/src/channel/config.rs:8` | `Option`, `None` for OSS |
-| Telemetry policy | `app/src/settings/privacy.rs:202` `should_disable_telemetry()` | unconditionally `true` |
+| Telemetry policy | `app/src/settings/privacy.rs` — clamp all three privacy setters (498/534/563) and `new()` (246) | store `false` on OSS |
+| Privacy state ingestion | `app/src/settings/privacy.rs:380` `fetch_or_update_settings()` | no-op on OSS |
+| Telemetry policy (defence in depth) | `app/src/settings/privacy.rs:202` `should_disable_telemetry()` | unconditionally `true` |
 | Telemetry transport | `app/src/server/telemetry/mod.rs` `TelemetryApi` (RudderStack) | no-op sink; queue never flushes |
 | Collector registration | `app/src/server/telemetry/collector.rs:35` | never registered under OSS |
 | Remote control | `app/src/server/experiments/mod.rs` `ServerExperiments` | never applied |
@@ -135,6 +137,31 @@ data, or when the server-side `AgentModeAnalyticsExperiment` enables the `AgentM
 (`app/src/server/experiments/mod.rs:81`, applied from server state per that module's own header
 comment). In the fork this function returns `true` unconditionally, and server experiments are
 never applied at all.
+
+**Correction, from runtime evidence (2026-07-22).** Overriding this function is *necessary but not
+sufficient*, and the real problem is worse than the static analysis above suggested. Running the
+unmodified OSS build logged out, with an empty `HOME`, produced:
+
+```
+[warp::settings::privacy] Warp Drive privacy preferences are set, using those for
+    telemetry=true, crash_reporting=true, cloud_conversation_storage=true
+```
+
+Two things follow:
+
+1. **The policy input itself arrives over the network.** `WarpDrivePrivacySettings` is a cloud
+   object that upstream calls "the source of truth for these booleans"
+   (`app/src/settings/privacy.rs:250`); `PrivacySettings` initialises from it and *subscribes to
+   changes*. `fetch_or_update_settings()` (`:380`) performs the round trip. Nulling
+   `telemetry_config` does not prevent this.
+2. **`is_telemetry_enabled` is a public field read directly** by roughly a dozen call sites that
+   never consult `should_disable_telemetry()` — `app/src/workspace/view.rs:7970`,
+   `app/src/terminal/input.rs:9317`, `app/src/terminal/terminal_manager.rs:135`,
+   `app/src/server/telemetry/collector.rs:174` and others. Each would read a server-supplied
+   `true`.
+
+The fix therefore clamps at every **write** and blocks the **ingestion**, leaving the readers
+untouched. Full evidence: `docs/superpowers/plans/egress-baseline-evidence.md`.
 
 ### Agent replacement
 

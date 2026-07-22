@@ -605,18 +605,39 @@ ChannelConfig Option migration."
 
 ---
 
-### Task 4: Telemetry policy always disabled on OSS
+### Task 4: Privacy state is local-only and always off on OSS
 
-Removes the server-controlled override of the user's telemetry opt-out.
+Upstream treats `WarpDrivePrivacySettings` — a **cloud object** — as "the source of truth for these
+booleans" (`app/src/settings/privacy.rs:250`). `PrivacySettings` initialises from it *and
+subscribes to changes*, so a server update flips telemetry at any time. This was observed live:
+see `docs/superpowers/plans/egress-baseline-evidence.md`, where a logged-out cold start logged
+
+```
+Warp Drive privacy preferences are set, using those for
+    telemetry=true, crash_reporting=true, cloud_conversation_storage=true
+```
+
+**Gating `should_disable_telemetry()` alone is NOT sufficient.** `is_telemetry_enabled` is a public
+field read directly in roughly a dozen places that never consult that function — e.g.
+`app/src/workspace/view.rs:7970`, `app/src/terminal/input.rs:9317`,
+`app/src/terminal/terminal_manager.rs:135`, `app/src/server/telemetry/collector.rs:174`. Those
+readers would each see a server-supplied `true`.
+
+So clamp at the **writes** and block the **ingestion**, per the plan's source-of-truth rule. The
+call sites stay untouched.
 
 **Files:**
-- Modify: `app/src/settings/privacy.rs:202`
+- Modify: `app/src/settings/privacy.rs` — `new()` (246), `fetch_or_update_settings()` (380),
+  `set_is_crash_reporting_enabled()` (498), `set_is_telemetry_enabled()` (534),
+  `set_is_cloud_conversation_storage_enabled()` (563), `should_disable_telemetry()` (202)
 - Create: `app/src/settings/privacy_tests.rs`
 
 **Interfaces:**
 - Consumes: `warp_core::channel::{Channel, ChannelState}`.
-- Produces: `PrivacySettingsSnapshot::should_disable_telemetry()` returning `true` on OSS
-  regardless of flags, settings, or server state. Signature unchanged: `fn(&self) -> bool`.
+- Produces:
+  - `PrivacySettings::clamp_privacy_value_for_channel(requested: bool, channel: Channel) -> bool`
+  - `PrivacySettings::clamp_privacy_value(requested: bool) -> bool`
+  - `PrivacySettingsSnapshot::should_disable_telemetry_for_channel(&self, channel: Channel) -> bool`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -625,21 +646,43 @@ Create `app/src/settings/privacy_tests.rs`:
 ```rust
 use warp_core::channel::Channel;
 
-use super::PrivacySettingsSnapshot;
+use super::{PrivacySettings, PrivacySettingsSnapshot};
+
+#[test]
+fn oss_clamps_every_privacy_toggle_to_off() {
+    for requested in [true, false] {
+        assert!(
+            !PrivacySettings::clamp_privacy_value_for_channel(requested, Channel::Oss),
+            "OSS must store false regardless of the requested value ({requested})"
+        );
+    }
+}
+
+#[test]
+fn non_oss_channels_store_the_requested_value() {
+    assert!(PrivacySettings::clamp_privacy_value_for_channel(
+        true,
+        Channel::Stable
+    ));
+    assert!(!PrivacySettings::clamp_privacy_value_for_channel(
+        false,
+        Channel::Stable
+    ));
+}
 
 #[test]
 fn oss_disables_telemetry_even_when_force_enabled() {
     // `mock()` sets is_telemetry_enabled, is_telemetry_force_enabled and
-    // should_collect_ai_ugc_telemetry all to true — the worst case.
+    // should_collect_ai_ugc_telemetry all to true -- the worst case.
     let snapshot = PrivacySettingsSnapshot::mock();
     assert!(
         snapshot.should_disable_telemetry_for_channel(Channel::Oss),
-        "OSS builds must disable telemetry even when the server force-enables it"
+        "OSS must disable telemetry even when the server force-enables it"
     );
 }
 
 #[test]
-fn non_oss_channels_retain_upstream_behaviour() {
+fn non_oss_channels_retain_upstream_telemetry_behaviour() {
     let snapshot = PrivacySettingsSnapshot::mock();
     assert!(
         !snapshot.should_disable_telemetry_for_channel(Channel::Stable),
@@ -663,11 +706,85 @@ set -o pipefail
 cargo test -p warp --lib settings::privacy 2>&1 | tail -20
 ```
 
-Expected: FAIL — no method `should_disable_telemetry_for_channel`.
+Expected: FAIL — no function `clamp_privacy_value_for_channel`. Confirm the output reports four
+tests attempted, not zero; `cargo test` exits 0 when a filter matches nothing.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Add the clamp**
 
-In `app/src/settings/privacy.rs`, replace `should_disable_telemetry` (lines 202–207) with:
+In `app/src/settings/privacy.rs`, add to `impl PrivacySettings`:
+
+```rust
+    /// Heddle: on OSS, privacy state is local-only and always off.
+    ///
+    /// This clamps at the write rather than at `should_disable_telemetry()`
+    /// because `is_telemetry_enabled` is a public field read directly by many
+    /// call sites that never consult that function.
+    pub fn clamp_privacy_value_for_channel(
+        requested: bool,
+        channel: warp_core::channel::Channel,
+    ) -> bool {
+        if channel == warp_core::channel::Channel::Oss {
+            return false;
+        }
+        requested
+    }
+
+    /// Clamps `requested` for the running channel.
+    pub fn clamp_privacy_value(requested: bool) -> bool {
+        Self::clamp_privacy_value_for_channel(requested, warp_core::channel::ChannelState::channel())
+    }
+```
+
+- [ ] **Step 4: Apply the clamp at every write**
+
+Insert as the FIRST line of the body of each of `set_is_crash_reporting_enabled` (498),
+`set_is_telemetry_enabled` (534), and `set_is_cloud_conversation_storage_enabled` (563):
+
+```rust
+        let new_value = Self::clamp_privacy_value(new_value);
+```
+
+Shadowing the parameter means the existing `old_value` comparison and change-event logic below it
+work unchanged.
+
+In `new()` (246), clamp the three initial reads:
+
+```rust
+        let warp_drive_privacy = WarpDrivePrivacySettings::as_ref(ctx);
+        let is_telemetry_enabled =
+            Self::clamp_privacy_value(*warp_drive_privacy.is_telemetry_enabled.value());
+        let is_crash_reporting_enabled =
+            Self::clamp_privacy_value(*warp_drive_privacy.is_crash_reporting_enabled.value());
+        let is_cloud_conversation_storage_enabled = Self::clamp_privacy_value(
+            *warp_drive_privacy
+                .is_cloud_conversation_storage_enabled
+                .value(),
+        );
+```
+
+The subscription to `WarpDrivePrivacySettings` below it needs no change: it routes through the
+setters, which now clamp.
+
+- [ ] **Step 5: Block the server round trip**
+
+`fetch_or_update_settings` (380) both *fetches* server state and *uploads* local state. On OSS it
+must do neither — this is egress in its own right, not merely a policy input. Insert as the first
+line of its body:
+
+```rust
+    pub fn fetch_or_update_settings(&self, ctx: &mut ModelContext<Self>) {
+        // Heddle: OSS never synchronises privacy settings with Warp's servers.
+        if warp_core::channel::ChannelState::channel() == warp_core::channel::Channel::Oss {
+            return;
+        }
+        // ... existing body unchanged ...
+```
+
+Its only caller is `app/src/auth/auth_manager.rs:437`, which is left untouched.
+
+- [ ] **Step 6: Keep the derived guard as defence in depth**
+
+Replace `should_disable_telemetry` (202) with:
 
 ```rust
     pub fn should_disable_telemetry(&self) -> bool {
@@ -676,8 +793,7 @@ In `app/src/settings/privacy.rs`, replace `should_disable_telemetry` (lines 202�
 
     /// Heddle: OSS builds never send telemetry. Upstream allows a user's opt-out
     /// to be overridden by `is_telemetry_force_enabled` (set from team/server
-    /// data) or by the server-driven `AgentModeAnalytics` experiment. On the OSS
-    /// channel neither override applies.
+    /// data) or by the server-driven `AgentModeAnalytics` experiment.
     pub fn should_disable_telemetry_for_channel(
         &self,
         channel: warp_core::channel::Channel,
@@ -691,31 +807,29 @@ In `app/src/settings/privacy.rs`, replace `should_disable_telemetry` (lines 202�
     }
 ```
 
-`PrivacySettingsSnapshot::mock()` is currently `#[cfg(test)]` only, which is what these tests need
-— no change required.
-
-- [ ] **Step 4: Run the tests and verify they pass**
+- [ ] **Step 7: Run the tests and verify they pass**
 
 ```bash
 set -o pipefail
 cargo test -p warp --lib settings::privacy 2>&1 | tail -20
 ```
 
-Expected: PASS, 2 tests.
+Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 ./script/format
 git add app/src/settings/privacy.rs app/src/settings/privacy_tests.rs
-git commit -m "feat(privacy): always disable telemetry on OSS channel
+git commit -m "feat(privacy): make privacy state local-only and off on OSS
 
-Upstream lets is_telemetry_force_enabled or the server-driven
-AgentModeAnalytics experiment override a user's telemetry opt-out. OSS
-builds now short-circuit both."
+Upstream treats the WarpDrivePrivacySettings cloud object as the source of
+truth, so a logged-out cold start fetches server-supplied preferences and
+sets telemetry=true. Clamp at every write and skip the server round trip
+entirely on OSS. Gating should_disable_telemetry() alone was insufficient
+because is_telemetry_enabled is read directly by many call sites."
 ```
 
----
 
 ### Task 5: Never initialize the telemetry collector on OSS
 
