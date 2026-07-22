@@ -2,6 +2,7 @@ use std::future::Future;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
+use warp_core::channel::BackendUnavailable;
 use warpui::r#async::Timer;
 use warpui::{RetryOption, duration_with_jitter};
 
@@ -54,6 +55,12 @@ pub(crate) fn is_transient_http_error(e: &anyhow::Error) -> bool {
     // human-friendly Display, so the typed error sits somewhere in the chain rather than as
     // the top-level error object — walk the chain.
     for cause in e.chain() {
+        // Heddle: a backend this build does not have is a PERMANENT state.
+        // Without this arm it falls through to the `true` default below and is
+        // retried forever against an endpoint that does not exist.
+        if cause.downcast_ref::<BackendUnavailable>().is_some() {
+            return false;
+        }
         if let Some(http_err) = cause.downcast_ref::<HttpStatusError>() {
             return is_transient_status(http_err.status);
         }
@@ -69,12 +76,17 @@ pub(crate) fn is_transient_http_error(e: &anyhow::Error) -> bool {
 /// operation layer and should not be retried or placed into transient cooldowns.
 pub(crate) fn is_transient_graphql_or_http_error(e: &anyhow::Error) -> bool {
     for cause in e.chain() {
+        if cause.downcast_ref::<BackendUnavailable>().is_some() {
+            return false;
+        }
         if let Some(graphql_err) = cause.downcast_ref::<GraphQLError>() {
             return match graphql_err {
                 GraphQLError::RequestError(_) => true,
                 GraphQLError::HttpError { status, .. } => is_transient_status(status.as_u16()),
+                // NoServerConfigured is permanent: there is no server to retry.
                 GraphQLError::StagingAccessBlocked
                 | GraphQLError::IapChallengeBlocked
+                | GraphQLError::NoServerConfigured
                 | GraphQLError::ResponseError(_) => false,
             };
         }

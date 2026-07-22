@@ -163,7 +163,7 @@ fn render_tier_limits_footer(
         .current_team()
         .map(|team| UserWorkspaces::upgrade_link_for_team(team.uid))?;
 
-    fragments.push(FormattedTextFragment::hyperlink("Upgrade", upgrade_url));
+    fragments.push(FormattedTextFragment::hyperlink_or_plain("Upgrade", upgrade_url));
     fragments.push(FormattedTextFragment::plain_text(
         " for more powerful cloud agents.",
     ));

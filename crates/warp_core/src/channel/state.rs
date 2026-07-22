@@ -17,13 +17,22 @@ lazy_static! {
     static ref CHANNEL_STATE: Mutex<ChannelState> = Mutex::new(ChannelState::init());
 }
 
-/// Message used whenever an operation needs a Warp server that this build does
-/// not have. Heddle's OSS build carries no Warp endpoints at all.
-pub const NO_SERVER_CONFIGURED: &str = "no Warp server is configured for this build";
-
-/// Message used whenever an operation needs the Oz backend, which is
-/// proprietary and absent from this build.
-pub const NO_OZ_CONFIGURED: &str = "no Oz backend is configured for this build";
+/// A backend this build simply does not have.
+///
+/// This is a **permanent capability state, not a transient failure.** It is a
+/// typed error precisely so retry logic can distinguish it: an untyped
+/// `anyhow` error would be classified transient by
+/// `is_transient_http_error` (which defaults to `true` for errors carrying no
+/// HTTP status) and retried forever against an endpoint that does not exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum BackendUnavailable {
+    #[error("no Warp server is configured for this build")]
+    WarpServer,
+    #[error("no Warp RTC server is configured for this build")]
+    Rtc,
+    #[error("no Oz backend is configured for this build")]
+    Oz,
+}
 
 #[cfg(feature = "test-util")]
 lazy_static! {
@@ -334,22 +343,22 @@ impl ChannelState {
     /// expression inside `format!` arguments, so most call sites become
     /// `ChannelState::require_server_root_url()?`.
     pub fn require_server_root_url() -> anyhow::Result<Cow<'static, str>> {
-        Self::server_root_url().ok_or_else(|| anyhow::anyhow!(NO_SERVER_CONFIGURED))
+        Self::server_root_url().ok_or_else(|| BackendUnavailable::WarpServer.into())
     }
 
     /// The RTC HTTP root, or an error when this build has no Warp server.
     pub fn require_rtc_http_url() -> anyhow::Result<Cow<'static, str>> {
-        Self::rtc_http_url().ok_or_else(|| anyhow::anyhow!(NO_SERVER_CONFIGURED))
+        Self::rtc_http_url().ok_or_else(|| BackendUnavailable::Rtc.into())
     }
 
     /// The websocket server URL, or an error when this build has no Warp server.
     pub fn require_ws_server_url() -> anyhow::Result<Cow<'static, str>> {
-        Self::ws_server_url().ok_or_else(|| anyhow::anyhow!(NO_SERVER_CONFIGURED))
+        Self::ws_server_url().ok_or_else(|| BackendUnavailable::Rtc.into())
     }
 
     /// The Oz root URL, or an error when this build has no Oz backend.
     pub fn require_oz_root_url() -> anyhow::Result<Cow<'static, str>> {
-        Self::oz_root_url().ok_or_else(|| anyhow::anyhow!(NO_OZ_CONFIGURED))
+        Self::oz_root_url().ok_or_else(|| BackendUnavailable::Oz.into())
     }
 
     pub fn workload_audience_url() -> Option<Cow<'static, str>> {

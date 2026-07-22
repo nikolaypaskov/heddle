@@ -605,6 +605,18 @@ impl FormattedTextFragment {
         }
     }
 
+    /// A hyperlink when `url` is present, plain text when it is not.
+    ///
+    /// Heddle: a build with no Warp server has no billing, account, or Oz page
+    /// to link to. Degrading to plain text keeps the surrounding sentence
+    /// readable instead of rendering a dead link.
+    pub fn hyperlink_or_plain(tag: impl Into<String>, url: Option<String>) -> Self {
+        match url {
+            Some(url) => Self::hyperlink(tag, url),
+            None => Self::plain_text(tag),
+        }
+    }
+
     pub fn hyperlink(tag: impl Into<String>, url: impl Into<String>) -> Self {
         Self {
             text: tag.into(),

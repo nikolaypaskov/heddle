@@ -536,9 +536,12 @@ pub mod text {
 
     /// Report the run ID with a link to the Oz dashboard.
     pub fn run_started<W: Write>(run_id: &str, w: &mut W) -> io::Result<()> {
-        let run_url = super::run_url(run_id);
+        // Always report the run ID; the dashboard link is decoration.
         writeln!(w, "Run ID: {run_id}")?;
-        writeln!(w, "Open in Oz: {run_url}\n")
+        match super::run_url(run_id) {
+            Some(run_url) => writeln!(w, "Open in Oz: {run_url}\n"),
+            None => writeln!(w),
+        }
     }
 
     /// Report that a shared session has been established.
@@ -639,7 +642,14 @@ pub mod json {
     #[serde(tag = "event_type", rename_all = "snake_case")]
     enum JsonSystemEvent<'a> {
         ConversationStarted { conversation_id: &'a str },
-        RunStarted { run_id: &'a str, run_url: &'a str },
+        RunStarted {
+            run_id: &'a str,
+            /// Omitted when this build has no Oz backend. The run itself is
+            /// still reported: a missing dashboard link must never suppress a
+            /// successfully created run.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            run_url: Option<&'a str>,
+        },
         SharedSessionEstablished { join_url: &'a str },
     }
 
@@ -1318,7 +1328,7 @@ pub mod json {
         let run_url = super::run_url(run_id);
         let message = JsonMessage::System(JsonSystemEvent::RunStarted {
             run_id,
-            run_url: &run_url,
+            run_url: run_url.as_deref(),
         });
         write_message(&message, w)
     }
@@ -1337,10 +1347,11 @@ use warp_core::channel::ChannelState;
 use crate::ai::agent::{AIAgentText, AIAgentTextSection};
 use crate::code::editor_management::CodeSource;
 
-/// Constructs the Oz dashboard URL for a given run ID.
-fn run_url(run_id: &str) -> String {
-    let oz_root_url = ChannelState::require_oz_root_url()?;
-    format!("{oz_root_url}/runs/{run_id}")
+/// Constructs the Oz dashboard URL for a given run ID, or [`None`] when this
+/// build has no Oz backend.
+fn run_url(run_id: &str) -> Option<String> {
+    let oz_root_url = ChannelState::oz_root_url()?;
+    Some(format!("{oz_root_url}/runs/{run_id}"))
 }
 
 /// Execute a closure with a buffered stdout writer and flush it afterwards.

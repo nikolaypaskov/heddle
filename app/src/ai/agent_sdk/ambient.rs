@@ -514,7 +514,7 @@ impl AmbientAgentRunner {
             };
 
             let should_open = args.open;
-            let oz_root_url = ChannelState::require_oz_root_url()?;
+            let oz_root_url = ChannelState::oz_root_url();
             let ai_client_clone = ai_client.clone();
             let spawn_future = async move {
                 let mut stream = Box::pin(spawn_task(request, ai_client_clone, Some(TASK_STATUS_POLLING_DURATION)));
@@ -526,7 +526,9 @@ impl AmbientAgentRunner {
                         Ok(event) => match event {
                             AmbientAgentEvent::TaskSpawned { task_id, .. } => {
                                 println!("Spawned ambient agent with run ID: {task_id}");
-                                println!("View run: {oz_root_url}/runs/{task_id}");
+                                if let Some(oz_root_url) = oz_root_url.as_ref() {
+                                    println!("View run: {oz_root_url}/runs/{task_id}");
+                                }
                                 spawned_task_id = Some(task_id);
                             }
                             AmbientAgentEvent::AtCapacity => {
@@ -841,7 +843,8 @@ impl AmbientAgentRunner {
             println!("\nAgent Runs ({}):", tasks.len());
         }
 
-        let oz_root_url = ChannelState::require_oz_root_url()?;
+        // Decoration only: a missing Oz link must not suppress the run list.
+        let oz_root_url = ChannelState::oz_root_url();
         for task in tasks {
             let state_emoji = Self::get_state_emoji(&task.state);
 
@@ -853,7 +856,9 @@ impl AmbientAgentRunner {
             table.add_row(vec![header]);
 
             // Oz webapp link
-            table.add_row(vec![format!("Oz: {oz_root_url}/runs/{}", task.task_id)]);
+            if let Some(oz_root_url) = oz_root_url.as_ref() {
+                table.add_row(vec![format!("Oz: {oz_root_url}/runs/{}", task.task_id)]);
+            }
 
             // Title (wrapped, single cell)
             if !task.title.is_empty() {
@@ -933,12 +938,10 @@ impl AmbientAgentRunner {
                 } => {
                     let plan_title = title.as_deref().unwrap_or("Untitled Plan");
                     lines.push(format!("  Plan: {}", plan_title));
-                    if let Some(id) = notebook_uid {
-                        lines.push(format!(
-                            "    Link: {}/drive/notebook/{}",
-                            ChannelState::require_server_root_url()?,
-                            id
-                        ));
+                    if let Some((id, server_root)) =
+                        notebook_uid.as_ref().zip(ChannelState::server_root_url())
+                    {
+                        lines.push(format!("    Link: {server_root}/drive/notebook/{id}"));
                     }
                 }
                 Artifact::Screenshot {

@@ -5693,7 +5693,7 @@ impl TypedActionView for DriveIndex {
                 ctx.emit(DriveIndexEvent::InvokeEnvVarCollectionInSubshell(*id))
             }
             DriveIndexAction::ViewPlans { team_uid } => {
-                ctx.open_url(UserWorkspaces::upgrade_link_for_team(*team_uid).as_str());
+                if let Some(upgrade_url) = UserWorkspaces::upgrade_link_for_team(*team_uid) { ctx.open_url(&upgrade_url); };
                 send_telemetry_from_ctx!(
                     TelemetryEvent::SharedObjectLimitHitBannerViewPlansButtonClicked,
                     ctx

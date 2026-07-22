@@ -5224,13 +5224,13 @@ impl SettingsWidget for UsageWidget {
                 let upgrade_url = UserWorkspaces::upgrade_link_for_team(team.uid);
                 if has_admin_permissions {
                     vec![
-                        FormattedTextFragment::hyperlink("Upgrade", upgrade_url),
+                        FormattedTextFragment::hyperlink_or_plain("Upgrade", upgrade_url),
                         FormattedTextFragment::plain_text(" to get more AI usage."),
                     ]
                 } else {
                     // The /upgrade page says to contact their administrator.
                     vec![
-                        FormattedTextFragment::hyperlink("Compare plans", upgrade_url),
+                        FormattedTextFragment::hyperlink_or_plain("Compare plans", upgrade_url),
                         FormattedTextFragment::plain_text(" for more AI usage."),
                     ]
                 }
@@ -5244,7 +5244,7 @@ impl SettingsWidget for UsageWidget {
             let user_id = auth_state.user_id().unwrap_or_default();
             let upgrade_url = UserWorkspaces::upgrade_link(user_id);
             vec![
-                FormattedTextFragment::hyperlink("Upgrade", upgrade_url),
+                FormattedTextFragment::hyperlink_or_plain("Upgrade", upgrade_url),
                 FormattedTextFragment::plain_text(" to get more AI usage."),
             ]
         };
@@ -9313,7 +9313,7 @@ impl SettingsWidget for ApiKeysWidget {
                     let upgrade_url = UserWorkspaces::upgrade_link_for_team(team.uid);
                     if has_admin_permissions {
                         vec![
-                            FormattedTextFragment::hyperlink(
+                            FormattedTextFragment::hyperlink_or_plain(
                                 "Upgrade to the Build plan",
                                 upgrade_url,
                             ),
@@ -9339,7 +9339,7 @@ impl SettingsWidget for ApiKeysWidget {
                 let user_id = auth_state.user_id().unwrap_or_default();
                 let upgrade_url = UserWorkspaces::upgrade_link(user_id);
                 vec![
-                    FormattedTextFragment::hyperlink("Upgrade to the Build plan", upgrade_url),
+                    FormattedTextFragment::hyperlink_or_plain("Upgrade to the Build plan", upgrade_url),
                     FormattedTextFragment::plain_text(" to use your own API keys."),
                 ]
             };

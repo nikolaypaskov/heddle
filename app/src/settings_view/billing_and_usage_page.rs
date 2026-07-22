@@ -769,10 +769,10 @@ impl TypedActionView for BillingAndUsagePageView {
         match action {
             BillingAndUsagePageAction::Upgrade { team_uid, user_id } => match team_uid {
                 Some(team_uid) => {
-                    ctx.open_url(&UserWorkspaces::upgrade_link_for_team(*team_uid));
+                    if let Some(upgrade_url) = UserWorkspaces::upgrade_link_for_team(*team_uid) { ctx.open_url(&upgrade_url); };
                 }
                 None => {
-                    ctx.open_url(&UserWorkspaces::upgrade_link(*user_id));
+                    if let Some(upgrade_url) = UserWorkspaces::upgrade_link(*user_id) { ctx.open_url(&upgrade_url); };
                 }
             },
             BillingAndUsagePageAction::GenerateStripeBillingPortalLink { team_uid } => {
@@ -1669,7 +1669,7 @@ impl BillingAndUsagePageView {
                 };
 
                 let text_fragments = vec![
-                    FormattedTextFragment::hyperlink(link_text, upgrade_url),
+                    FormattedTextFragment::hyperlink_or_plain(link_text, upgrade_url),
                     FormattedTextFragment::plain_text(suffix),
                 ];
 
@@ -3081,7 +3081,7 @@ impl BillingAndUsagePageView {
                     if team.billing_metadata.can_upgrade_to_build_plan() {
                         if team.billing_metadata.is_on_legacy_paid_plan() {
                             vec![
-                                FormattedTextFragment::hyperlink(
+                                FormattedTextFragment::hyperlink_or_plain(
                                     "Switch to the Build plan",
                                     upgrade_url,
                                 ),
@@ -3090,7 +3090,7 @@ impl BillingAndUsagePageView {
                                 ),
                             ]
                         } else {
-                            let mut fragments = vec![FormattedTextFragment::hyperlink(
+                            let mut fragments = vec![FormattedTextFragment::hyperlink_or_plain(
                                 "Upgrade to the Build plan",
                                 upgrade_url,
                             )];
@@ -3113,7 +3113,7 @@ impl BillingAndUsagePageView {
                             _ => "Upgrade",
                         };
                         vec![
-                            FormattedTextFragment::hyperlink(upgrade_text, upgrade_url),
+                            FormattedTextFragment::hyperlink_or_plain(upgrade_text, upgrade_url),
                             FormattedTextFragment::plain_text(" to get more AI usage."),
                         ]
                     }
@@ -3159,7 +3159,7 @@ impl BillingAndUsagePageView {
         } else {
             let user_id = auth_state.user_id().unwrap_or_default();
             let upgrade_url = UserWorkspaces::upgrade_link(user_id);
-            let mut fragments = vec![FormattedTextFragment::hyperlink(
+            let mut fragments = vec![FormattedTextFragment::hyperlink_or_plain(
                 "Upgrade to the Build plan",
                 upgrade_url,
             )];

@@ -128,7 +128,8 @@ impl FreeAiRemovalModal {
         }
     }
 
-    fn upgrade_url(ctx: &ViewContext<Self>) -> String {
+    /// [`None`] when this build has no Warp server: there is no billing page.
+    fn upgrade_url(ctx: &ViewContext<Self>) -> Option<String> {
         if let Some(team) = UserWorkspaces::as_ref(ctx).current_team() {
             UserWorkspaces::upgrade_link_for_team(team.uid)
         } else {

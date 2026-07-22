@@ -201,7 +201,7 @@ impl TypedActionView for BillingCycleUsageSectionView {
             }
             BillingCycleUsageAction::OpenUpgrade => {
                 if let Some(team_uid) = UserWorkspaces::as_ref(ctx).current_team_uid() {
-                    ctx.open_url(&UserWorkspaces::upgrade_link_for_team(team_uid));
+                    if let Some(upgrade_url) = UserWorkspaces::upgrade_link_for_team(team_uid) { ctx.open_url(&upgrade_url); };
                 }
             }
             BillingCycleUsageAction::OpenAdminPanel => {

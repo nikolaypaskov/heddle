@@ -176,7 +176,7 @@ impl SharedObjectsCreationDeniedModal {
                 // If team_uid is set, then open up the upgrade page for the team
                 // directly.
                 Some(team_uid) => {
-                    ctx.open_url(UserWorkspaces::upgrade_link_for_team(team_uid).as_str());
+                    if let Some(upgrade_url) = UserWorkspaces::upgrade_link_for_team(team_uid) { ctx.open_url(&upgrade_url); };
                 }
                 // Otherwise redirect them to the team settings page.
                 None => ctx.emit(SharedObjectsCreationDeniedModalEvent::TeamSettings),

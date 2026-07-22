@@ -219,10 +219,10 @@ impl TypedActionView for MainSettingsPageView {
             }
             MainPageAction::Upgrade { team_uid, user_id } => match team_uid {
                 Some(team_uid) => {
-                    ctx.open_url(&UserWorkspaces::upgrade_link_for_team(*team_uid));
+                    if let Some(upgrade_url) = UserWorkspaces::upgrade_link_for_team(*team_uid) { ctx.open_url(&upgrade_url); };
                 }
                 None => {
-                    ctx.open_url(&UserWorkspaces::upgrade_link(*user_id));
+                    if let Some(upgrade_url) = UserWorkspaces::upgrade_link(*user_id) { ctx.open_url(&upgrade_url); };
                 }
             },
             MainPageAction::GenerateStripeBillingPortalLink { team_uid } => {

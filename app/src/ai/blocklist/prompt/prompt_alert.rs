@@ -302,7 +302,7 @@ impl PromptAlertView {
                         };
 
                         text_fragments
-                            .push(FormattedTextFragment::hyperlink(upgrade_text, upgrade_url));
+                            .push(FormattedTextFragment::hyperlink_or_plain(upgrade_text, upgrade_url));
                     } else {
                         text_fragments.push(FormattedTextFragment::hyperlink(
                             CONTACT_SUPPORT_TEXT,
@@ -322,7 +322,7 @@ impl PromptAlertView {
                         } else {
                             UPGRADE_TEXT
                         };
-                    text_fragments.push(FormattedTextFragment::hyperlink(label, upgrade_url));
+                    text_fragments.push(FormattedTextFragment::hyperlink_or_plain(label, upgrade_url));
                 }
                 if UserWorkspaces::as_ref(app).is_byo_api_key_enabled(app) {
                     text_fragments.push(FormattedTextFragment::plain_text(" or "));
