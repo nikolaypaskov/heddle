@@ -68,31 +68,35 @@ FORBIDDEN=(
     "rudderlabs.com"
 )
 
-# Extract once into a temp file rather than re-running `strings` per needle.
+# Scan RAW BYTES with grep, not `strings`.
 #
-# Do NOT pipe `strings` into `grep -q`: grep exits on first match, `strings`
-# dies of SIGPIPE (141), and under `set -o pipefail` the pipeline reports
-# failure — so the check silently reports "clean" exactly when a forbidden
-# string IS present. That bug produced a false PASS on a binary that provably
-# contained app.warp.dev.
-DUMP="$(mktemp -t heddle-strings)"
-trap 'rm -f "${DUMP}"' EXIT
-strings -a "${BINARY}" > "${DUMP}" 2>/dev/null || true
+# macOS ships the cctools `strings`, which parses Mach-O load commands and only
+# scans known sections -- even with `-a`. Verified here: appending
+# "CANARYoz.warp.devCANARY" to a copy of the binary grew the file, `grep -a`
+# found it, and `strings -a` did not, reporting an identical line count. A
+# scanner that can miss planted bytes cannot certify their absence.
+#
+# `grep -a` treats the binary as text and matches literal byte sequences, so it
+# cannot miss a hardcoded endpoint regardless of which section it lands in.
 
-# Sanity-check the instrument before trusting a clean result: the binary must
-# contain SOME extractable strings, or every pattern would trivially "pass".
-EXTRACTED="$(wc -l < "${DUMP}" | tr -d ' ')"
-if [[ "${EXTRACTED}" -lt 1000 ]]; then
-    echo "INCONCLUSIVE: only ${EXTRACTED} strings extracted from ${BINARY}."
-    echo "The scan cannot be trusted; check that 'strings' works on this file."
+# Validate the instrument before trusting a clean result: a known-present marker
+# must be found, or grep is not reading the file as expected and every pattern
+# would trivially "pass".
+SENTINEL="warp-tui.log"
+if ! LC_ALL=C grep -aqF -- "${SENTINEL}" "${BINARY}"; then
+    echo "INCONCLUSIVE: sentinel '${SENTINEL}' not found in ${BINARY}."
+    echo "The scan cannot be trusted; grep is not matching content it should."
     exit 2
 fi
 
-echo "Scanning ${BINARY} (${EXTRACTED} strings)..."
+echo "Scanning ${BINARY} ($(stat -f%z "${BINARY}" 2>/dev/null || stat -c%s "${BINARY}") bytes, raw)..."
 
 FOUND=0
 for needle in "${FORBIDDEN[@]}"; do
-    count="$(grep -cF -- "${needle}" "${DUMP}" || true)"
+    # grep exits 1 when it finds nothing. Under `set -e` + `pipefail` that
+    # aborts the whole script before it can report anything -- which reads as a
+    # FAIL but is actually a crash. Neutralise grep's exit status explicitly.
+    count="$( { LC_ALL=C grep -aoF -- "${needle}" "${BINARY}" || true; } | wc -l | tr -d ' ')"
     if [[ "${count}" -gt 0 ]]; then
         echo "  FORBIDDEN: ${needle} (${count} occurrence(s))"
         FOUND=1
