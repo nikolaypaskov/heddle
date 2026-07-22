@@ -219,6 +219,17 @@ docker run --rm -t \
      mkdir -p \$STAGE
      cp \$CARGO_TARGET_DIR/debug/warp-tui-oss \$STAGE/
 
+     # option_env! is evaluated at COMPILE time, and cargo does not invalidate
+     # its cache when a plain environment variable changes. A build cached from
+     # an earlier run would silently lack the tag, disabling the autoupdater and
+     # restoring the false PASS this staging exists to prevent. Verify the tag
+     # is actually baked into the artifact.
+     if ! grep -aq 'v0.0.0-heddle-egress-test' \$STAGE/warp-tui-oss; then
+       echo 'TAG_BAKED=no' >> /src/${MARKER}
+     else
+       echo 'TAG_BAKED=yes' >> /src/${MARKER}
+     fi
+
      export HOME=/tmp/heddle-empty-home
      mkdir -p \$HOME
 
@@ -246,6 +257,13 @@ echo "Validating that the observation is meaningful..."
 if ! grep -qE 'AF_INET' "${CONTROL_LOG}" 2>/dev/null; then
     echo "INCONCLUSIVE: the positive control observed no network syscalls."
     echo "strace is not attached correctly, so a PASS would be meaningless."
+    exit 2
+fi
+
+if ! grep -q 'TAG_BAKED=yes' "${MARKER}"; then
+    echo "INCONCLUSIVE: GIT_RELEASE_TAG is not baked into the binary, so the"
+    echo "autoupdater disabled itself and its egress is invisible to this test."
+    echo "Force a rebuild: docker volume rm heddle-target-linux"
     exit 2
 fi
 
