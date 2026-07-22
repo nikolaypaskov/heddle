@@ -1,6 +1,6 @@
 [package]
 authors = ["Warp Team <dev@warp.dev>"]
-default-run = "warp-oss"
+default-run = "heddle"
 description = "The cloud-backed terminal for individuals and teams"
 edition = "2024"
 autobins = false
@@ -18,7 +18,7 @@ path = "src/lib.rs"
 # flag overrides). Otherwise these binaries are exactly identical to our main binary.
 
 [[bin]]
-name = "warp-oss"
+name = "heddle"
 path = "src/bin/oss.rs"
 test = false
 

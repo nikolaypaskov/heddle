@@ -1683,7 +1683,7 @@ fn test_resolve_copy_link_uses_cloud_conversation_link_for_inactive_task() {
 
             assert_eq!(
                 link,
-                Some(ServerConversationToken::new(token.to_string()).conversation_link())
+                ServerConversationToken::new(token.to_string()).conversation_link()
             );
 
             let entry = AgentConversationsModel::as_ref(ctx)
@@ -1821,7 +1821,7 @@ fn test_server_token_assignment_updates_copy_link_resolution() {
             );
             assert_eq!(
                 link,
-                Some(ServerConversationToken::new(token.to_string()).conversation_link())
+                ServerConversationToken::new(token.to_string()).conversation_link()
             );
         });
     });
@@ -1951,7 +1951,7 @@ fn test_resolve_copy_link_uses_attached_synced_conversation_for_task_without_tok
 
             assert_eq!(
                 link,
-                Some(ServerConversationToken::new(token.to_string()).conversation_link())
+                ServerConversationToken::new(token.to_string()).conversation_link()
             );
 
             let entry = AgentConversationsModel::as_ref(ctx)

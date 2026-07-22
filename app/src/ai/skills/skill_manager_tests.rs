@@ -559,7 +559,7 @@ Use `{{warpctrl_binary_name}}` from {{warpctrl_wrapper_path}}.
     let skill = skills.get("test-skill").unwrap();
 
     let expected_cli = ChannelState::channel().cli_command_name();
-    let expected_url = ChannelState::require_server_root_url()?;
+    let expected_url = ChannelState::server_root_url().unwrap();
     assert!(skill.content.contains(&format!(
         "Run `{expected_cli}` to connect to {expected_url}."
     )));
@@ -730,7 +730,7 @@ fn test_build_bundled_skill_context() {
 
     assert_eq!(
         context.get("warp_server_url").unwrap(),
-        &ChannelState::require_server_root_url()?.to_string()
+        &ChannelState::server_root_url().unwrap().to_string()
     );
     assert_eq!(
         context.get("warp_cli_binary_name").unwrap(),

@@ -11,8 +11,11 @@ fn main() -> Result<()> {
     let mut state = ChannelState::new(
         Channel::Oss,
         ChannelConfig {
-            app_id: AppId::new("dev", "warp", "WarpOss"),
-            logfile_name: "warp-oss.log".into(),
+            // Heddle identity. AGPL grants the code, not the "Warp" trademark,
+            // so the fork must not present itself as Warp. This also gives
+            // Heddle its own data directory rather than sharing Warp's.
+            app_id: AppId::new("dev", "heddle", "Heddle"),
+            logfile_name: "heddle.log".into(),
             // Heddle: no Warp server, no Oz. These endpoints are absent from
             // the binary entirely -- not disabled by a flag that could be
             // flipped, and not reachable by any server-pushed configuration.
@@ -42,15 +45,15 @@ embed_plist::embed_info_plist_bytes!(r#"
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>WarpOss</string>
+    <string>Heddle</string>
     <key>CFBundleExecutable</key>
-    <string>warp-oss</string>
+    <string>heddle</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.warp.WarpOss</string>
+    <string>dev.heddle.Heddle</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>WarpOss</string>
+    <string>Heddle</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -62,9 +65,9 @@ embed_plist::embed_info_plist_bytes!(r#"
     <key>UIDesignRequiresCompatibility</key>
     <true/>
     <key>CFBundleURLTypes</key>
-    <array><dict><key>CFBundleURLName</key><string>Custom App</string><key>CFBundleURLSchemes</key><array><string>warposs</string></array></dict></array>
+    <array><dict><key>CFBundleURLName</key><string>Custom App</string><key>CFBundleURLSchemes</key><array><string>heddle</string></array></dict></array>
     <key>NSHumanReadableCopyright</key>
-    <string>© 2026, Denver Technologies, Inc</string>
+    <string>© 2026 Denver Technologies, Inc. Modified work © 2026 Heddle contributors. Licensed under AGPL-3.0.</string>
     </dict>
     </plist>
 "#.as_bytes());

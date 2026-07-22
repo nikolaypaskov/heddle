@@ -206,7 +206,7 @@ fn test_warp_web_link_notebook() {
         get_item_data_from_warp_link(
             &Url::parse(&format!(
                 "{}/drive/notebook/Performance-Analysis-LkDlnAe34vfYD2JXsAkssc?focused_folder_id=test_uid00000000000123&invitee_email=test@example.com",
-                ChannelState::require_server_root_url()?
+                ChannelState::server_root_url().unwrap()
             ))
             .unwrap()
         ),
@@ -228,7 +228,7 @@ fn test_warp_web_link_session() {
             &Url::parse(&format!(
                 "{}/session/317d0686-7a0b-4b67-806b-aaa3e9df501b?
                 pwd=6f727249-af9f-4025-a240-59df40a4c64b",
-                ChannelState::require_server_root_url()?
+                ChannelState::server_root_url().unwrap()
             ))
             .unwrap()
         ),
@@ -242,7 +242,7 @@ fn test_warp_web_link_workflow() {
         get_item_data_from_warp_link(
             &Url::parse(&format!(
                 "{}/drive/workflow/Remove-all-stopped-docker-container-image-and-volumes-ZCJSkai2gpwTqpBFs5HOfZ",
-                ChannelState::require_server_root_url()?
+                ChannelState::server_root_url().unwrap()
             ))
             .unwrap()
         ),
@@ -263,7 +263,7 @@ fn test_warp_web_link_failure() {
 }
 #[test]
 fn test_app_web_link_rewrites_to_new_cloud_agent_conversation() {
-    let url = Url::parse(&format!("{}/app", ChannelState::require_server_root_url()?)).unwrap();
+    let url = Url::parse(&format!("{}/app", ChannelState::server_root_url().unwrap())).unwrap();
     let intent = web_intent_parser::maybe_rewrite_web_url_to_intent(&url).unwrap();
 
     assert_eq!(

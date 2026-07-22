@@ -14,8 +14,9 @@ fn main() -> Result<()> {
     let mut state = ChannelState::new(
         Channel::Oss,
         ChannelConfig {
-            app_id: AppId::new("dev", "warp", "WarpTui"),
-            logfile_name: "warp-tui.log".into(),
+            // Heddle identity -- see app/src/bin/oss.rs for rationale.
+            app_id: AppId::new("dev", "heddle", "HeddleTui"),
+            logfile_name: "heddle-tui.log".into(),
             // Heddle: no Warp server, no Oz. These endpoints are absent from
             // the binary entirely -- not disabled by a flag that could be
             // flipped, and not reachable by any server-pushed configuration.

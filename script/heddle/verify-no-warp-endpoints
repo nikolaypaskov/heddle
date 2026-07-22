@@ -23,7 +23,7 @@
 # never as "verified silent".
 #
 # Usage: script/heddle/verify-no-warp-endpoints [path-to-binary]
-#        defaults to target/debug/warp-tui-oss
+#        defaults to target/debug/heddle-tui
 #
 # Exit codes: 0 = clean, 1 = forbidden strings found, 2 = inconclusive.
 
@@ -32,11 +32,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)"
 cd "${REPO_ROOT}"
 
-BINARY="${1:-target/debug/warp-tui-oss}"
+BINARY="${1:-target/debug/heddle-tui}"
 
 if [[ ! -f "${BINARY}" ]]; then
     echo "INCONCLUSIVE: binary not found at ${BINARY}"
-    echo "Build it first: cargo build -p warp_tui --bin warp-tui-oss"
+    echo "Build it first: cargo build -p warp_tui --bin heddle-tui"
     exit 2
 fi
 
@@ -51,7 +51,7 @@ NEWER_SOURCES="$(find app/src crates -name '*.rs' -newer "${BINARY}" -print -qui
 if [[ -n "${NEWER_SOURCES}" ]]; then
     echo "INCONCLUSIVE: ${BINARY} is older than the sources."
     echo "At least one file changed after it was built: ${NEWER_SOURCES}"
-    echo "Rebuild before scanning: cargo build -p warp_tui --bin warp-tui-oss"
+    echo "Rebuild before scanning: cargo build -p warp_tui --bin heddle-tui"
     exit 2
 fi
 
@@ -82,7 +82,7 @@ FORBIDDEN=(
 # Validate the instrument before trusting a clean result: a known-present marker
 # must be found, or grep is not reading the file as expected and every pattern
 # would trivially "pass".
-SENTINEL="warp-tui.log"
+SENTINEL="heddle-tui.log"
 if ! LC_ALL=C grep -aqF -- "${SENTINEL}" "${BINARY}"; then
     echo "INCONCLUSIVE: sentinel '${SENTINEL}' not found in ${BINARY}."
     echo "The scan cannot be trusted; grep is not matching content it should."

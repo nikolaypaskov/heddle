@@ -1,112 +1,132 @@
-<a href="https://www.warp.dev">
-    <img width="1024" alt="Warp Agentic Development Environment product preview" src="https://github.com/user-attachments/assets/9976b2da-2edd-4604-a36c-8fd53719c6d4" />
-</a>
-&nbsp;
-<p align="center">
-  <a href="https://www.warp.dev"><img height="20" alt="Built with Warp" src="https://raw.githubusercontent.com/warpdotdev/brand-assets/main/Github/Built-With-Warp-Export@2x.png" /></a>
-  &nbsp;
-  <a href="https://oz.warp.dev"><img height="20" alt="Powered by Oz" src="https://raw.githubusercontent.com/warpdotdev/brand-assets/main/Github/Powered-By-Oz-Export@2x.png" /></a>
-</p>
+# Heddle
 
-<p align="center">
-  <a href="https://www.warp.dev">Website</a>
-  ·
-  <a href="https://www.warp.dev/code">Code</a>
-  ·
-  <a href="https://www.warp.dev/agents">Agents</a>
-  ·
-  <a href="https://www.warp.dev/terminal">Terminal</a>
-  ·
-  <a href="https://www.warp.dev/drive">Drive</a>
-  ·
-  <a href="https://docs.warp.dev">Docs</a>
-  ·
-  <a href="https://www.warp.dev/blog/how-warp-works">How Warp Works</a>
-</p>
+A de-commercialized fork of the [Warp](https://github.com/warpdotdev/Warp) terminal.
 
-> [!NOTE]
-> OpenAI is the founding sponsor of the new, open-source Warp repository, and the new agentic management workflows are powered by GPT models.
+**No account. No telemetry. No connection to Warp's infrastructure.**
 
-<h1></h1>
+A heddle is the loom component that lifts and separates the warp threads — the part that
+controls the warp.
 
-## About
+---
 
-[Warp](https://www.warp.dev) is an agentic development environment, born out of the terminal. Use Warp's built-in coding agent, or bring your own CLI agent (Claude Code, Codex, Gemini CLI, and others).
+## What this is
 
-## Installation
+Warp open-sourced its client under AGPL-3.0. The client is genuinely open; the **server, Warp
+Drive backend, hosted authentication, and Oz** (the agent orchestration layer) are not, and remain
+proprietary.
 
-You can [download Warp](https://www.warp.dev/download) and [read our docs](https://docs.warp.dev/) for platform-specific instructions.
+Heddle takes the open client and removes its dependence on the closed parts. It is not a
+"cracked" Warp — see [Non-goals](#non-goals).
 
-## Warp Contributions Overview Dashboard
+## What was removed
 
-Explore [build.warp.dev](https://build.warp.dev) to:
-- Watch thousands of Oz agents triage issues, write specs, implement changes, and review PRs
-- View top contributors and in-flight features
-- Track your own issues with GitHub sign-in
-- Click into active agent sessions in a web-compiled Warp terminal
+Every item below is verified, not asserted. See [Verification](#verification).
 
-## Oz for OSS
+| Removed | Detail |
+|---|---|
+| **Warp's endpoints** | `app.warp.dev`, `rtc.app.warp.dev`, `sessions.app.warp.dev`, `staging.warp.dev`, `oz.warp.dev` are absent from the binary |
+| **Firebase credentials** | The hardcoded Firebase auth API key is gone |
+| **Telemetry** | RudderStack destinations absent; the collector never starts |
+| **Server-supplied privacy settings** | See below — the most important finding |
+| **Remote configuration** | Server-driven experiments are never applied |
+| **Crash reporting** | No Sentry |
+| **Warp Drive sync** | The cloud-object listener does not start |
+| **Hosted auth** | Sign-in, sign-up, SSO and device-authorization flows have no endpoint |
+| **Billing surfaces** | Upgrade links, Stripe pages and paywall prompts have no destination |
 
-Maintaining a popular open-source project? [Apply for Oz credits](https://tally.so/r/LZWxqG) to explore [Oz for OSS](https://github.com/warpdotdev/oz-for-oss).
+### The finding that shaped the design
 
-Oz for OSS is our partner program for bringing the same agentic open-source management workflows used in this repository to select partner repositories. We work directly with maintainers to implement workflows for issue triage, PR review, community management, and contributor coordination in a way that fits each project.
+Upstream treats `WarpDrivePrivacySettings` — a **cloud object** — as, in its own words, "the
+source of truth for these booleans" (`app/src/settings/privacy.rs`). On a logged-out cold start,
+the unmodified client logged:
 
-## Licensing
-
-Warp's UI framework (the `warpui_core` and `warpui` crates) are licensed under the [MIT license](LICENSE-MIT).
-
-The rest of the code in this repository is licensed under the [AGPL v3](LICENSE-AGPL).
-
-## Open Source & Contributing
-
-Warp's client codebase is open source and lives in this repository. We welcome community contributions and have designed a lightweight workflow to help new contributors get started. For the full contribution flow, read our [CONTRIBUTING.md](CONTRIBUTING.md) guide.
-
-> [!TIP]
-> **Chat with contributors and the Warp team** in the [`#oss-contributors`](https://warpcommunity.slack.com/archives/C0B0LM8N4DB) Slack channel — a good place for ad-hoc questions, design discussion, and pairing with maintainers. New here? [Join the Warp Slack community](https://go.warp.dev/join-preview) first, then jump into `#oss-contributors`.
-
-### Issue to PR
-
-Before filing, [search existing issues](https://github.com/warpdotdev/warp/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc) for your bug or feature request. If nothing exists, [file an issue](https://github.com/warpdotdev/warp/issues/new/choose) using our templates. Security vulnerabilities should be reported privately as described in [CONTRIBUTING.md](CONTRIBUTING.md#reporting-security-issues).
-
-Once filed, a Warp maintainer reviews the issue and may apply a readiness label: [`ready-to-spec`](https://github.com/warpdotdev/warp/issues?q=is%3Aissue+is%3Aopen+label%3Aready-to-spec) signals the design is open for contributors to spec out, and [`ready-to-implement`](https://github.com/warpdotdev/warp/issues?q=is%3Aissue+is%3Aopen+label%3Aready-to-implement) signals the design is settled and code PRs are welcome. Anyone can pick up a labeled issue — mention **@oss-maintainers** on an issue if you'd like it considered for a readiness label.
-
-### Building the Repo Locally
-
-To build and run Warp from source:
-
-```bash
-./script/bootstrap   # platform-specific setup
-./script/run         # build and run Warp
-./script/presubmit   # fmt, clippy, and tests
+```
+[warp::settings::privacy] Warp Drive privacy preferences are set, using those for
+    telemetry=true, crash_reporting=true, cloud_conversation_storage=true
 ```
 
-See [AGENTS.md](AGENTS.md) for the full engineering guide, including coding style, testing, and platform-specific notes.
+The client **fetched privacy preferences from the server and switched telemetry on** — on a build
+whose `telemetry_config` was already `None`. Disabling the telemetry transport was therefore never
+sufficient: the *policy input itself* arrived over the network. Heddle clamps privacy state at
+every write and never performs the fetch.
 
-## Joining the Team
+## How it works
 
-Interested in joining the team? See our [open roles](https://www.warp.dev/careers).
+The mechanism is a type change, not a feature flag:
 
-## Support and Questions
+```rust
+pub struct ChannelConfig {
+    pub server_config: Option<WarpServerConfig>,
+    pub oz_config: Option<OzConfig>,
+    // ...
+}
+```
 
-1. See our [docs](https://docs.warp.dev/) for a comprehensive guide to Warp's features.
-2. Join our [Slack Community](https://go.warp.dev/join-preview) to connect with other users and get help from the Warp team — contributors hang out in [`#oss-contributors`](https://warpcommunity.slack.com/archives/C0B0LM8N4DB).
-3. Try our [Preview build](https://www.warp.dev/download-preview) to test the latest experimental features.
-4. Mention **@oss-maintainers** on any issue to escalate to the team — for example, if you encounter problems with the automated agents.
+Heddle passes `None`. The endpoints are not in the binary, so there is nothing to re-enable — no
+flag to flip, no server-pushed configuration that can restore them. Every one of the ~101 call
+sites that wanted a Warp URL became a compile error and was resolved individually, so absence is
+enforced by the type system rather than by a runtime check that could be bypassed.
 
-## Code of Conduct
+## Building
 
-We ask everyone to be respectful and empathetic. Warp follows the [Code of Conduct](CODE_OF_CONDUCT.md). To report violations, email warp-coc at warp.dev.
+```bash
+./script/bootstrap          # platform deps (macOS also needs the Xcode Metal Toolchain)
+cargo build -p warp_tui --bin heddle-tui
+```
 
-## Open Source Dependencies
+On macOS the Metal Toolchain is a separate Xcode component and the build fails without it:
 
-We'd like to call out a few of the [open source dependencies](https://docs.warp.dev/help/licenses) that have helped Warp to get off the ground:
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
 
-- [Tokio](https://github.com/tokio-rs/tokio)
-- [NuShell](https://github.com/nushell/nushell)
-- [Fig Completion Specs](https://github.com/withfig/autocomplete)
-- [Warp Server Framework](https://github.com/seanmonstar/warp)
-- [Alacritty](https://github.com/alacritty/alacritty)
-- [Hyper HTTP library](https://github.com/hyperium/hyper)
-- [FontKit](https://github.com/servo/font-kit)
-- [Core-foundation](https://github.com/servo/core-foundation-rs)
-- [Smol](https://github.com/smol-rs/smol)
+## Verification
+
+```bash
+./script/heddle/verify-no-warp-endpoints
+```
+
+The scanner reads **raw bytes** of the built binary and fails if any Warp endpoint, credential or
+telemetry destination appears. It is validated in both directions: it passes on a clean build and
+fails on a binary with a planted canary string.
+
+**What this proves, and what it does not.** The scan is a regression tripwire, not proof of
+network silence. An endpoint could in principle be assembled at runtime, and no property of any
+binary can stop a user typing `curl app.warp.dev` into their own terminal. The defensible claim is
+scoped: **Heddle's own code initiates no connection to Warp's infrastructure.** Fully
+substantiating that additionally requires syscall-level tracing across startup, onboarding,
+agents, updates and shutdown; that work is in progress.
+
+## Non-goals
+
+- **This does not unlock paid Warp features.** Entitlements are enforced server-side. Removing
+  paywall UI removes nags and dead controls; it does not grant premium functionality, because
+  there is no server to grant it. The value here is privacy and independence, not free Pro.
+- **This does not reimplement Warp Drive.** Cloud sync is removed, not replaced.
+- **This does not fork Warp's server.** There is no server to fork.
+
+## Status
+
+| Area | State |
+|---|---|
+| Endpoint removal | Verified — scanner passes |
+| Telemetry / experiments / Drive | Removed |
+| Rebrand | In progress |
+| Release builds | Not started |
+| Agent support (ACP) | Not started — see below |
+
+Warp's built-in agent runs on their proprietary server and cannot work here. The intended
+replacement is [ACP](https://agentclientprotocol.com/), bridging to local CLI agents such as
+Claude Code, Codex and Gemini CLI — which the codebase already detects
+(`app/src/terminal/cli_agent.rs`). Until then, Heddle is a terminal, not an agentic environment.
+
+## Licence
+
+AGPL-3.0, inherited from upstream and unchanged. The `warpui` and `warpui_core` crates remain MIT,
+as upstream licensed them.
+
+Copyright © 2026 Denver Technologies, Inc. Modified work © 2026 Heddle contributors.
+
+Upstream's copyright notices are preserved throughout, as the AGPL requires. "Warp" is a trademark
+of Denver Technologies, Inc.; Heddle is an independent fork and is **not** affiliated with,
+endorsed by, or supported by them. Please do not report Heddle issues to Warp.
