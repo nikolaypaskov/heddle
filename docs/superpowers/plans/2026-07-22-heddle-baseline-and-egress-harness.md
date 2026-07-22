@@ -79,7 +79,29 @@ brew install jq clang-format pkgconf llvm protobuf
 
 Skip `sentry-cli`, `create-dmg`, `multitime`, `powershell`, and Docker Desktop for now — they are
 needed for bundling and linting, not for `cargo build`. Do NOT run `./script/bootstrap`: it
-requires sudo, switches your active Xcode, and installs a large toolchain we do not yet need.
+requires sudo and switches your active Xcode.
+
+- [ ] **Step 2b: Install the Xcode Metal Toolchain (macOS only)**
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+
+VERIFIED REQUIRED on 2026-07-22 with Xcode 26.6: without it the build fails at
+`crates/warpui/build.rs:113` with
+
+```
+error compiling metal shaders to .air; error: cannot execute tool 'metal' due to
+missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain
+```
+
+Note that `xcrun -f metal` still resolves to a binary even when the component is absent, so
+checking for the tool's existence is not a valid precondition test — only a build proves it.
+
+This is needed even though `warp-tui-oss` is the *headless* TUI: `warp_tui` depends on the `warp`
+app crate, which depends on `warpui`, whose build script compiles Metal shaders on macOS. The TUI
+is not GPU-free at build time on this platform. (The Linux container in Task 2 is unaffected —
+`warpui`'s build script takes a non-Metal path there.)
 
 - [ ] **Step 3: Build the OSS TUI binary**
 
