@@ -2,7 +2,7 @@
 
 A de-commercialized fork of the [Warp](https://github.com/warpdotdev/Warp) terminal.
 
-**No account. No telemetry. No connection to Warp's infrastructure.**
+**No account. No telemetry. Heddle's own code never connects to Warp's infrastructure.**
 
 A heddle is the loom component that lifts and separates the warp threads — the part that
 controls the warp.
@@ -20,7 +20,8 @@ Heddle takes the open client and removes its dependence on the closed parts. It 
 
 ## What was removed
 
-Every item below is verified, not asserted. See [Verification](#verification).
+Each item below is checked mechanically against the built binary on every
+change. Read [Verification](#verification) for exactly what that does and does not prove.
 
 | Removed | Detail |
 |---|---|
@@ -32,7 +33,8 @@ Every item below is verified, not asserted. See [Verification](#verification).
 | **Crash reporting** | No Sentry |
 | **Warp Drive sync** | The cloud-object listener does not start |
 | **Hosted auth** | Sign-in, sign-up, SSO and device-authorization flows have no endpoint |
-| **Billing surfaces** | Upgrade links, Stripe pages and paywall prompts have no destination |
+| **Billing surfaces** | Upgrade links, Stripe pages, plan-comparison and pricing links removed |
+| **Warp's legal pages** | Terms of Service and privacy policy no longer linked as if they govern Heddle |
 
 ### The finding that shaped the design
 
@@ -100,10 +102,22 @@ fails on a binary with a planted canary string.
 
 **What this proves, and what it does not.** The scan is a regression tripwire, not proof of
 network silence. An endpoint could in principle be assembled at runtime, and no property of any
-binary can stop a user typing `curl app.warp.dev` into their own terminal. The defensible claim is
-scoped: **Heddle's own code initiates no connection to Warp's infrastructure.** Fully
-substantiating that additionally requires syscall-level tracing across startup, onboarding,
-agents, updates and shutdown; that work is in progress.
+binary can stop a user typing `curl app.warp.dev` into their own terminal. Fully substantiating the
+claim additionally requires syscall-level tracing across startup, onboarding, agents, updates and
+shutdown. **That work is not done.**
+
+Two honest caveats:
+
+- **Help links still point to upstream documentation** (`docs.warp.dev`) in around 46 files, because
+  those pages document features Heddle inherited. Following one is a deliberate user action, not
+  something Heddle initiates — but it is a connection to Warp, and you should know it exists.
+- Observed behaviour on a logged-out cold start is below; it is evidence, not proof.
+
+| Unmodified upstream did | Heddle |
+|---|---|
+| Fetched channel versions from Warp's server | nothing |
+| Opened a Warp Drive websocket, retried on failure | listener never starts |
+| Fetched privacy preferences and set `telemetry=true` | nothing |
 
 ## Non-goals
 
@@ -119,7 +133,7 @@ agents, updates and shutdown; that work is in progress.
 |---|---|
 | Endpoint removal | Verified — scanner passes, enforced in CI |
 | Telemetry / experiments / Drive | Removed |
-| Rebrand | Done — own name, icon, bundle ID, paths |
+| Rebrand | Own name, icon, logo, bundle ID, paths; upstream doc links remain |
 | Release builds | Linux x86_64; macOS builds from source |
 | Agent support (ACP) | Designed, **not implemented** — see below |
 

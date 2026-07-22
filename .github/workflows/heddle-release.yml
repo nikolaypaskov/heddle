@@ -48,7 +48,13 @@ jobs:
           # someone accepts the cost and the duty of protecting signing keys.
 
     steps:
+      # Check out the exact ref being released. Without this, a manual run
+      # accepts a tag input but builds whatever the default branch points at,
+      # attaching a binary to a different tag's source archive. Under AGPL that
+      # is a Corresponding Source mismatch, not just untidiness.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install Rust toolchain
         run: rustup show
@@ -102,8 +108,21 @@ jobs:
           mkdir -p "dist/${name}"
           cp target/release/heddle-tui "dist/${name}/"
           cp README.md LICENSE-AGPL LICENSE-MIT "dist/${name}/"
+          # AGPL distribution requires the licence texts to travel with the
+          # binary, and dependency attribution must not be dropped.
+          if [ -f THIRD_PARTY_LICENSES.txt ]; then
+            cp THIRD_PARTY_LICENSES.txt "dist/${name}/"
+          else
+            cargo install cargo-about --locked >/dev/null 2>&1 || true
+            cargo about generate about.hbs > "dist/${name}/THIRD_PARTY_LICENSES.txt" \
+              || echo "THIRD_PARTY_LICENSES generation failed" >&2
+          fi
+          test -s "dist/${name}/THIRD_PARTY_LICENSES.txt"
           tar -czf "dist/${name}.tar.gz" -C dist "${name}"
-          shasum -a 256 "dist/${name}.tar.gz" > "dist/${name}.tar.gz.sha256"
+          # Record the checksum with a BARE filename so `shasum -c` works from
+          # the directory the user downloaded into. Recording "dist/<name>"
+          # makes the documented verification command fail.
+          ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
 
       - uses: actions/upload-artifact@v4
         with:
