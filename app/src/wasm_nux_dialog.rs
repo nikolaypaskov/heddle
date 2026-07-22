@@ -276,7 +276,9 @@ impl TypedActionView for WasmNUXDialog {
                 }
             }
             WasmNUXDialogAction::OpenDownloadDesktopAppLink => {
-                ctx.open_url("https://app.warp.dev/get_warp");
+                // Heddle: this promoted Warp's own download page. There is no
+                // first-party download endpoint in this fork, so the action
+                // records intent without sending anyone to warp.dev.
                 self.requested_download = true;
                 ctx.notify();
             }

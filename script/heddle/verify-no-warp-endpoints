@@ -3,10 +3,24 @@
 # Verifies that a built Heddle binary contains NO Warp first-party endpoints,
 # credentials, or telemetry destinations.
 #
-# This is the cheapest and strongest enforcement of Heddle's core claim. Unlike
-# a runtime egress test, it cannot be fooled by a code path that simply did not
-# execute during the observation window: if the string is not in the binary,
-# there is nothing to connect to.
+# WHAT THIS DOES AND DOES NOT PROVE
+#
+# This is a regression tripwire, NOT proof that the binary cannot contact Warp.
+# It is cheap, deterministic, and catches the reintroduction of a hardcoded
+# endpoint — which is exactly the drift a fork tracking a fast-moving upstream
+# needs to catch. It does not prove absence of egress:
+#
+#   - An endpoint can be assembled at runtime from fragments, read from user
+#     configuration, or arrive in a redirect, and no literal appears here.
+#   - A user can always type `curl app.warp.dev` into the terminal. No property
+#     of this binary can prevent that, and it would be dishonest to imply
+#     otherwise.
+#
+# The defensible claim is therefore scoped: *Heddle's own code initiates no
+# connection to Warp's infrastructure.* Supporting that claim needs this scan
+# PLUS syscall- or namespace-level runtime tracing across startup, onboarding,
+# agents, updates and shutdown. Treat a PASS here as "no known regression",
+# never as "verified silent".
 #
 # Usage: script/heddle/verify-no-warp-endpoints [path-to-binary]
 #        defaults to target/debug/warp-tui-oss

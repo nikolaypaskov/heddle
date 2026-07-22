@@ -30,16 +30,10 @@ impl ErrorExt for reqwest::Error {
             return false;
         }
 
-        // If we're making a request to the staging server and get back a 403 Forbidden, the user
-        // is probably not whitelisted to talk to staging from their current IP address, so
-        // downgrade to a warning.
-        if let (Some(url), Some(status)) = (self.url(), self.status())
-            && let Some(domain) = url.domain()
-            && domain == "staging.warp.dev"
-            && status == StatusCode::FORBIDDEN
-        {
-            return false;
-        }
+        // Heddle: upstream downgraded 403s from its staging server to warnings.
+        // This build has no Warp server, staging or otherwise, so the heuristic
+        // is unreachable. It is removed rather than left dead so the staging
+        // hostname is not present in the shipped binary.
 
         true
     }

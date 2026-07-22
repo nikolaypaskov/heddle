@@ -8,8 +8,7 @@ use url::{Origin, ParseError, Url};
 use super::Channel;
 use crate::AppId;
 use crate::channel::config::{
-    ChannelConfig, IapConfig, McpOAuthProviderConfig, OzConfig, RudderStackDestination,
-    WarpServerConfig,
+    ChannelConfig, IapConfig, McpOAuthProviderConfig, RudderStackDestination,
 };
 use crate::features::FeatureFlag;
 
@@ -147,15 +146,15 @@ impl ChannelState {
         Ok(())
     }
 
+    /// Always false in Heddle: this build has no Warp server, staging or
+    /// otherwise.
+    ///
+    /// The host comparison is removed rather than left unreachable so the
+    /// staging hostname is not present in the shipped binary at all. Callers
+    /// degrade correctly: the staging-only UI branch disables, session sharing
+    /// keeps using the web URL, and the GraphQL staging-403 check is skipped.
     pub fn uses_staging_server() -> bool {
-        // A build with no server config uses no server at all, staging included.
-        let Some(root) = Self::server_root_url() else {
-            return false;
-        };
-        let Ok(url) = Url::parse(root.as_ref()) else {
-            return false;
-        };
-        url.host_str() == Some("staging.warp.dev")
+        false
     }
 
     /// Returns the canonical identifier for the application.

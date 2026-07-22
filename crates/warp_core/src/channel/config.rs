@@ -56,17 +56,16 @@ pub struct WarpServerConfig {
     pub iap_config: Option<IapConfig>,
 }
 
-impl WarpServerConfig {
-    pub fn production() -> Self {
-        Self {
-            server_root_url: "https://app.warp.dev".into(),
-            rtc_server_url: "wss://rtc.app.warp.dev/graphql/v2".into(),
-            session_sharing_server_url: Some("wss://sessions.app.warp.dev".into()),
-            firebase_auth_api_key: "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs".into(),
-            iap_config: None,
-        }
-    }
-}
+// Heddle: WarpServerConfig::production() is deliberately absent.
+//
+// It hardcoded Warp's production endpoints and a Firebase API key. Nothing in
+// this fork calls it, but merely defining it kept those literals in the shipped
+// binary, so `verify-no-warp-endpoints` reported them. Deleting the constructor
+// is what actually removes them.
+//
+// The upstream non-OSS channel binaries do not need it either: they build their
+// config via `warp_channel_config::load_config!`, an internal generator that
+// requires Warp repo access and is unavailable here.
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OzConfig {
@@ -79,14 +78,8 @@ pub struct OzConfig {
     pub workload_audience_url: Option<Cow<'static, str>>,
 }
 
-impl OzConfig {
-    pub fn production() -> Self {
-        Self {
-            oz_root_url: "https://oz.warp.dev".into(),
-            workload_audience_url: None,
-        }
-    }
-}
+// Heddle: OzConfig::production() is deliberately absent, for the same reason as
+// WarpServerConfig::production(). Oz is proprietary and has no address here.
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TelemetryConfig {
