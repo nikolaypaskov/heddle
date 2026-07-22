@@ -53,7 +53,7 @@ impl ShareableObject {
             ShareableObject::WarpDriveObject(id) => CloudModel::as_ref(app)
                 .get_by_uid(&id.uid())
                 .and_then(|object| object.object_link()),
-            ShareableObject::Session { session_id, .. } => Some(join_link(session_id)),
+            ShareableObject::Session { session_id, .. } => join_link(session_id),
             ShareableObject::AIConversation(id) => {
                 // Use the unified helper that checks both loaded conversation and historical metadata
                 BlocklistAIHistoryModel::as_ref(app)
@@ -61,7 +61,7 @@ impl ShareableObject {
                     .map(|m| {
                         format!(
                             "{}/conversation/{}",
-                            ChannelState::require_server_root_url()?,
+                            ChannelState::server_root_url()?,
                             m.server_conversation_token.as_str()
                         )
                     })

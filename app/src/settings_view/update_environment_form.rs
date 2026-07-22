@@ -1274,13 +1274,18 @@ impl UpdateEnvironmentForm {
             .auth_url
             .as_deref()
             .map(|auth_url| self.auth_url_with_next(auth_url))
-            .unwrap_or_else(|| self.github_connect_fallback_url());
-        ctx.open_url(&url);
+            .or_else(|| self.github_connect_fallback_url());
+        if let Some(url) = url {
+            ctx.open_url(&url);
+        }
     }
 
-    fn github_connect_fallback_url(&self) -> String {
-        let base_url = format!("{}/oauth/connect/github", ChannelState::require_server_root_url()?);
-        self.auth_url_with_next(&base_url)
+    fn github_connect_fallback_url(&self) -> Option<String> {
+        let base_url = format!(
+            "{}/oauth/connect/github",
+            ChannelState::server_root_url()?
+        );
+        Some(self.auth_url_with_next(&base_url))
     }
 
     fn extract_tx_id(auth_url: &str) -> Option<String> {
@@ -1382,8 +1387,9 @@ impl UpdateEnvironmentForm {
                         let auth_url = me.auth_url_with_next(auth_url);
                         ctx.open_url(&auth_url);
                     } else if me.github_dropdown_state.available_repos.is_empty() {
-                        let fallback_url = me.github_connect_fallback_url();
-                        ctx.open_url(&fallback_url);
+                        if let Some(fallback_url) = me.github_connect_fallback_url() {
+                            ctx.open_url(&fallback_url);
+                        }
                     }
                 }
                 ctx.notify();

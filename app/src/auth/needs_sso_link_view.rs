@@ -95,7 +95,9 @@ impl TypedActionView for NeedsSsoLinkView {
 
                 AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
                     let url = auth_manager.link_sso_url(email);
-                    ctx.open_url(&url);
+                    if let Some(url) = url.as_ref() {
+                        ctx.open_url(url);
+                    }
                 });
             }
         }

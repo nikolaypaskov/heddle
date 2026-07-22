@@ -234,8 +234,11 @@ impl TerminalDriver {
         // Create a oneshot channel for session sharing when sharing is expected.
         // When sharing is disabled (or running against ngrok), leave both halves
         // as None so that `wait_for_session_shared` returns immediately.
-        let sharing_expected =
-            should_share && !warp_core::channel::ChannelState::require_server_root_url()?.contains("ngrok");
+        // With no Warp server there is nothing to share a session through, so
+        // sharing is never expected.
+        let sharing_expected = should_share
+            && warp_core::channel::ChannelState::server_root_url()
+                .is_some_and(|url| !url.contains("ngrok"));
         let (mut session_share_tx, session_share_rx) = if sharing_expected {
             if !FeatureFlag::CreatingSharedSessions.is_enabled() {
                 // Session sharing was requested but the feature is not enabled for this
@@ -754,7 +757,7 @@ impl TerminalDriver {
 
                 ctx.emit(TerminalDriverEvent::EstablishedSharedSession {
                     session_id: *session_id,
-                    join_url: shared_session::join_link(session_id),
+                    join_url: shared_session::join_link(session_id).unwrap_or_default(),
                 });
             }
             crate::terminal::view::Event::FailedToShareSession { reason, cause } => {

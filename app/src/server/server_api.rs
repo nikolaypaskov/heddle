@@ -854,9 +854,15 @@ impl ServerApi {
     /// Sends an authenticated empty POST request to /client/login, which signals to the server
     /// that the user is logged in.
     pub async fn notify_login(&self) {
+        // No Warp server means there is nobody to notify. Returning early keeps
+        // this a genuine no-op rather than widening the signature to a Result
+        // that the caller ignores, which would surface as silence.
+        let Some(server_root) = ChannelState::server_root_url() else {
+            return;
+        };
         match self.get_or_refresh_access_token().await {
             Ok(auth_token) => {
-                let url = format!("{}/client/login", ChannelState::require_server_root_url()?);
+                let url = format!("{server_root}/client/login");
                 let mut request = self.base_client.http_client().post(&url);
                 if let Some(token) = auth_token.as_bearer_token() {
                     request = request.bearer_auth(token);

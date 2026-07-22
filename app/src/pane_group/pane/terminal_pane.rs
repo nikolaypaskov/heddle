@@ -617,7 +617,8 @@ fn retrieve_shared_session_link(manager: &Manager, terminal_view_id: &EntityId) 
         log::warn!("Failed to get join link args for updating browser url");
         return None;
     };
-    if let Ok(url) = Url::parse(&join_link(&session_id)) {
+    let join_link = join_link(&session_id)?;
+    if let Ok(url) = Url::parse(&join_link) {
         return Some(url);
     }
     None

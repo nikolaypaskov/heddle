@@ -125,7 +125,7 @@ fn build_next_url(
             Some(url.to_string())
         }
         OAuthNextPlatform::Web => {
-            let mut url = Url::parse(&ChannelState::require_server_root_url()?).ok()?;
+            let mut url = Url::parse(&ChannelState::server_root_url()?).ok()?;
             url.set_query(None);
 
             match target {

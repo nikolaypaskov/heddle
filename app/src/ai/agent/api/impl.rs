@@ -177,6 +177,11 @@ async fn convert_multi_agent_client_error(
         warp_multi_agent_client::Error::EventSource(error) => {
             AIApiError::from_stream_error("GenerateMultiAgentOutput", *error).await
         }
+        // Carry the typed error through so retry logic classifies it as
+        // permanent: there is no Oz backend in this build to retry against.
+        warp_multi_agent_client::Error::NoServerConfigured => AIApiError::Other(
+            anyhow::Error::new(warp_core::channel::BackendUnavailable::Oz),
+        ),
     };
     Arc::new(error)
 }

@@ -253,6 +253,14 @@ impl<A: Action + Clone> ToastLink<A> {
         self
     }
 
+    /// Sets the href only when one exists. Heddle: a build with no Warp server
+    /// has no billing page, so the toast renders without a link rather than
+    /// with a dead one.
+    pub fn with_optional_href(mut self, href: Option<String>) -> Self {
+        self.href = href;
+        self
+    }
+
     pub fn with_onclick_action(mut self, action: A) -> Self {
         self.action = Some(action);
         self

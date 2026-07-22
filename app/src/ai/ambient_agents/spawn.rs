@@ -53,7 +53,8 @@ impl SessionJoinInfo {
         let session_link = run_execution
             .session_link
             .map(String::from)
-            .unwrap_or_else(|| shared_session::join_link(&session_id));
+            .or_else(|| shared_session::join_link(&session_id))
+            .unwrap_or_default();
         Some(Self {
             session_id: Some(session_id),
             session_link,

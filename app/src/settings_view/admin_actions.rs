@@ -8,14 +8,19 @@ pub struct AdminActions;
 
 impl AdminActions {
     /// Generate the admin panel URL for a given team
-    pub fn admin_panel_link_for_team(team_uid: ServerId) -> String {
-        format!("{}/admin/{}", ChannelState::require_server_root_url()?, team_uid)
+    pub fn admin_panel_link_for_team(team_uid: ServerId) -> Option<String> {
+        Some(format!(
+            "{}/admin/{}",
+            ChannelState::server_root_url()?,
+            team_uid
+        ))
     }
 
     /// Open the admin panel for a specific team
     pub fn open_admin_panel(team_uid: ServerId, ctx: &mut AppContext) {
-        let url = Self::admin_panel_link_for_team(team_uid);
-        ctx.open_url(&url);
+        if let Some(url) = Self::admin_panel_link_for_team(team_uid) {
+            ctx.open_url(&url);
+        }
     }
 
     /// Open the support email link

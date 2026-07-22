@@ -4601,9 +4601,11 @@ impl Workspace {
         session_id: &SharedSessionId,
         ctx: &mut ViewContext<Self>,
     ) {
-        ctx.clipboard().write(ClipboardContent::plain_text(
-            terminal::shared_session::join_link(session_id),
-        ));
+        let Some(join_link) = terminal::shared_session::join_link(session_id) else {
+            return;
+        };
+        ctx.clipboard()
+            .write(ClipboardContent::plain_text(join_link));
 
         self.toast_stack.update(ctx, |toast_stack, ctx| {
             let toast = DismissibleToast::default("Remote control link copied.".to_string());
@@ -11106,7 +11108,7 @@ impl Workspace {
                         DismissibleToast::error("Looks like you're out of AI credits.".into())
                             .with_link(
                                 ToastLink::new("Upgrade for more credits.".into())
-                                    .with_href(upgrade_link),
+                                    .with_optional_href(upgrade_link),
                             );
                     view.add_ephemeral_toast(new_toast, ctx);
                 });
@@ -23538,8 +23540,9 @@ impl Workspace {
         } else {
             // User is fully logged out (no Firebase user) — open the regular sign-up page.
             AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                let sign_up_url = auth_manager.sign_up_url();
-                ctx.open_url(&sign_up_url);
+                if let Some(sign_up_url) = auth_manager.sign_up_url() {
+                    ctx.open_url(&sign_up_url);
+                }
             });
         }
         self.require_login_modal.update(ctx, |auth_modal, ctx| {
@@ -24305,7 +24308,9 @@ impl TypedActionView for Workspace {
                     UserWorkspaces::upgrade_link(user_id)
                 };
 
-                ctx.open_url(&upgrade_url);
+                if let Some(upgrade_url) = upgrade_url {
+                    ctx.open_url(&upgrade_url);
+                }
             }
             ShowReferralSettingsPage => {
                 self.show_settings_with_section(Some(SettingsSection::Referrals), ctx);
@@ -25081,8 +25086,9 @@ impl TypedActionView for Workspace {
             }
             Reauth => {
                 AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                    let sign_in_url = auth_manager.sign_in_url();
-                    ctx.open_url(&sign_in_url);
+                    if let Some(sign_in_url) = auth_manager.sign_in_url() {
+                        ctx.open_url(&sign_in_url);
+                    }
                 });
                 send_telemetry_from_ctx!(TelemetryEvent::InitiateReauth, ctx);
             }

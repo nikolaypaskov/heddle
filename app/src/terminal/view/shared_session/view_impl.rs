@@ -1564,8 +1564,12 @@ impl TerminalView {
             return;
         };
 
+        // No Warp server means no shareable join link to copy.
+        let Some(join_link) = join_link(&session_id) else {
+            return;
+        };
         ctx.clipboard()
-            .write(ClipboardContent::plain_text(join_link(&session_id)));
+            .write(ClipboardContent::plain_text(join_link));
 
         let window_id = ctx.window_id();
         crate::workspace::ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {

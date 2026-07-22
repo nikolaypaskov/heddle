@@ -337,13 +337,13 @@ pub fn join_native_intent(session_id: &SessionId) -> String {
 }
 
 /// Returns the link to join a shared session.
-pub fn join_link(session_id: &SessionId) -> String {
+pub fn join_link(session_id: &SessionId) -> Option<String> {
     // For non-bundled builds against the staging server, use the native app intent
     // because the staging web URL won't resolve to a local build.
     let use_web_url = !ChannelState::uses_staging_server() || cfg!(feature = "release_bundle");
 
     let mut link = if use_web_url {
-        format!("{}/session/{}", ChannelState::require_server_root_url()?, session_id,)
+        format!("{}/session/{}", ChannelState::server_root_url()?, session_id,)
     } else {
         join_native_intent(session_id)
     };
@@ -353,7 +353,7 @@ pub fn join_link(session_id: &SessionId) -> String {
         link.push_str("?preview=true");
     }
 
-    link
+    Some(link)
 }
 
 /// Returns the full session sharing URL given a path.

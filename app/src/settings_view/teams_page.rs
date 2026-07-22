@@ -3675,7 +3675,7 @@ impl TeamsWidget {
             Some(invite_code) => {
                 let link = format!(
                     "{}{}{}",
-                    ChannelState::require_server_root_url()?,
+                    ChannelState::server_root_url()?,
                     INVITE_LINK_PREFIX,
                     invite_code.code
                 );

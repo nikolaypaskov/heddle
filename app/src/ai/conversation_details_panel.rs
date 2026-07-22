@@ -1098,7 +1098,7 @@ impl ConversationDetailsPanel {
         .finish();
 
         let agent_name_element = if let Some(uid) = &executor.uid {
-            let oz_root_url = ChannelState::require_oz_root_url()?;
+            let oz_root_url = ChannelState::oz_root_url()?;
             let agent_url = format!("{oz_root_url}/agents/{}", urlencoding::encode(uid));
             appearance
                 .ui_builder()
@@ -1462,7 +1462,7 @@ impl ConversationDetailsPanel {
         .with_selectable(true)
         .finish();
 
-        let oz_root_url = ChannelState::require_oz_root_url()?;
+        let oz_root_url = ChannelState::oz_root_url()?;
         let encoded_skill_name = urlencoding::encode(&skill_name);
         let skill_url = format!("{oz_root_url}/skills/{encoded_skill_name}");
 

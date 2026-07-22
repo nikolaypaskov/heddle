@@ -2708,7 +2708,7 @@ impl WorkflowView {
             ToastLink::new("Upgrade for more credits.".into())
                 .with_onclick_action(WorkspaceAction::AttemptLoginGatedAIUpgrade)
         } else {
-            ToastLink::new("Upgrade for more credits.".into()).with_href(upgrade_link)
+            ToastLink::new("Upgrade for more credits.".into()).with_optional_href(upgrade_link)
         };
 
         crate::workspace::ToastStack::handle(ctx).update(ctx, |stack, ctx| {

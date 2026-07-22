@@ -334,7 +334,9 @@ impl TypedActionView for FreeAiRemovalModal {
                     ctx
                 );
                 let upgrade_url = Self::upgrade_url(ctx);
-                ctx.open_url(&upgrade_url);
+                if let Some(upgrade_url) = upgrade_url.as_ref() {
+                    ctx.open_url(upgrade_url);
+                }
                 ctx.emit(FreeAiRemovalModalEvent::Close);
             }
         }

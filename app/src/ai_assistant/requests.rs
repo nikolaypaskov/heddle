@@ -251,8 +251,10 @@ impl Requests {
                                 let has_admin_permissions = team.has_admin_permissions(&current_user_email);
                                 if team.billing_metadata.can_upgrade_to_higher_tier_plan() {
                                     if has_admin_permissions {
-                                        let upgrade_url = UserWorkspaces::upgrade_link_for_team(team.uid);
-                                        format!("It seems you're out of credits. Please try again {next_time}.\n\n[Upgrade]({upgrade_url}) for more credits.")
+                                        match UserWorkspaces::upgrade_link_for_team(team.uid) {
+                                            Some(upgrade_url) => format!("It seems you're out of credits. Please try again {next_time}.\n\n[Upgrade]({upgrade_url}) for more credits."),
+                                            None => format!("It seems you're out of credits. Please try again {next_time}."),
+                                        }
                                     } else {
                                         format!("It seems you're out of credits. Please try again {next_time}.\n\nContact a team admin to upgrade for more credits.")
                                     }
@@ -261,8 +263,10 @@ impl Requests {
                                 }
                             } else {
                                 let user_id = auth_state.user_id().unwrap_or_default();
-                                let upgrade_url = UserWorkspaces::upgrade_link(user_id);
-                                format!("It seems you're out of credits. Please try again {next_time}.\n\n[Upgrade]({upgrade_url}) for more credits.")
+                                match UserWorkspaces::upgrade_link(user_id) {
+                                    Some(upgrade_url) => format!("It seems you're out of credits. Please try again {next_time}.\n\n[Upgrade]({upgrade_url}) for more credits."),
+                                    None => format!("It seems you're out of credits. Please try again {next_time}."),
+                                }
                             };
                             let response_in_markdown = markdown_segments_from_text(
                                 transcript_part_index,

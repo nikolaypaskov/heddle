@@ -382,15 +382,21 @@ fn task_env_vars_for_harness_name(
     // Server URL overrides are disabled on release channels, so there's no
     // override to propagate to child processes there.
     if ChannelState::channel().allows_server_url_overrides() {
+        // insert_non_empty_task_env_var skips empty values, so a build with no
+        // Warp server simply passes no override.
         insert_non_empty_task_env_var(
             &mut env_vars,
             SERVER_ROOT_URL_OVERRIDE_ENV,
-            ChannelState::require_server_root_url()?.into_owned(),
+            ChannelState::server_root_url()
+                .map(|url| url.into_owned())
+                .unwrap_or_default(),
         );
         insert_non_empty_task_env_var(
             &mut env_vars,
             WS_SERVER_URL_OVERRIDE_ENV,
-            ChannelState::require_ws_server_url()?.into_owned(),
+            ChannelState::ws_server_url()
+                .map(|url| url.into_owned())
+                .unwrap_or_default(),
         );
         if let Some(url) = ChannelState::session_sharing_server_url()
             .map(Cow::into_owned)

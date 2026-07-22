@@ -469,7 +469,11 @@ pub(crate) fn build_bundled_skill_context(
     [
         (
             "warp_server_url".to_owned(),
-            ChannelState::require_server_root_url()?.into_owned(),
+            // Empty when this build has no Warp server; the skill context simply
+            // carries no server URL rather than failing to build.
+            ChannelState::server_root_url()
+                .map(|url| url.into_owned())
+                .unwrap_or_default(),
         ),
         (
             "warp_cli_binary_name".to_owned(),

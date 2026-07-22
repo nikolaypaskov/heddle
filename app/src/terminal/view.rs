@@ -24581,13 +24581,14 @@ impl TerminalView {
                 conversation_token,
                 request_id,
             } => {
-                let url = match request_id {
-                    Some(request_id) => {
-                        format!("{}?request={}", conversation_token.debug_link(), request_id)
-                    }
-                    None => conversation_token.debug_link(),
-                };
-                ctx.clipboard().write(ClipboardContent::plain_text(url));
+                // No Warp server means no hosted debug page to copy a link to.
+                if let Some(debug_link) = conversation_token.debug_link() {
+                    let url = match request_id {
+                        Some(request_id) => format!("{debug_link}?request={request_id}"),
+                        None => debug_link,
+                    };
+                    ctx.clipboard().write(ClipboardContent::plain_text(url));
+                }
             }
             CopyAIBlockQuery { ai_block_view_id } => {
                 for rich_content in self.rich_content_views.iter() {

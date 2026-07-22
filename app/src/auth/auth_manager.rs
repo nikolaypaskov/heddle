@@ -85,7 +85,9 @@ pub enum AuthManagerEvent {
 
 pub type LoginGatedFeature = &'static str;
 
-type URLConstructorCallback = Box<dyn FnOnce(Option<&str>) -> String>;
+/// Returns [`None`] when no URL exists for this build — e.g. a Heddle build
+/// with no Warp server has no hosted page to open.
+type URLConstructorCallback = Box<dyn FnOnce(Option<&str>) -> Option<String>>;
 
 /// AuthManager is a singleton model which manages the currently logged-in user's state.
 /// If you need to access the state, use `AuthStateProvider`.
@@ -694,7 +696,9 @@ impl AuthManager {
                                 update_browser_url(Url::parse(&login_options_url).ok(), true);
                             }
                         } else {
-                            ctx.open_url(&login_options_url);
+                            if let Some(login_options_url) = login_options_url.as_ref() {
+                                ctx.open_url(login_options_url);
+                            }
                         }
                     }
                     Err(e) => {
@@ -716,8 +720,9 @@ impl AuthManager {
             || !self.auth_state.is_logged_in()
         {
             // Not an anonymous Firebase user, or fully logged out — open URL without token.
-            let url: String = construct_url(None);
-            ctx.open_url(&url);
+            if let Some(url) = construct_url(None) {
+                ctx.open_url(&url);
+            }
             return;
         }
 
@@ -728,8 +733,9 @@ impl AuthManager {
                 let custom_token = me.auth_client.on_custom_token_fetched(response);
                 match custom_token {
                     Ok(custom_token) => {
-                        let url: String = construct_url(Some(&custom_token));
-                        ctx.open_url(&url);
+                        if let Some(url) = construct_url(Some(&custom_token)) {
+                            ctx.open_url(&url);
+                        }
                     }
                     Err(e) => {
                         report_error!(anyhow::Error::new(e).context(
@@ -753,12 +759,13 @@ impl AuthManager {
 
                 match custom_token {
                     Ok(custom_token) => {
-                        let login_options_url = me.login_options_url(&custom_token);
-                        ctx.clipboard().write(ClipboardContent {
-                            plain_text: login_options_url,
-                            paths: None,
-                            ..Default::default()
-                        });
+                        if let Some(login_options_url) = me.login_options_url(&custom_token) {
+                            ctx.clipboard().write(ClipboardContent {
+                                plain_text: login_options_url,
+                                paths: None,
+                                ..Default::default()
+                            });
+                        }
                     }
                     Err(e) => {
                         ctx.emit(AuthManagerEvent::MintCustomTokenFailed(e));
