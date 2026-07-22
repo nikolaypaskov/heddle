@@ -165,7 +165,9 @@ echo "Building observation image..."
 docker build -q -t "${IMAGE}" docker/heddle-egress >/dev/null
 
 echo "Building and tracing warp-tui-oss (cold start, empty HOME)..."
-docker run --rm \
+# -t allocates a TTY: the TUI uses an alt screen and exits immediately without
+# one, which would produce an empty trace and a meaningless PASS.
+docker run --rm -t \
     --cap-add=SYS_PTRACE \
     -v "${REPO_ROOT}:/src" \
     -v heddle-cargo-registry:/usr/local/cargo/registry \
@@ -176,12 +178,39 @@ docker run --rm \
      cargo build --bin warp-tui-oss
      export HOME=/tmp/heddle-empty-home
      mkdir -p \$HOME
+     # 'set -e' would abort on timeout's non-zero exit before the marker is
+     # written, so capture the code explicitly. 124 means it was still running
+     # when the timeout fired, which is exactly what we need to trust a PASS.
+     RC=0
      timeout ${RUN_SECONDS} strace -f -qq -e trace=connect \
         -o /src/${LOG} \
-        \$CARGO_TARGET_DIR/debug/warp-tui-oss || true" \
+        \$CARGO_TARGET_DIR/debug/warp-tui-oss || RC=\$?
+     echo \"HEDDLE_EXIT=\$RC\" >> /src/${LOG}" \
     2>&1 | tail -20
 
 echo
+echo "Validating that the observation is meaningful..."
+
+# A test that cannot fail proves nothing. Before trusting a PASS, confirm the
+# process actually ran long enough to phone home.
+if [[ ! -s "${LOG}" ]]; then
+    echo "INCONCLUSIVE: trace file is empty — the binary never started."
+    exit 2
+fi
+
+if ! grep -q 'HEDDLE_EXIT=124' "${LOG}"; then
+    echo "INCONCLUSIVE: the process exited before the ${RUN_SECONDS}s timeout."
+    echo "A short-lived process cannot demonstrate absence of egress."
+    echo "Exit marker: $(grep -o 'HEDDLE_EXIT=[0-9]*' "${LOG}" || echo 'none')"
+    exit 2
+fi
+
+if ! grep -qE 'connect\(' "${LOG}"; then
+    echo "INCONCLUSIVE: no connect() calls of any kind were traced, not even"
+    echo "loopback. strace is probably not attached correctly."
+    exit 2
+fi
+
 echo "Analysing observed connections..."
 
 # strace renders AF_INET/AF_INET6 destinations with an inet_addr/inet_pton field.
@@ -213,10 +242,17 @@ chmod +x script/heddle/egress-test
 ./script/heddle/egress-test
 ```
 
-Expected: **exit 1**, listing connections to Warp infrastructure. This failure is the deliverable —
-it is the evidence that the leak is real and that the observer detects it. If it PASSES here, the
-observer is broken (most likely the trace file is empty or the binary exited immediately); debug
-that before continuing, because a test that cannot fail proves nothing.
+The script has three distinct outcomes, and only one of them is acceptable here:
+
+| Exit | Meaning | What to do |
+|---|---|---|
+| **1** | Egress observed — connections to Warp infrastructure listed | **This is the goal.** Proceed to Step 4. |
+| 2 | Inconclusive — empty trace, process died early, or strace not attached | Fix the harness. Do NOT proceed. |
+| 0 | "No egress" from an unmodified build | Disbelieve it. The observer is broken. |
+
+Exit 1 is the deliverable: it is the evidence that the leak is real *and* that the observer can
+detect it. A test that has never failed proves nothing, so do not continue past this step until you
+have seen it fail for the right reason.
 
 - [ ] **Step 4: Record the observed baseline leak**
 
