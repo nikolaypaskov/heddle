@@ -1023,34 +1023,9 @@ impl Action {
                 }
             }
             Action::CloudAgentSetup => {
-                let window_id =
-                    primary_window_id.or_else(|| Some(open_new_window_get_handles(None, ctx).0));
-
-                let Some(window_id) = window_id else {
-                    log::warn!("unable to determine window for cloud agent setup action");
-                    return;
-                };
-
-                let Some(mut workspaces) = ctx.views_of_type::<Workspace>(window_id) else {
-                    log::warn!(
-                        "no workspace found in window {window_id} for cloud agent setup action"
-                    );
-                    return;
-                };
-
-                match workspaces.pop() {
-                    Some(workspace) => {
-                        workspace.update(ctx, |workspace, ctx| {
-                            workspace
-                                .handle_action(&WorkspaceAction::OpenCloudAgentSetupGuide, ctx);
-                        });
-                    }
-                    _ => {
-                        log::warn!(
-                            "no workspace views in window {window_id} for cloud agent setup action"
-                        );
-                    }
-                }
+                // The cloud agent setup guide / agent-management panel was removed
+                // in the OSS build, so this deeplink no longer has a destination.
+                log::warn!("cloud agent setup deeplink is not supported in this build");
             }
             Action::NewCloudAgentConversation => {
                 let Some(window_id) = primary_window_id else {

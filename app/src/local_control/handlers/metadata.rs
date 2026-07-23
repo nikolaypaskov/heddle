@@ -1,7 +1,4 @@
 //! Metadata response builders for local-control introspection actions.
-#[cfg(test)]
-#[path = "metadata_tests.rs"]
-mod tests;
 use ::local_control::protocol::{
     ActionNameParams, ActiveTargetChain, PaneTarget, SessionTarget, SurfaceListResult,
     SurfaceSummary, TabTarget, TargetSelector, WindowTarget,
@@ -145,7 +142,6 @@ pub(crate) enum SurfaceDestination {
     LeftPanel,
     RightPanel,
     VerticalTabs,
-    AgentManagement,
 }
 
 impl SurfaceDestination {
@@ -165,7 +161,6 @@ impl SurfaceDestination {
         Self::LeftPanel,
         Self::RightPanel,
         Self::VerticalTabs,
-        Self::AgentManagement,
     ];
 
     fn name(self) -> &'static str {
@@ -185,7 +180,6 @@ impl SurfaceDestination {
             Self::LeftPanel => "left_panel",
             Self::RightPanel => "right_panel",
             Self::VerticalTabs => "vertical_tabs",
-            Self::AgentManagement => "agent_management",
         }
     }
 }
@@ -366,13 +360,6 @@ pub(crate) fn surface_unavailable_reason(
             Some("vertical tabs are unavailable or disabled")
         }
         SurfaceDestination::VerticalTabs => None,
-        SurfaceDestination::AgentManagement
-            if !FeatureFlag::AgentManagementView.is_enabled()
-                || !AISettings::as_ref(ctx).is_any_ai_enabled(ctx) =>
-        {
-            Some("agent management is unavailable or disabled")
-        }
-        SurfaceDestination::AgentManagement => None,
     }
 }
 

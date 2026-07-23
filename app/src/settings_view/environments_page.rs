@@ -67,7 +67,7 @@ use crate::view_components::{
     COPY_FEEDBACK_DURATION, CopyButtonPlacement, CopyableTextFieldConfig, DismissibleToast,
     render_copyable_text_field,
 };
-use crate::workspace::{ToastStack, WorkspaceAction};
+use crate::workspace::ToastStack;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 mod new_environment_button;
@@ -1840,18 +1840,14 @@ impl EnvironmentsPageWidget {
 
             let timestamp_color = blended_colors::text_sub(theme, theme.surface_1());
 
-            // Add "Last edited" and "Last used" text with a "View my runs" link.
-            let view_runs_env_id = env_id_str.clone();
+            // Add "Last edited" and "Last used" text. The agent-runs panel was
+            // removed in the OSS build, so the label is no longer a live link.
             let view_runs_link = appearance
                 .ui_builder()
                 .link(
                     "View my runs".to_string(),
                     None,
-                    Some(Box::new(move |ctx| {
-                        ctx.dispatch_typed_action(WorkspaceAction::ViewAgentRunsForEnvironment {
-                            environment_id: view_runs_env_id.clone(),
-                        });
-                    })),
+                    None,
                     view_runs_link_mouse_state.clone(),
                 )
                 .soft_wrap(false)

@@ -517,7 +517,6 @@ pub enum WorkspaceAction {
         /// The type of zero state prompt suggestion to start with (optional).
         zero_state_prompt_suggestion_type: Option<ZeroStatePromptSuggestionType>,
     },
-    OpenCloudAgentSetupGuide,
     AttemptLoginGatedAIUpgrade,
     /// Open the modal explaining Prompt Suggestions aren't available on the Free plan.
     /// Dismisses the Wayland crash recovery banner and opens a link to our docs page with more
@@ -707,7 +706,6 @@ pub enum WorkspaceAction {
     OpenGlobalSearch,
     ToggleConversationListView,
     OpenConversationListView,
-    OpenAgentManagementView,
     /// Open the Build Plan Migration Modal (for debugging)
     #[cfg(debug_assertions)]
     /// Reset the build plan migration modal dismissed state (for debugging)
@@ -758,10 +756,6 @@ pub enum WorkspaceAction {
     SampleProcess,
     ToggleNotificationMailbox {
         select_first: bool,
-    },
-    ToggleAgentManagementView,
-    ViewAgentRunsForEnvironment {
-        environment_id: String,
     },
     /// Show the rewind confirmation dialog before rewinding an AI conversation
     ShowRewindConfirmationDialog {
@@ -1015,7 +1009,6 @@ impl WorkspaceAction {
             | ToggleUserMenu
             | ClickedAIAssistantIcon
             | ToggleAIAssistant
-            | OpenCloudAgentSetupGuide
             | ToggleKeybindingsPage
             | ShowCommandSearch(_)
             | ToggleMouseReporting
@@ -1127,9 +1120,6 @@ impl WorkspaceAction {
             | ToggleConversationListView
             | OpenConversationListView
             | ToggleNotificationMailbox { .. }
-            | ToggleAgentManagementView
-            | OpenAgentManagementView
-            | ViewAgentRunsForEnvironment { .. }
             | ToggleAIDocumentPane { .. }
             | HideAIDocumentPanes
             | OpenAIDocumentPane { .. }
