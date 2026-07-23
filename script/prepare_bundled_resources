@@ -58,6 +58,12 @@ if [ -d "$RESOURCES_SRC/bundled" ]; then
   echo "Copying bundled resources to $DEST_DIR/bundled"
   rm -rf "$DEST_DIR/bundled"
   cp -R "$RESOURCES_SRC/bundled" "$DEST_DIR/bundled"
+  # Heddle: NO_SKILLS drops bundled agent skills (e.g. the Oz platform skill),
+  # which have no place in a build with no agent backend.
+  if [ -n "${NO_SKILLS:-}" ]; then
+    echo "NO_SKILLS set: removing bundled skills"
+    rm -rf "$DEST_DIR/bundled/skills"
+  fi
 else
   echo "Warning: No bundled directory found at $RESOURCES_SRC/bundled" >&2
 fi

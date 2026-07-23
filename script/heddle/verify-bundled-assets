@@ -16,7 +16,7 @@
 # new asset and confirm it carries no third-party mark before updating the pin.
 #
 # Regenerate after an intentional, reviewed change:
-#   find app/assets/bundled -type f \( -iname '*.png' -o -iname '*.ico' \
+#   find app/assets/bundled app/DockTilePlugin/Resources -type f \( -iname '*.png' -o -iname '*.ico' \
 #     -o -iname '*.ttf' -o -iname '*.otf' -o -iname '*.jpg' -o -iname '*.gif' \) \
 #     -print0 | sort -z | xargs -0 shasum -a256 \
 #     > script/heddle/bundled-asset-manifest.sha256
@@ -36,7 +36,7 @@ fi
 CURRENT="$(mktemp)"
 trap 'rm -f "${CURRENT}"' EXIT
 
-find app/assets/bundled -type f \
+find app/assets/bundled app/DockTilePlugin/Resources -type f \
     \( -iname '*.png' -o -iname '*.ico' -o -iname '*.ttf' \
        -o -iname '*.otf' -o -iname '*.jpg' -o -iname '*.gif' \) \
     -print0 | sort -z | xargs -0 shasum -a256 > "${CURRENT}"

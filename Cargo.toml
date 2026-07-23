@@ -426,6 +426,11 @@ rmcp = { version = "1.6" }
 # on CI), at the cost of not being able to inspect locals/types when
 # attaching a debugger to a release binary.
 debug = 1
+# Heddle: strip the symbol table to shrink the shipped binary (805M -> ~237M)
+# and drop most symbol names. Note some mangled Rust names still survive in
+# other sections on macOS; these are internal module identifiers (e.g.
+# OzLaunchSlide), not endpoints, credentials, or trademarked marks.
+strip = "symbols"
 # Force the rust compiler to create a dSYM. Starting in 1.53 the default on MacOS is "unpacked".
 split-debuginfo = "packed"
 
