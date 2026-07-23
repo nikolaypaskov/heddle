@@ -92,3 +92,41 @@ This scope and the decision to defer were reviewed and endorsed by the Codex
 evaluator (`gpt-5.6-sol`, reasoning effort `xhigh`), which independently judged
 ACP "achievable, but defer it from v0.1" and warned specifically against
 treating CLI-name detection as protocol compatibility.
+
+
+## Consensus addendum (2026-07-23): scope, safety, and honest effort
+
+After v0.1 shipped (Phases 1-5), the standing project goal — "all six phases
+implemented" — required deciding how to proceed on Phase 6. This was put to the
+Codex evaluator as a consensus decision. The agreed outcome:
+
+**Implement toward full (option A), incrementally, seam-first. Phase 6 counts as
+"implemented" ONLY when all seven acceptance criteria pass — not before.**
+
+- **Land the `AgentBackend` seam now** as a behavior-preserving refactor. This is
+  safe: an interface executes nothing.
+- **Do NOT ship a partial, prompt-capable ACP backend.** A default-off runtime
+  flag is explicitly judged *insufficient* protection — it creates "a hazardous
+  latent backend" that could execute unapproved tool calls if ever reached. ACP
+  must stay genuinely unreachable until permission-blocking, denial, cancellation,
+  and crash handling all work end-to-end.
+- **"Implemented by design" does not satisfy "all six phases implemented."**
+  Calling the seam alone "Phase 6 done" would be dishonest.
+
+**Honest effort estimate (one experienced engineer, from Codex):** 9-14
+engineer-weeks plus review and soak.
+
+| Work | Estimate |
+|---|---|
+| Seam + call-site decoupling | 1-2 weeks |
+| ACP process/session lifecycle | 1-2 weeks |
+| Stateful transactional translation (ClientAction: 13 variants, FieldMask, begin/commit/rollback transactions) | 3-4 weeks |
+| Permission UI + blocking round trip | 2-3 weeks |
+| Cancellation, crash recovery, tests, hardening | 2-3 weeks |
+
+This is why Phase 6 was deferred from v0.1 and why it cannot be honestly
+compressed into a checkbox. The translation target
+(`warp_multi_agent_api::ResponseEvent` -> `ClientActions` -> 13 transactional
+`ClientAction` variants) is a stateful, field-mask-based message-mutation
+protocol, measured against the real proto at
+`~/.cargo/git/checkouts/warp-proto-apis-*/apis/multi_agent/v1`.
