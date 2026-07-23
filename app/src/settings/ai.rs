@@ -1552,34 +1552,6 @@ define_settings_group!(AISettings, settings: [
         private: true,
     }
 
-    // This is not a user-visible setting - it's merely a one-time flag to track if the Oz launch modal
-    // has been shown to the user.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_check_to_trigger_oz_launch_modal: DidShowOzLaunchModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
-    // This is not a user-visible setting - it's merely a one-time flag to track if the
-    // orchestration launch modal has been shown to the user.
-    //
-    // We model it as a setting so it's only shown once to a given user regardless of the number of
-    // devices they use.
-    did_check_to_trigger_orchestration_launch_modal: DidShowOrchestrationLaunchModal {
-        type: bool,
-        default: false,
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::No),
-        surface: settings::SettingSurfaces::GUI,
-        private: true,
-    }
-
     // Used to determine whether the "What's new in Oz" section of the agent view
     // zero state is expanded or collapsed by default.
     should_expand_oz_updates: ShouldExpandOzUpdates {

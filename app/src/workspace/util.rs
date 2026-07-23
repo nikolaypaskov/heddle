@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use warpui::elements::MouseStateHandle;
 use warpui::{AppContext, EntityId, SingletonEntity, ViewContext, ViewHandle, WindowId};
 
-use super::OneTimeModalModel;
 use crate::appearance::Appearance;
 use crate::pane_group::PaneId;
 use crate::terminal::TerminalView;
@@ -132,7 +131,7 @@ impl WorkspaceState {
             || self.is_warp_drive_open
     }
 
-    pub fn is_any_non_palette_modal_open(&self, app: &AppContext) -> bool {
+    pub fn is_any_non_palette_modal_open(&self, _app: &AppContext) -> bool {
         self.is_theme_creator_modal_open
             || self.is_theme_deletion_modal_open
             || self.is_changelog_modal_open
@@ -156,10 +155,6 @@ impl WorkspaceState {
             || self.is_session_config_modal_open
             || self.is_new_worktree_modal_open
             || self.is_remove_tab_config_dialog_open
-            || {
-                let one_time_modal = OneTimeModalModel::as_ref(app);
-                one_time_modal.is_oz_launch_modal_open()
-            }
     }
 
     /// Returns whether any modal (sitting over terminal views) is open.
