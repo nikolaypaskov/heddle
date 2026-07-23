@@ -6303,10 +6303,6 @@ impl Workspace {
     }
 
 
-    fn join_slack(&mut self, ctx: &mut ViewContext<Self>) {
-        ctx.open_url(links::SLACK_URL);
-    }
-
     fn view_user_docs(&mut self, ctx: &mut ViewContext<Self>) {
         ctx.open_url(links::USER_DOCS_URL);
     }
@@ -9481,12 +9477,6 @@ impl Workspace {
                 .into_item(),
         );
 
-        items.extend([
-            MenuItemFields::new("Join our Slack community")
-                .with_on_select_action(WorkspaceAction::JoinSlack)
-                .into_item(),
-            MenuItem::Separator,
-        ]);
 
         if self.auth_state.is_anonymous_or_logged_out() {
             items.push(
@@ -23790,7 +23780,6 @@ impl TypedActionView for Workspace {
                 mode: palette_mode,
                 source,
             } => self.toggle_palette(*palette_mode, *source, ctx),
-            JoinSlack => self.join_slack(ctx),
             ViewUserDocs => self.view_user_docs(ctx),
             ViewLatestChangelog => self.view_latest_changelog(ctx),
             ViewPrivacyPolicy => self.view_privacy_policy(ctx),
