@@ -32,10 +32,20 @@ Progress on the sweep:
 |---|---|
 | Referrals / refer-a-friend / rewards | ✅ removed (`2635768b`) |
 | Billing & Usage page, buy-credits banner, auto-reload modal, /usage /cost, Upgrade menu, prompt-alert credit CTAs | ✅ removed (`3d5ff762`) |
-| P2 · upgrade/paywall residues (ShowUpgrade, upgrade_link, out-of-credits CTA, free_ai_removal_modal) | ⏳ next |
-| P2 · paid onboarding ($18/mo slide) + Oz/orchestration/build-plan launch modals | ⏳ |
+| P2 · upgrade/paywall residues (ShowUpgrade, out-of-credits CTA, frontier-models footer, free_ai_removal_modal, upgrade toast) | ✅ removed (`9bf250a1`) |
+| P2 · Build-plan migration modal | ✅ removed (`7b87ba65`) |
+| P2 · paid onboarding ($18/mo slide) + command-search upgrade CTA | ✅ removed (`f81d4209`) |
+| P2 · Oz / orchestration launch marketing modals | ⏳ (removed with Oz feature) |
 | P1 · Teams, Warp Drive, session/block sharing, cloud conversation history | ⏳ |
 | P0 · Warp-hosted agent/AI transport, Oz cloud agents | ⏳ (overlaps Phase 6) |
+
+The self-contained **P2 paywall/paid-onboarding tier is complete** and passed an
+independent Codex sign-off (2026-07-23); the only P2 items left are the Oz/
+orchestration launch modals, which are that feature's marketing and go with the
+Oz removal (P0). `UserWorkspaces::upgrade_link[_for_team]` remain as
+`None`-returning stubs for callers inside not-yet-removed features (teams,
+ai_page); they're removed with those features. Privacy scanners
+(`verify-no-warp-endpoints`, `verify-bundled-assets`) still PASS.
 
 ## Phase 6 decision (owner call, 2026-07-23)
 

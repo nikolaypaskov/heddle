@@ -44,14 +44,6 @@ pub struct OneTimeModalModel {
     /// intentionally excluded from `is_any_modal_open` (which suppresses terminal
     /// focus stealing) to keep the terminal usable while it is visible.
     active_feature_intro: Option<FeatureIntroId>,
-    /// Whether the initial one-time modal checks have run. The seen markers are
-    /// cloud-synced settings, so event-driven re-checks must wait for the initial
-    /// cloud preferences load to avoid acting on stale values.
-    has_completed_initial_modal_checks: bool,
-    /// Whether `UserWorkspaces` has emitted `TeamsChanged`, meaning workspace billing
-    /// data reflects more than the local cache and "no workspace" can be trusted to
-    /// mean a solo (Free) user rather than not-yet-loaded data.
-    has_fetched_workspaces: bool,
     /// The window ID where the currently open one-time modal should be displayed.
     /// This is captured when a modal is first opened and ensures the modal stays on that window.
     target_window_id: Option<WindowId>,
@@ -59,17 +51,6 @@ pub struct OneTimeModalModel {
 
 impl OneTimeModalModel {
     pub fn new(ctx: &mut ModelContext<Self>) -> Self {
-        // Track whether a server fetch of the user's teams has completed.
-        ctx.subscribe_to_model(
-            &crate::workspaces::user_workspaces::UserWorkspaces::handle(ctx),
-            |me, _, event, _ctx| {
-                use crate::workspaces::user_workspaces::UserWorkspacesEvent;
-                if let UserWorkspacesEvent::TeamsChanged = event {
-                    me.has_fetched_workspaces = true;
-                }
-            },
-        );
-
         // Subscribe to auth manager events to automatically trigger modal when user becomes onboarded
         ctx.subscribe_to_model(&AuthManager::handle(ctx), |_, _, event, ctx| {
             let AuthManagerEvent::AuthComplete = event else {
@@ -86,7 +67,6 @@ impl OneTimeModalModel {
                     move |me, _, event, ctx| {
                         if let CloudPreferencesSyncerEvent::InitialLoadCompleted = event {
                             ctx.unsubscribe_from_model(&CloudPreferencesSyncer::handle(ctx));
-                            me.has_completed_initial_modal_checks = true;
                             me.check_and_trigger_all_modals(ctx);
                             maybe_ensure_handoff_chip_in_toolbar(ctx);
                         }
@@ -136,8 +116,6 @@ impl OneTimeModalModel {
             auto_handoff_sleep_modal_closed,
             is_hoa_onboarding_open: false,
             active_feature_intro: None,
-            has_completed_initial_modal_checks: false,
-            has_fetched_workspaces: false,
             target_window_id: None,
         }
     }
@@ -186,9 +164,8 @@ impl OneTimeModalModel {
         if !self.set_active_feature_intro(None, ctx) {
             return;
         }
-        // Feature intros sit ahead of HOA/build-plan in the startup queue and also
-        // suppress free-AI rechecks while open. Resume those deferred paths so
-        // lower-priority notices are not lost for the rest of the session.
+        // Feature intros sit ahead of HOA onboarding in the startup queue. Resume
+        // that deferred path so it is not lost for the rest of the session.
         self.resume_modal_checks_after_feature_intro(ctx);
     }
 
