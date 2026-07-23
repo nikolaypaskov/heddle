@@ -328,10 +328,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::RevertToCheckpoints,
         #[cfg(feature = "rewind_slash_command")]
         FeatureFlag::RewindSlashCommand,
-        #[cfg(feature = "agent_management_view")]
-        FeatureFlag::AgentManagementView,
-        #[cfg(feature = "agent_management_details_view")]
-        FeatureFlag::AgentManagementDetailsView,
         #[cfg(feature = "agent_view")]
         FeatureFlag::AgentView,
         #[cfg(feature = "agent_view_block_context")]
@@ -376,12 +372,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::InlineHistoryMenu,
         #[cfg(feature = "inline_repo_menu")]
         FeatureFlag::InlineRepoMenu,
-        #[cfg(feature = "cloud_mode")]
-        FeatureFlag::CloudMode,
-        #[cfg(feature = "cloud_mode_from_local_session")]
-        FeatureFlag::CloudModeFromLocalSession,
-        #[cfg(feature = "cloud_mode_image_context")]
-        FeatureFlag::CloudModeImageContext,
         #[cfg(feature = "summarization_via_message_replacement")]
         FeatureFlag::SummarizationViaMessageReplacement,
         #[cfg(feature = "pluggable_notifications")]
@@ -476,10 +466,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::CodexPlugin,
         #[cfg(feature = "trim_trailing_blank_lines")]
         FeatureFlag::TrimTrailingBlankLines,
-        #[cfg(feature = "cloud_mode_setup_v2")]
-        FeatureFlag::CloudModeSetupV2,
-        #[cfg(feature = "cloud_mode_input_v2")]
-        FeatureFlag::CloudModeInputV2,
         #[cfg(feature = "handoff_cloud_cloud")]
         FeatureFlag::HandoffCloudCloud,
         #[cfg(feature = "git_credential_refresh")]
