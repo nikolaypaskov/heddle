@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# Verifies that every embedded binary asset matches a reviewed, pinned hash.
+#
+# WHY THIS EXISTS
+#
+# The string scanner (verify-no-warp-endpoints) cannot see a logo inside a PNG
+# or a glyph inside a font. That blind spot shipped real trademarked assets more
+# than once: Warp's app icon as blue.png/dev.png/local.png, its logomark as
+# warp-loading-*.svg, and a warpLogo glyph inside the Roboto fonts. Innocuous
+# filenames (blue.png) defeat any name-based rule.
+#
+# You cannot grep a logo, but you CAN pin the exact bytes you reviewed. This
+# check fails if any bundled raster/font asset changed, was added, or was
+# removed relative to the reviewed manifest. A diff forces a human to render the
+# new asset and confirm it carries no third-party mark before updating the pin.
+#
+# Regenerate after an intentional, reviewed change:
+#   find app/assets/bundled -type f \( -iname '*.png' -o -iname '*.ico' \
+#     -o -iname '*.ttf' -o -iname '*.otf' -o -iname '*.jpg' -o -iname '*.gif' \) \
+#     -print0 | sort -z | xargs -0 shasum -a256 \
+#     > script/heddle/bundled-asset-manifest.sha256
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)"
+cd "${REPO_ROOT}"
+
+MANIFEST="script/heddle/bundled-asset-manifest.sha256"
+
+if [[ ! -f "${MANIFEST}" ]]; then
+    echo "INCONCLUSIVE: manifest not found at ${MANIFEST}"
+    exit 2
+fi
+
+CURRENT="$(mktemp)"
+trap 'rm -f "${CURRENT}"' EXIT
+
+find app/assets/bundled -type f \
+    \( -iname '*.png' -o -iname '*.ico' -o -iname '*.ttf' \
+       -o -iname '*.otf' -o -iname '*.jpg' -o -iname '*.gif' \) \
+    -print0 | sort -z | xargs -0 shasum -a256 > "${CURRENT}"
+
+if diff -u "${MANIFEST}" "${CURRENT}" > /tmp/heddle-asset-diff 2>&1; then
+    echo "PASS: all $(wc -l < "${MANIFEST}" | tr -d ' ') bundled binary assets match the reviewed manifest."
+    exit 0
+fi
+
+echo "FAIL: bundled binary assets differ from the reviewed manifest."
+echo "Every changed/added asset must be rendered and confirmed free of any"
+echo "third-party trademark before the manifest is updated."
+echo
+cat /tmp/heddle-asset-diff
+exit 1

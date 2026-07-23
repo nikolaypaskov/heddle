@@ -98,6 +98,7 @@ jobs:
           fi
           rm -f /tmp/heddle-canary
           ./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
+          ./script/heddle/verify-bundled-assets
 
       - name: Package
         env:

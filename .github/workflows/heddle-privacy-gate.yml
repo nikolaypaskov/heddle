@@ -87,3 +87,6 @@ jobs:
 
       - name: Verify no Warp endpoints in the binary
         run: ./script/heddle/verify-no-warp-endpoints
+
+      - name: Verify bundled binary assets match the reviewed manifest
+        run: ./script/heddle/verify-bundled-assets
