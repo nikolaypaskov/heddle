@@ -141,7 +141,7 @@ One honest caveat:
 | Telemetry / experiments / Drive | Removed |
 | Rebrand | Own name, icon, logo, bundle ID, paths; upstream doc links remain |
 | Release builds | Linux x86_64; macOS builds from source |
-| Agent support (ACP) | Designed, **not implemented** — see below |
+| Agent support (ACP) | Designed + `AgentBackend` seam planned; **not implemented** (next milestone) |
 
 Warp's built-in agent runs on their proprietary server and cannot work here. The intended
 replacement is [ACP](https://agentclientprotocol.com/), bridging to a local agent process. The
