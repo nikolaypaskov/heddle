@@ -187,8 +187,6 @@ impl CollapsibleSectionStates {
 
 fn render_failure_section(
     presentation: &FailedOutputPresentation,
-    compare_plans_hover_state: &MouseStateHandle,
-    byok_hover_state: &MouseStateHandle,
     app: &AppContext,
 ) -> Box<dyn TuiElement> {
     let builder = TuiUiBuilder::from_app(app);
@@ -213,36 +211,6 @@ fn render_failure_section(
             (detail.clone(), body_style),
         ])
         .finish(),
-        FailedOutputPresentation::OutOfCredits {
-            message,
-            can_use_own_api_keys,
-        } => {
-            let primary_style = builder.primary_text_style();
-            let link_style = primary_style.add_modifier(Modifier::UNDERLINED);
-            let (title, detail) = message.split_once("\n\n").unwrap_or((message.as_str(), ""));
-            let _ = (&compare_plans_hover_state, &byok_hover_state, can_use_own_api_keys);
-            let _ = link_style;
-            // No plan-comparison or BYOK links: both pointed at warp.dev.
-            let actions = TuiFlex::row();
-            let mut content = TuiFlex::column().child(
-                TuiText::from_spans([
-                    (FAILURE_WARNING_PREFIX.to_owned(), error_style),
-                    (title.to_owned(), primary_style),
-                ])
-                .finish(),
-            );
-            if !detail.is_empty() {
-                content = content.child(
-                    TuiText::new(format!("  {detail}"))
-                        .with_style(primary_style)
-                        .finish(),
-                );
-            }
-            content
-                .child(TuiText::new(" ").finish())
-                .child(actions.finish())
-                .finish()
-        }
         FailedOutputPresentation::ContextWindowExceeded { message } => TuiText::from_spans([
             ("× ".to_owned(), error_style),
             (message.clone(), body_style),
@@ -264,15 +232,6 @@ fn failure_text(presentation: &FailedOutputPresentation) -> String {
             fallback_message: message,
         }
         | FailedOutputPresentation::ContextWindowExceeded { message } => message.clone(),
-        FailedOutputPresentation::OutOfCredits {
-            message,
-            can_use_own_api_keys,
-        } => {
-            // Heddle: no plan-comparison or BYOK links -- both were warp.dev
-            // destinations. The message stands on its own.
-            let _ = can_use_own_api_keys;
-            message.clone()
-        }
         FailedOutputPresentation::InvalidApiKey { title, detail } => {
             format!("{title}\n{detail}")
         }
@@ -360,8 +319,6 @@ pub(super) struct TuiAIBlock {
     /// Per-message UI state for this exchange's collapsible sections
     /// (thinking blocks and task lists).
     collapsible_states: CollapsibleSectionStates,
-    compare_plans_hover_state: MouseStateHandle,
-    byok_hover_state: MouseStateHandle,
     /// Every tool-call action id seen in this exchange's output, maintained by
     /// [`Self::sync_action_views`]. Mirrors the GUI `AIBlock`'s
     /// `requested_action_ids` so per-action-event lookups are a cheap set
@@ -403,8 +360,6 @@ impl TuiAIBlock {
             action_model: action_model.clone(),
             terminal_model,
             collapsible_states: Default::default(),
-            compare_plans_hover_state: MouseStateHandle::default(),
-            byok_hover_state: MouseStateHandle::default(),
             action_ids: HashSet::new(),
             action_views: HashMap::new(),
             code_block_views: HashMap::new(),
@@ -1204,12 +1159,7 @@ impl TuiAIBlock {
                 )
             }
             TuiAIBlockSection::AgentMessage(_) => return None,
-            TuiAIBlockSection::Failure(presentation) => render_failure_section(
-                presentation,
-                &self.compare_plans_hover_state,
-                &self.byok_hover_state,
-                app,
-            ),
+            TuiAIBlockSection::Failure(presentation) => render_failure_section(presentation, app),
             TuiAIBlockSection::UsageNotice => render_usage_notice(app),
         })
     }
@@ -1584,12 +1534,7 @@ impl TuiAIBlock {
                     self.conversation_id,
                     app,
                 ),
-                TuiAIBlockSection::Failure(presentation) => render_failure_section(
-                    presentation,
-                    &self.compare_plans_hover_state,
-                    &self.byok_hover_state,
-                    app,
-                ),
+                TuiAIBlockSection::Failure(presentation) => render_failure_section(presentation, app),
                 TuiAIBlockSection::UsageNotice => render_usage_notice(app),
             };
 

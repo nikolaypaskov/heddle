@@ -1,13 +1,10 @@
-use pathfinder_geometry::vector::vec2f;
 use warpui::elements::{
-    Align, ClippedScrollStateHandle, ClippedScrollable, Container, CornerRadius, Element, Empty,
-    Fill, Flex, Hoverable, Icon, MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement,
-    Radius, Shrinkable,
+    Align, ClippedScrollStateHandle, ClippedScrollable, Container, Element, Empty,
+    Fill, Flex, Hoverable, MainAxisSize, MouseStateHandle, ParentElement, Shrinkable,
 };
 use warpui::platform::Cursor;
 use warpui::presenter::ChildView;
-use warpui::ui_components::button::{ButtonVariant, TextAndIcon, TextAndIconAlignment};
-use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
+use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{
     AppContext, Entity, EntityId, ModelHandle, SingletonEntity, TypedActionView, View, ViewContext,
     ViewHandle, WindowId,
@@ -16,7 +13,7 @@ use warpui::{
 use super::section_views::feature_section::FeatureSectionEvent;
 use super::section_views::{
     BUTTON_PADDING, DETAIL_FONT_SIZE, FOOTER_ICON_SIZE, SCROLLBAR_OFFSET, SCROLLBAR_WIDTH,
-    SECTION_SPACING, SECTION_SPACING_BOTTOM, SectionViewHandle,
+    SECTION_SPACING, SectionViewHandle,
 };
 use super::sections::sections;
 use super::{
@@ -24,7 +21,6 @@ use super::{
     FeatureSectionData, FeatureSectionView, Section, TipsCompleted,
 };
 use crate::appearance::Appearance;
-use crate::auth::AuthStateProvider;
 use crate::changelog_model::ChangelogModel;
 use crate::channel::ChannelState;
 use crate::features::FeatureFlag;
@@ -32,7 +28,6 @@ use crate::resource_center::skip_tips_and_write_to_user_defaults;
 use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::Settings;
-use crate::themes::theme::{Blend, Fill as FillTheme};
 use crate::workspace::WorkspaceAction;
 
 const SEND_SVG_PATH: &str = "bundled/svg/send.svg";

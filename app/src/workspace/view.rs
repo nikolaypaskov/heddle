@@ -6,7 +6,6 @@ pub mod conversation_list;
 #[cfg(enable_crash_recovery)]
 mod crash_recovery;
 pub(crate) mod feature_intro_modal;
-pub(crate) mod free_ai_removal_modal;
 pub mod global_search;
 pub(crate) mod launch_modal;
 pub(crate) mod left_panel;
@@ -509,10 +508,6 @@ use crate::workspace::view::codex_modal::{CodexModal, CodexModalEvent};
 use crate::workspace::view::feature_intro_modal::{
     FeatureIntroCtaTarget, FeatureIntroId, FeatureIntroModal, FeatureIntroModalEvent,
     feature_intro_by_id,
-};
-use crate::workspace::view::free_ai_removal_modal::{
-    FreeAiRemovalModal, FreeAiRemovalModalEvent, FreeAiRemovalModalTelemetryEvent,
-    FreeAiRemovalModalVariant,
 };
 use crate::workspace::view::global_search::view::GlobalSearchEntryFocus;
 use crate::workspace::view::launch_modal::{LaunchModal, LaunchModalEvent, OzLaunchSlide};
@@ -1108,10 +1103,8 @@ pub struct Workspace {
     build_plan_migration_modal: ViewHandle<BuildPlanMigrationModal>,
     codex_modal: ViewHandle<CodexModal>,
     cloud_agent_capacity_modal: ViewHandle<CloudAgentCapacityModal>,
-    free_ai_removal_modal: ViewHandle<FreeAiRemovalModal>,
     /// Second instance of the free-AI-removal modal, opened on demand when a
     /// Free user activates Prompt Suggestions while out of credits.
-    prompt_suggestions_unavailable_modal: ViewHandle<FreeAiRemovalModal>,
     toast_stack: ViewHandle<DismissibleToastStack<WorkspaceAction>>,
     agent_toast_stack: ViewHandle<AgentToastStack>,
     update_toast_stack: ViewHandle<DismissibleToastStack<WorkspaceAction>>,
@@ -1717,7 +1710,7 @@ impl Workspace {
     }
 
     fn build_settings_views(
-        global_resource_handles: GlobalResourceHandles,
+        _global_resource_handles: GlobalResourceHandles,
         tips_completed: ModelHandle<TipsCompleted>,
         ctx: &mut ViewContext<Self>,
     ) -> (ViewHandle<SettingsView>, ViewHandle<ThemeChooser>) {
@@ -2894,23 +2887,6 @@ impl Workspace {
             me.handle_cloud_agent_capacity_modal_event(event, ctx);
         });
 
-        let free_ai_removal_modal = ctx.add_typed_action_view(|ctx| {
-            FreeAiRemovalModal::new(FreeAiRemovalModalVariant::Notice, ctx)
-        });
-        ctx.subscribe_to_view(&free_ai_removal_modal, |me, _, event, ctx| {
-            me.handle_free_ai_removal_modal_event(event, ctx);
-        });
-
-        let prompt_suggestions_unavailable_modal = ctx.add_typed_action_view(|ctx| {
-            FreeAiRemovalModal::new(FreeAiRemovalModalVariant::PromptSuggestions, ctx)
-        });
-        ctx.subscribe_to_view(
-            &prompt_suggestions_unavailable_modal,
-            |me, _, event, ctx| {
-                me.handle_prompt_suggestions_unavailable_modal_event(event, ctx);
-            },
-        );
-
         let require_login_modal = Self::build_require_login_modal(ctx);
 
         let auth_override_warning_modal = Self::build_auth_override_warning_modal(ctx);
@@ -3272,8 +3248,6 @@ impl Workspace {
                         me.focus_orchestration_launch_modal(ctx);
                     } else if model_ref.is_auto_handoff_sleep_modal_open() {
                         me.focus_auto_handoff_sleep_modal(ctx);
-                    } else if model_ref.is_free_ai_removal_modal_open() {
-                        me.focus_free_ai_removal_modal(ctx);
                     } else if model_ref.is_hoa_onboarding_open() {
                         me.show_hoa_onboarding_flow(ctx);
                     } else if model_ref.is_build_plan_migration_modal_open() {
@@ -3421,8 +3395,6 @@ impl Workspace {
             notification_toast_stack,
             codex_modal,
             cloud_agent_capacity_modal,
-            free_ai_removal_modal,
-            prompt_suggestions_unavailable_modal,
             lightbox_view: None,
             hoa_onboarding_flow: None,
             hoa_vtabs_callout_pinned_position: None,
@@ -10937,21 +10909,6 @@ impl Workspace {
             }
             WorkflowModalEvent::ViewInWarpDrive(id) => {
                 self.view_in_and_focus_warp_drive(*id, ctx);
-            }
-            WorkflowModalEvent::AiAssistUpgradeError(team_uid, user_id) => {
-                let upgrade_link = team_uid
-                    .map(UserWorkspaces::upgrade_link_for_team)
-                    .unwrap_or_else(|| UserWorkspaces::upgrade_link(*user_id));
-
-                self.toast_stack.update(ctx, |view, ctx| {
-                    let new_toast =
-                        DismissibleToast::error("Looks like you're out of AI credits.".into())
-                            .with_link(
-                                ToastLink::new("Upgrade for more credits.".into())
-                                    .with_optional_href(upgrade_link),
-                            );
-                    view.add_ephemeral_toast(new_toast, ctx);
-                });
             }
         }
     }
@@ -18879,50 +18836,6 @@ impl Workspace {
         }
     }
 
-    fn handle_free_ai_removal_modal_event(
-        &mut self,
-        event: &FreeAiRemovalModalEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            FreeAiRemovalModalEvent::Close => {
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.mark_free_ai_removal_modal_dismissed(ctx);
-                });
-                self.focus_active_tab(ctx);
-                ctx.notify();
-            }
-        }
-    }
-
-    fn handle_prompt_suggestions_unavailable_modal_event(
-        &mut self,
-        event: &FreeAiRemovalModalEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            FreeAiRemovalModalEvent::Close => {
-                self.current_workspace_state
-                    .is_prompt_suggestions_unavailable_modal_open = false;
-                self.focus_active_tab(ctx);
-                ctx.notify();
-            }
-        }
-    }
-
-    pub fn open_prompt_suggestions_unavailable_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        self.current_workspace_state
-            .is_prompt_suggestions_unavailable_modal_open = true;
-        send_telemetry_from_ctx!(
-            FreeAiRemovalModalTelemetryEvent::Shown {
-                variant: FreeAiRemovalModalVariant::PromptSuggestions,
-            },
-            ctx
-        );
-        ctx.focus(&self.prompt_suggestions_unavailable_modal);
-        ctx.notify();
-    }
-
     fn handle_codex_modal_event(&mut self, event: &CodexModalEvent, ctx: &mut ViewContext<Self>) {
         use crate::AIExecutionProfilesModel;
         use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
@@ -23445,10 +23358,6 @@ impl Workspace {
         ctx.focus(&self.build_plan_migration_modal);
     }
 
-    fn focus_free_ai_removal_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        ctx.focus(&self.free_ai_removal_modal);
-    }
-
     fn open_left_panel_view(&mut self, action: &LeftPanelAction, ctx: &mut ViewContext<Self>) {
         if !self.active_tab_pane_group().as_ref(ctx).left_panel_open {
             self.toggle_left_panel(ctx);
@@ -24073,9 +23982,6 @@ impl TypedActionView for Workspace {
                 search_query,
                 section,
             } => self.show_settings_with_search(search_query, *section, ctx),
-            OpenPromptSuggestionsUnavailableModal => {
-                self.open_prompt_suggestions_unavailable_modal(ctx)
-            }
             ShowThemeChooser(mode) => self.show_theme_chooser(Some(*mode), ctx),
             ShowThemeChooserForActiveTheme => self.show_theme_chooser_for_active_theme(ctx),
             IncreaseFontSize => self.increase_font_size(ctx),
@@ -24093,23 +23999,6 @@ impl TypedActionView for Workspace {
                 mode: palette_mode,
                 source,
             } => self.toggle_palette(*palette_mode, *source, ctx),
-            ShowUpgrade => {
-                send_telemetry_from_ctx!(TelemetryEvent::UserMenuUpgradeClicked, ctx);
-
-                let auth_state = AuthStateProvider::as_ref(ctx).get();
-                let user_workspaces = UserWorkspaces::as_ref(ctx);
-
-                let upgrade_url = if let Some(team) = user_workspaces.current_team() {
-                    UserWorkspaces::upgrade_link_for_team(team.uid)
-                } else {
-                    let user_id = auth_state.user_id().unwrap_or_default();
-                    UserWorkspaces::upgrade_link(user_id)
-                };
-
-                if let Some(upgrade_url) = upgrade_url {
-                    ctx.open_url(&upgrade_url);
-                }
-            }
             JoinSlack => self.join_slack(ctx),
             ViewUserDocs => self.view_user_docs(ctx),
             ViewLatestChangelog => self.view_latest_changelog(ctx),
@@ -25585,25 +25474,6 @@ impl TypedActionView for Workspace {
                 );
             }
             #[cfg(debug_assertions)]
-            OpenFreeAiRemovalModal => {
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.force_open_free_ai_removal_modal(ctx);
-                });
-                ctx.notify();
-            }
-            #[cfg(debug_assertions)]
-            ResetFreeAiRemovalModalState => {
-                AISettings::handle(ctx).update(ctx, |ai_settings, ctx| {
-                    if let Err(e) = ai_settings
-                        .did_check_to_trigger_free_ai_removal_modal
-                        .set_value(false, ctx)
-                    {
-                        log::warn!("Failed to reset free AI removal modal seen setting: {e}");
-                    }
-                });
-                log::info!("Free AI removal modal seen state has been reset");
-            }
-            #[cfg(debug_assertions)]
             OpenFeatureIntroModal => {
                 if let Some(id) = crate::workspace::view::feature_intro_modal::FEATURE_INTROS
                     .first()
@@ -26979,17 +26849,6 @@ impl View for Workspace {
 
         if should_show_modal && one_time_modal_model.is_auto_handoff_sleep_modal_open() {
             stack.add_child(ChildView::new(&self.auto_handoff_sleep_modal).finish());
-        }
-
-        if should_show_modal && one_time_modal_model.is_free_ai_removal_modal_open() {
-            stack.add_child(ChildView::new(&self.free_ai_removal_modal).finish());
-        }
-
-        if self
-            .current_workspace_state
-            .is_prompt_suggestions_unavailable_modal_open
-        {
-            stack.add_child(ChildView::new(&self.prompt_suggestions_unavailable_modal).finish());
         }
 
         if let Some(hoa_flow) = &self.hoa_onboarding_flow {

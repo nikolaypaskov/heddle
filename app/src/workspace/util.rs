@@ -111,7 +111,6 @@ pub struct WorkspaceState {
     pub is_agent_management_view_open: bool,
     pub is_codex_modal_open: bool,
     pub is_cloud_agent_capacity_modal_open: bool,
-    pub is_prompt_suggestions_unavailable_modal_open: bool,
     pub is_tab_config_params_modal_open: bool,
     pub is_session_config_modal_open: bool,
     pub is_new_worktree_modal_open: bool,
@@ -153,7 +152,6 @@ impl WorkspaceState {
             || self.is_suggested_agent_mode_workflow_modal_open
             || self.is_codex_modal_open
             || self.is_cloud_agent_capacity_modal_open
-            || self.is_prompt_suggestions_unavailable_modal_open
             || self.is_tab_config_params_modal_open
             || self.is_session_config_modal_open
             || self.is_new_worktree_modal_open
@@ -196,7 +194,6 @@ impl WorkspaceState {
         self.is_suggested_agent_mode_workflow_modal_open = false;
         self.is_codex_modal_open = false;
         self.is_cloud_agent_capacity_modal_open = false;
-        self.is_prompt_suggestions_unavailable_modal_open = false;
         self.is_tab_config_params_modal_open = false;
         self.is_session_config_modal_open = false;
         self.is_new_worktree_modal_open = false;

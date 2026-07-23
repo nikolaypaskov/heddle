@@ -3,7 +3,6 @@ use std::rc::Rc;
 use pathfinder_geometry::vector::vec2f;
 use serde::Serialize;
 use warp_core::channel::ChannelState;
-use warp_core::features::FeatureFlag;
 use warp_core::ui::theme::color::internal_colors::{neutral_2, neutral_3};
 use warpui::elements::{
     ChildAnchor, ChildView, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment, Empty,
@@ -19,7 +18,6 @@ use warpui::{
     ViewContext, ViewHandle,
 };
 
-use crate::ai::AIRequestUsageModel;
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::agent::{PassiveSuggestionTrigger, StaticQueryType};
@@ -36,8 +34,6 @@ use crate::terminal::view::{ContextMenuAction, InputType, PromptSuggestion, Term
 use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon as WarpUIIcon;
 use crate::util::bindings::keybinding_name_to_keystroke;
-use crate::workspace::WorkspaceAction;
-use crate::workspaces::user_workspaces::UserWorkspaces;
 
 const INLINE_BANNER_SPACING: f32 = 8.;
 const INLINE_BANNER_BUTTON_PADDING: f32 = 8.;
@@ -313,20 +309,6 @@ fn get_tooltip_text_for_alert_state(alert_state: &PromptAlertState) -> Option<St
     }
 }
 
-/// Free-plan users who run out of Warp-provided AI credits should get a modal
-/// offering BYO/upgrade instead of a disabled button. Other disabled states
-/// (offline, payment issues, team overage gates) keep the disabled treatment.
-fn should_open_unavailable_modal(state: &PromptAlertState, app: &AppContext) -> bool {
-    FeatureFlag::OpenWarpNewSettingsModes.is_enabled()
-        && matches!(state, PromptAlertState::RequestLimitReached)
-        && !UserWorkspaces::as_ref(app)
-            .current_workspace()
-            .is_some_and(|workspace| workspace.billing_metadata.is_user_on_paid_plan())
-        // ICPs who still receive base credits on the Free plan keep the disabled
-        // button; only offer the modal once the base allowance is gone.
-        && AIRequestUsageModel::as_ref(app).request_limit() == 0
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptSuggestionsEvent {
     SignupAnonymousUser,
@@ -390,7 +372,6 @@ impl View for PromptSuggestionsView {
             .with_main_axis_size(MainAxisSize::Max);
 
         let prompt_alert_state = self.prompt_alert.as_ref(app).state();
-        let open_unavailable_modal = should_open_unavailable_modal(prompt_alert_state, app);
 
         let Some(banner_state) = &self.banner_state else {
             return Empty::new().finish();
@@ -416,22 +397,16 @@ impl View for PromptSuggestionsView {
                     keybinding_name_to_keystroke(ACCEPT_PROMPT_SUGGESTION_KEYBINDING, app),
                     banner_state.accept_button_mouse_state.clone(),
                     Rc::new(move |ctx: &mut warpui::EventContext<'_>| {
-                        if open_unavailable_modal {
-                            ctx.dispatch_typed_action(
-                                WorkspaceAction::OpenPromptSuggestionsUnavailableModal,
-                            );
-                        } else {
-                            ctx.dispatch_typed_action(TerminalAction::ResolvePromptSuggestion(
-                                PromptSuggestionResolution::Accept {
-                                    interaction_source: InteractionSource::Button,
-                                },
-                            ));
-                        }
+                        ctx.dispatch_typed_action(TerminalAction::ResolvePromptSuggestion(
+                            PromptSuggestionResolution::Accept {
+                                interaction_source: InteractionSource::Button,
+                            },
+                        ));
                     }),
                     debug_request_token,
                     prompt_alert_state,
                     true, // should_shrink
-                    open_unavailable_modal,
+                    false, // force_enabled
                     appearance,
                     app,
                 ),

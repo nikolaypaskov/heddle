@@ -20170,7 +20170,7 @@ impl TerminalView {
                 AIAgentCitation::WarpDriveObject { uid } => {
                     ctx.emit(Event::OpenWarpDriveObjectInPane(uid.clone()));
                 }
-                AIAgentCitation::WarpDocumentation { path } => {
+                AIAgentCitation::WarpDocumentation { path: _ } => {
                     ctx.open_url(&format!("https://github.com/nikolaypaskov/warp#readme"));
                 }
                 AIAgentCitation::WebPage { url } => {

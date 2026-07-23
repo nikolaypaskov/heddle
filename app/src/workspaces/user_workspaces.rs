@@ -38,7 +38,6 @@ use crate::workspaces::workspace::{
     AiAutonomySettings, AiOverages, SandboxedAgentSettings, UsageBasedPricingSettings,
 };
 
-const STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX: &str = "/upgrade";
 
 #[derive(Debug)]
 pub enum UserWorkspacesEvent {
@@ -189,25 +188,17 @@ impl UserWorkspaces {
         }
     }
 
-    /// [`None`] when this build has no Warp server: there is no subscription
-    /// to upgrade and no billing page to send anyone to.
-    pub fn upgrade_link(user_id: UserUid) -> Option<String> {
-        Some(format!(
-            "{}{}/{}/{}",
-            ChannelState::server_root_url()?,
-            STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX,
-            "user",
-            user_id.as_str()
-        ))
+    /// Always [`None`] in this fork: there is no Warp server, so there is no
+    /// subscription to upgrade and no billing page to send anyone to. Retained
+    /// as a no-op so the (soon-to-be-removed) callers that still reference an
+    /// "upgrade" path compile and simply do nothing.
+    pub fn upgrade_link(_user_id: UserUid) -> Option<String> {
+        None
     }
 
-    pub fn upgrade_link_for_team(team_uid: ServerId) -> Option<String> {
-        Some(format!(
-            "{}{}/{}",
-            ChannelState::server_root_url()?,
-            STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX,
-            team_uid
-        ))
+    /// Always [`None`] in this fork. See [`Self::upgrade_link`].
+    pub fn upgrade_link_for_team(_team_uid: ServerId) -> Option<String> {
+        None
     }
 
     pub fn team_from_uid(&self, team_uid: ServerId) -> Option<&Team> {
