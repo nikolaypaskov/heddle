@@ -163,9 +163,12 @@ items — all now fixed:
   (label + separator + mouse-state plumbing), rather than left as a dead
   click/hover target.
 
-Codex confirmed no egress guard was added or removed by the range and the
-protocol code removal is otherwise consistent. Next candidate under
-investigation: the `AgentConversationsModel` + "Agent conversations"
+After a three-round adversarial cycle (two REJECTs, both fixed), Codex
+**APPROVED** the full range (`5a8c33dd..c841efcb`) with no findings: strict
+global settings decode preserved, opt-in toolbar tolerance correct and
+wire-compatible, protocol removal consistent, catalog at 83, and no egress guard
+changed. Next candidate under investigation: the `AgentConversationsModel` +
+"Agent conversations"
 conversation-list panel + Oz ambient-agent cloud fetches
 (`list_ambient_agent_tasks`). An Explore pass found this is **preserve-local
 surgery, not clean deletion** (~35–40 files): the model is a deliberate
