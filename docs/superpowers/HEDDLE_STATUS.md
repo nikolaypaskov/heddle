@@ -35,7 +35,7 @@ Progress on the sweep:
 | P2 · upgrade/paywall residues (ShowUpgrade, out-of-credits CTA, frontier-models footer, free_ai_removal_modal, upgrade toast) | ✅ removed (`9bf250a1`) |
 | P2 · Build-plan migration modal | ✅ removed (`7b87ba65`) |
 | P2 · paid onboarding ($18/mo slide) + command-search upgrade CTA | ✅ removed (`f81d4209`) |
-| P2 · Oz / orchestration launch marketing modals | ⏳ (removed with Oz feature) |
+| P2 · Oz / orchestration / OpenWarp launch marketing modals | ✅ removed (`878db60f`) |
 | P1 · Block sharing (modal, hosted API, settings page, context menu, telemetry) | ✅ removed (`4580b9b8`) |
 | P1 · Teams settings page (plan/seat/invite/billing/upgrade UI + all triggers) | ✅ removed (`072dbc4b`) |
 | P1 · Session sharing (116 files, terminal-core-woven) | ⏳ deep |
@@ -43,12 +43,13 @@ Progress on the sweep:
 | P1 · Cloud conversation history (cloud loader/retention over local SQLite — preserve-local) | ⏳ deep |
 | P0 · Warp-hosted agent/AI transport, Oz cloud agents | ⏳ (overlaps Phase 6) |
 
-The self-contained **P2 paywall/paid-onboarding tier is complete** and passed an
-independent Codex sign-off (2026-07-23). Two P1 features that were cleanly
-*removable* (block sharing, the Teams settings page) are also done. Privacy
-scanners (`verify-no-warp-endpoints`, `verify-bundled-assets`) PASS after every
+**The entire P2 tier is complete** (billing, paywalls, paid onboarding, and the
+Oz/orchestration/OpenWarp launch marketing modals) and passed an independent
+Codex sign-off (2026-07-23). The two P1 features that were cleanly *removable*
+— block sharing and the Teams settings page — are also done. Privacy scanners
+(`verify-no-warp-endpoints`, `verify-bundled-assets`) PASS after every
 increment; the OSS TUI binary has shrunk from ~799 MB to ~794 MB across the
-sweep.
+sweep. Every additive commercial *surface* the fork shipped is now gone.
 
 ### Boundary reached: clean removals vs. preserve-local surgery
 
