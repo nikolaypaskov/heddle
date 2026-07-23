@@ -33,7 +33,7 @@ if [ "$WARP_CHANNEL" = "local" ]; then
     WARP_APP_PATH="${TARGET_DIR}/debug/bundle/osx/WarpLocal.app"
     WARP_SCHEME_NAME="warplocal"
 else
-    WARP_APP_PATH="${TARGET_DIR}/debug/bundle/osx/WarpOss.app"
+    WARP_APP_PATH="${TARGET_DIR}/debug/bundle/osx/Heddle.app"
     WARP_SCHEME_NAME="warposs"
 fi
 DONT_OPEN=false
@@ -70,7 +70,7 @@ while (( "$#" )); do
       if [ "$WARP_CHANNEL" = "local" ]; then
           WARP_APP_PATH="${TARGET_DIR}/release/bundle/osx/WarpLocal.app"
       else
-          WARP_APP_PATH="${TARGET_DIR}/release/bundle/osx/WarpOss.app"
+          WARP_APP_PATH="${TARGET_DIR}/release/bundle/osx/Heddle.app"
       fi
       PARAMS="$PARAMS $1"
       shift
@@ -81,7 +81,7 @@ while (( "$#" )); do
       if [ "$WARP_CHANNEL" = "local" ]; then
           WARP_APP_PATH="${TARGET_DIR}/${PROFILE}/bundle/osx/WarpLocal.app"
       else
-          WARP_APP_PATH="${TARGET_DIR}/${PROFILE}/bundle/osx/WarpOss.app"
+          WARP_APP_PATH="${TARGET_DIR}/${PROFILE}/bundle/osx/Heddle.app"
       fi
       PARAMS="$PARAMS --profile $PROFILE"
       ;;
@@ -154,10 +154,10 @@ if [ "$DONT_OPEN" = false ] ; then
         if [ "$WARP_CHANNEL" = "local" ]; then
             LOG_FILE=~/Library/Logs/warp_local.log
         elif [ "$WARP_CHANNEL" = "oss" ]; then
-            LOG_FILE=~/Library/Logs/warp-oss.log
+            LOG_FILE=~/Library/Logs/heddle/heddle.log
         else
             echo "Warning: unrecognized WARP_CHANNEL '$WARP_CHANNEL', defaulting to OSS log path" >&2
-            LOG_FILE=~/Library/Logs/warp-oss.log
+            LOG_FILE=~/Library/Logs/heddle/heddle.log
         fi
         tail -F "$LOG_FILE"
     else
