@@ -4422,18 +4422,18 @@ impl SettingsWidget for TeamsWidget {
 #[cfg(test)]
 #[test]
 pub fn test_valid_domains() {
-    assert!(!TeamsPageView::is_valid_domain("@warp.dev"));
+    assert!(!TeamsPageView::is_valid_domain("@example.test"));
     assert!(!TeamsPageView::is_valid_domain("warp,"));
     assert!(!TeamsPageView::is_valid_domain("warpdev"));
     assert!(!TeamsPageView::is_valid_domain(".dev"));
     assert!(!TeamsPageView::is_valid_domain("warp..dev"));
     assert!(!TeamsPageView::is_valid_domain(" "));
     assert!(!TeamsPageView::is_valid_domain("warp!.dev"));
-    assert!(!TeamsPageView::is_valid_domain("warp.dev>"));
-    assert!(!TeamsPageView::is_valid_domain("warp.dev."));
+    assert!(!TeamsPageView::is_valid_domain("example.test>"));
+    assert!(!TeamsPageView::is_valid_domain("example.test."));
     assert!(TeamsPageView::is_valid_domain("app.example.invalid"));
     assert!(TeamsPageView::is_valid_domain("warp0.dev0"));
-    assert!(TeamsPageView::is_valid_domain("warp.dev"));
+    assert!(TeamsPageView::is_valid_domain("example.test"));
     assert!(TeamsPageView::is_valid_domain("miniclip.com"));
 }
 
