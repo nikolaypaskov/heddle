@@ -239,22 +239,6 @@ pub static FORK: LazyLock<StaticCommand> = LazyLock::new(|| {
     }
 });
 
-pub static MOVE_TO_CLOUD: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand {
-    name: "/handoff",
-    description: "Hand off this conversation to a cloud agent",
-    icon_path: "bundled/svg/upload-cloud-01.svg",
-    availability: Availability::AGENT_VIEW
-        | Availability::ACTIVE_CONVERSATION
-        | Availability::AI_ENABLED
-        | Availability::NOT_CLOUD_AGENT,
-    auto_enter_ai_mode: false,
-    argument: Some(
-        Argument::optional()
-            .with_hint_text("<optional follow-up prompt>")
-            .with_execute_on_selection(),
-    ),
-});
-
 pub const OPEN_CODE_REVIEW: StaticCommand = StaticCommand {
     name: "/open-code-review",
     description: "Open code review",
@@ -530,15 +514,6 @@ pub static CONTINUE_LOCALLY: LazyLock<StaticCommand> = LazyLock::new(|| {
     }
 });
 
-pub const REMOTE_CONTROL: StaticCommand = StaticCommand {
-    name: "/remote-control",
-    description: "Start remote control for this session",
-    icon_path: "bundled/svg/phone-01.svg",
-    availability: Availability::AI_ENABLED.union(Availability::NOT_CLOUD_AGENT),
-    auto_enter_ai_mode: false,
-    argument: None,
-};
-
 pub const CONVERSATIONS: StaticCommand = StaticCommand {
     name: "/conversations",
     description: "Open conversation history",
@@ -699,7 +674,6 @@ fn all_commands(settings_mode: settings::SettingsMode) -> Vec<StaticCommand> {
     if FeatureFlag::CreatingSharedSessions.is_enabled()
         && FeatureFlag::HOARemoteControl.is_enabled()
     {
-        commands.push(REMOTE_CONTROL);
     }
 
     if FeatureFlag::Changelog.is_enabled() {
@@ -758,7 +732,6 @@ fn all_commands(settings_mode: settings::SettingsMode) -> Vec<StaticCommand> {
         && FeatureFlag::HandoffLocalCloud.is_enabled()
         && cfg!(all(feature = "local_fs", not(target_family = "wasm")))
     {
-        commands.push(MOVE_TO_CLOUD.clone());
     }
 
     if FeatureFlag::InlineProfileSelector.is_enabled() {

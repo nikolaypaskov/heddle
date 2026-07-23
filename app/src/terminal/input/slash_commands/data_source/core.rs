@@ -413,9 +413,6 @@ pub trait SlashCommandDataSource {
         if command.name == commands::ORCHESTRATE_NAME && !gates.is_orchestration_enabled {
             return false;
         }
-        if command.name == commands::MOVE_TO_CLOUD.name && !gates.is_cloud_handoff_enabled {
-            return false;
-        }
         // /host is only useful when a default self-hosted host is configured.
         if command.name == commands::HOST.name && !gates.has_default_host {
             return false;
