@@ -23867,23 +23867,6 @@ impl TypedActionView for Workspace {
                     );
                 }
             }
-            CreateTeamNotebook => {
-                let team_uid = self.team_uid(ctx);
-                if let Some(team_uid) = team_uid {
-                    self.update_warp_drive_view(ctx, |drive_panel, ctx| {
-                        drive_panel.open_cloud_object_dialog(
-                            DriveObjectType::Notebook {
-                                is_ai_document: false,
-                            },
-                            Space::Team { team_uid },
-                            None,
-                            ctx,
-                        );
-                    });
-                    self.current_workspace_state.is_warp_drive_open = true;
-                    ctx.notify();
-                }
-            }
             CreatePersonalEnvVarCollection => {
                 if let Some(personal_drive) = UserWorkspaces::as_ref(ctx).personal_drive(ctx) {
                     self.open_env_var_collection(
@@ -23897,45 +23880,12 @@ impl TypedActionView for Workspace {
                     );
                 }
             }
-            CreateTeamEnvVarCollection => {
-                let team_uid = self.team_uid(ctx);
-                if let Some(team_uid) = team_uid {
-                    self.update_warp_drive_view(ctx, |drive_panel, ctx| {
-                        drive_panel.open_cloud_object_dialog(
-                            DriveObjectType::EnvVarCollection,
-                            Space::Team { team_uid },
-                            None,
-                            ctx,
-                        );
-                    });
-                    self.current_workspace_state.is_warp_drive_open = true;
-                    ctx.notify();
-                }
-            }
             CreatePersonalWorkflow => {
                 if let Some(personal_drive) = UserWorkspaces::as_ref(ctx).personal_drive(ctx) {
                     let source = WorkflowOpenSource::New {
                         title: None,
                         content: None,
                         owner: personal_drive,
-                        initial_folder_id: None,
-                        is_for_agent_mode: false,
-                    };
-                    self.open_workflow_in_pane(
-                        &source,
-                        &OpenWarpDriveObjectSettings::default(),
-                        WorkflowViewMode::Create,
-                        ctx,
-                    );
-                }
-            }
-            CreateTeamWorkflow => {
-                let team_uid = self.team_uid(ctx);
-                if let Some(team_uid) = team_uid {
-                    let source = WorkflowOpenSource::New {
-                        title: None,
-                        content: None,
-                        owner: Owner::Team { team_uid },
                         initial_folder_id: None,
                         is_for_agent_mode: false,
                     };
@@ -23958,21 +23908,6 @@ impl TypedActionView for Workspace {
                 });
                 self.current_workspace_state.is_warp_drive_open = true;
                 ctx.notify();
-            }
-            CreateTeamFolder => {
-                let team_uid = self.team_uid(ctx);
-                if let Some(team_uid) = team_uid {
-                    self.update_warp_drive_view(ctx, |drive_panel, ctx| {
-                        drive_panel.open_cloud_object_dialog(
-                            DriveObjectType::Folder,
-                            Space::Team { team_uid },
-                            None,
-                            ctx,
-                        );
-                    });
-                    self.current_workspace_state.is_warp_drive_open = true;
-                    ctx.notify();
-                }
             }
             ToggleMouseReporting => self.toggle_mouse_reporting(ctx),
             ToggleScrollReporting => self.toggle_scroll_reporting(ctx),
@@ -25064,24 +24999,6 @@ impl TypedActionView for Workspace {
                         title: None,
                         content: None,
                         owner: personal_drive,
-                        initial_folder_id: None,
-                        is_for_agent_mode: true,
-                    };
-                    self.open_workflow_in_pane(
-                        &source,
-                        &OpenWarpDriveObjectSettings::default(),
-                        WorkflowViewMode::Create,
-                        ctx,
-                    );
-                }
-            }
-            CreateTeamAIPrompt => {
-                let team_uid = self.team_uid(ctx);
-                if let Some(team_uid) = team_uid {
-                    let source = WorkflowOpenSource::New {
-                        title: None,
-                        content: None,
-                        owner: Owner::Team { team_uid },
                         initial_folder_id: None,
                         is_for_agent_mode: true,
                     };

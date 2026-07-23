@@ -350,15 +350,10 @@ pub enum WorkspaceAction {
     CreatePersonalNotebook,
     ImportToPersonalDrive,
     ImportToTeamDrive,
-    CreateTeamNotebook,
     CreatePersonalWorkflow,
-    CreateTeamWorkflow,
     CreatePersonalFolder,
-    CreateTeamFolder,
-    CreateTeamEnvVarCollection,
     CreatePersonalEnvVarCollection,
     CreatePersonalAIPrompt,
-    CreateTeamAIPrompt,
     ToggleMouseReporting,
     ToggleScrollReporting,
     ToggleFocusReporting,
@@ -869,11 +864,6 @@ impl From<&WorkspaceAction> for LoginGatedFeature {
         use WorkspaceAction::*;
         match val {
             ImportToTeamDrive => "Importing to a team drive",
-            CreateTeamNotebook => "Creating a team notebook",
-            CreateTeamWorkflow => "Creating a team workflow",
-            CreateTeamFolder => "Creating a team folder",
-            CreateTeamEnvVarCollection => "Creating a team environment variable collection",
-            CreateTeamAIPrompt => "Creating a team prompt",
             OpenShareSessionModal(_) => "Sharing a session",
             _ => "Unknown reason",
         }
@@ -885,13 +875,7 @@ impl WorkspaceAction {
         use WorkspaceAction::*;
         matches!(
             self,
-            ImportToTeamDrive
-                | CreateTeamNotebook
-                | CreateTeamWorkflow
-                | CreateTeamFolder
-                | CreateTeamEnvVarCollection
-                | CreateTeamAIPrompt
-                | OpenShareSessionModal(_)
+            ImportToTeamDrive | OpenShareSessionModal(_)
         )
     }
 
@@ -1042,15 +1026,10 @@ impl WorkspaceAction {
             | ImportToPersonalDrive
             | ImportToTeamDrive
             | CreatePersonalNotebook
-            | CreateTeamNotebook
             | CreatePersonalWorkflow
-            | CreateTeamWorkflow
             | CreatePersonalFolder
-            | CreateTeamFolder
-            | CreateTeamEnvVarCollection
             | CreatePersonalEnvVarCollection
             | CreatePersonalAIPrompt
-            | CreateTeamAIPrompt
             | OpenInExplorer { .. }
             | DragTab { .. }
             | StartTabDrag
