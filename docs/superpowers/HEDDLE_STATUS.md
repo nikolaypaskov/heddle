@@ -36,7 +36,8 @@ Progress on the sweep:
 | P2 · Build-plan migration modal | ✅ removed (`7b87ba65`) |
 | P2 · paid onboarding ($18/mo slide) + command-search upgrade CTA | ✅ removed (`f81d4209`) |
 | P2 · Oz / orchestration launch marketing modals | ⏳ (removed with Oz feature) |
-| P1 · Teams, Warp Drive, session/block sharing, cloud conversation history | ⏳ |
+| P1 · Block sharing (modal, hosted API, settings page, context menu, telemetry) | ✅ removed (`4580b9b8`) |
+| P1 · Session sharing, Teams, Warp Drive, cloud conversation history | ⏳ |
 | P0 · Warp-hosted agent/AI transport, Oz cloud agents | ⏳ (overlaps Phase 6) |
 
 The self-contained **P2 paywall/paid-onboarding tier is complete** and passed an
