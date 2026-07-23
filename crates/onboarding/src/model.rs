@@ -148,14 +148,12 @@ impl std::fmt::Display for AiSetupChoice {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AiAccessChoice {
     #[default]
-    Subscription,
     SetUpLater,
 }
 
 impl std::fmt::Display for AiAccessChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AiAccessChoice::Subscription => write!(f, "subscription"),
             AiAccessChoice::SetUpLater => write!(f, "set_up_later"),
         }
     }
@@ -175,7 +173,6 @@ pub(crate) enum OnboardingStateEvent {
     SelectedSlideChanged,
     IntentionChanged,
     Completed,
-    UpgradeRequested,
     AuthStateChanged,
     NoAiConfirmationChanged,
 }
@@ -630,10 +627,6 @@ impl OnboardingStateModel {
 
     pub(crate) fn set_intention_agent_driven_development(&mut self, ctx: &mut ModelContext<Self>) {
         self.set_intention(OnboardingIntention::AgentDrivenDevelopment, ctx);
-    }
-
-    pub(crate) fn request_upgrade(&mut self, ctx: &mut ModelContext<Self>) {
-        ctx.emit(OnboardingStateEvent::UpgradeRequested);
     }
 
     pub(crate) fn on_user_selected_model(&mut self, model_id: LLMId, ctx: &mut ModelContext<Self>) {
