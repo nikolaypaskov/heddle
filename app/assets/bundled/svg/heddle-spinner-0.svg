@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="30" height="30">
+  <!-- Heddle loading spinner. Original work; replaces Warp's animated
+       logomark frames, which are a trademarked mark. -->
+  <circle cx="24.00" cy="15.00" r="2.1" fill="currentColor" opacity="0.15"/>
+  <circle cx="21.36" cy="21.36" r="2.1" fill="currentColor" opacity="0.27"/>
+  <circle cx="15.00" cy="24.00" r="2.1" fill="currentColor" opacity="0.39"/>
+  <circle cx="8.64" cy="21.36" r="2.1" fill="currentColor" opacity="0.51"/>
+  <circle cx="6.00" cy="15.00" r="2.1" fill="currentColor" opacity="0.64"/>
+  <circle cx="8.64" cy="8.64" r="2.1" fill="currentColor" opacity="0.76"/>
+  <circle cx="15.00" cy="6.00" r="2.1" fill="currentColor" opacity="0.88"/>
+  <circle cx="21.36" cy="8.64" r="2.1" fill="currentColor" opacity="1.00"/>
+</svg>

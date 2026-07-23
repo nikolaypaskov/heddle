@@ -22,7 +22,7 @@ pub static AGENT: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand {
 pub static CLOUD_AGENT: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand {
     name: "/cloud-agent",
     description: "Start a new cloud agent conversation",
-    icon_path: "bundled/svg/oz-cloud.svg",
+    icon_path: "bundled/svg/agent-cloud.svg",
     availability: Availability::AI_ENABLED.union(Availability::NOT_CLOUD_AGENT),
     auto_enter_ai_mode: false,
     argument: Some(Argument::optional().with_execute_on_selection()),
@@ -375,7 +375,7 @@ pub static MODEL: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand {
 pub static HOST: LazyLock<StaticCommand> = LazyLock::new(|| StaticCommand {
     name: "/host",
     description: "Switch the cloud agent execution host",
-    icon_path: "bundled/svg/oz-cloud.svg",
+    icon_path: "bundled/svg/agent-cloud.svg",
     availability: Availability::AGENT_VIEW
         | Availability::AI_ENABLED
         | Availability::CLOUD_MODE_V2_COMPOSER,

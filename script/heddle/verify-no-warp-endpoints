@@ -81,6 +81,8 @@ FORBIDDEN=(
     "customize_warpdrive"
     "warp_install_image"
     "warpLogo"
+    "warp-loading"  # Warp's animated logomark frames; replaced with a neutral spinner
+    "svg/oz-"       # any Oz-branded bundled vector asset path
 )
 
 # Scan RAW BYTES with grep, not `strings`.
