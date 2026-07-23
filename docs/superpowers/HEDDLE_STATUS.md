@@ -51,6 +51,36 @@ Codex sign-off (2026-07-23). The two P1 features that were cleanly *removable*
 increment; the OSS TUI binary has shrunk from ~799 MB to ~794 MB across the
 sweep. Every additive commercial *surface* the fork shipped is now gone.
 
+### Menu audit + privacy pass (owner-requested, after seeing the GUI run)
+
+The de-commercialized GUI was built and run locally; the owner confirmed it
+"looks good" but asked to (a) audit the menus for OSS-irrelevant items and (b)
+keep going, framing Heddle as a **privacy-oriented** version. Done in this pass:
+
+- **Warp Drive team-object creation** removed from the Drive menu / palette /
+  keybindings (`New Team Workflow/Notebook/Prompt/Env Vars/Folder`); local
+  `NewPersonal*` kept.
+- **"Cloud Agent"** new-session entry and **"Share pane" / "Share current
+  session"** Drive-menu items removed.
+- **Slack-community** surfaces removed everywhere (Help menu, account menu,
+  Resource Center footer, `JoinSlack` action, `SLACK_URL`, and the bundled Slack
+  trademark logo).
+- **Upstream links fixed:** `GITHUB_ISSUES_URL` and the feedback form pointed at
+  `warpdotdev/Warp`; repointed to the fork, and feedback no longer auto-attaches
+  OS/app version.
+- **`/handoff` and `/remote-control` slash commands** removed.
+- **Privacy fix (live-verified):** the OSS build was repeatedly attempting
+  `fetching updated cloud objects`. Guarded all cloud-object / workspace-metadata
+  pollers on `ChannelState::server_root_url().is_some()` — a hard no-op without a
+  server. A fresh build now logs **zero** cloud-fetch/auth-fail lines and starts
+  with `server_config: None, oz_config: None, telemetry_config: None,
+  crash_reporting_config: None`.
+
+Still visible in the AI agent view (deferred — intricate serde-persisted toolbar
+enum): the "Hand off to cloud" and "Share session" footer chips, the
+"Agent Management" header toolbar, and the "Cloud agent" type selector. These
+come out with the Oz / session-sharing deep removals.
+
 ### Boundary reached: clean removals vs. preserve-local surgery
 
 The remaining P1 items are a **different class of work** from everything removed
