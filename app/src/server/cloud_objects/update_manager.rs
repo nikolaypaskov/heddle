@@ -26,6 +26,7 @@ use warpui::{
 };
 
 use super::listener::ObjectUpdateMessage;
+use crate::channel::ChannelState;
 use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::ambient_agents::scheduled::{
@@ -624,6 +625,10 @@ impl UpdateManager {
     }
 
     pub fn start_polling_for_updated_objects(&mut self, ctx: &mut ModelContext<Self>) {
+        // No Warp server in this fork: there are no cloud objects to sync.
+        if ChannelState::server_root_url().is_none() {
+            return;
+        }
         let is_online = NetworkStatus::as_ref(ctx).is_online();
 
         if !self.should_poll_for_updated_objects && is_online {
@@ -634,6 +639,10 @@ impl UpdateManager {
 
     /// Out-of-band (from the regular poll) refresh of updated objects.
     pub fn refresh_updated_objects(&mut self, ctx: &mut ModelContext<Self>) {
+        // No Warp server in this fork: there are no cloud objects to fetch.
+        if ChannelState::server_root_url().is_none() {
+            return;
+        }
         let object_client = self.object_client.clone();
         let cloud_model = CloudModel::as_ref(ctx);
         let versions_for_all_objects = cloud_model.get_versions_for_all_objects(ctx);
