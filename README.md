@@ -20,8 +20,10 @@ Heddle takes the open client and removes its dependence on the closed parts. It 
 
 ## What was removed
 
-Each item below is checked mechanically against the built binary on every
-change. Read [Verification](#verification) for exactly what that does and does not prove.
+Most items below are removed from the source outright. A subset — every
+`warp.dev` string, the Firebase key, and telemetry destinations — is additionally
+checked against the built binary on every change; see
+[Verification](#verification) for exactly what that check does and does not prove.
 
 | Removed | Detail |
 |---|---|
@@ -110,7 +112,7 @@ shutdown. **That work is not done.**
 
 One honest caveat:
 
-- **The string rebrand is incomplete.** Menu items, dialogs and notifications say Heddle, but
+- **The string rebrand is incomplete.** Menu items, dialogs, notifications and icons say Heddle, but
   roughly 600 further strings — mostly log messages and internal diagnostics — still say "Warp".
   Two categories are left alone deliberately: `Warp OSC` markers are a wire-protocol identifier
   that shell hooks depend on, and "Warp Drive" names an upstream feature Heddle removed, so

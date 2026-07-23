@@ -307,6 +307,14 @@ fn open_file_command_path(
 
 impl Input {
     fn is_slash_command_available(&self, command: &StaticCommand, ctx: &AppContext) -> bool {
+        // Heddle: /logout is meaningless with no account system, and running it
+        // used to strand the user. Hide it rather than leave a silent no-op in
+        // the command palette.
+        if command.name == commands::LOGOUT.name
+            && warp_core::channel::ChannelState::server_root_url().is_none()
+        {
+            return false;
+        }
         let slash_command_data_source = if self.is_cloud_mode_input_v2_composing(ctx) {
             let Some(data_source) = self.cloud_mode_composer_slash_command_data_source.as_ref()
             else {

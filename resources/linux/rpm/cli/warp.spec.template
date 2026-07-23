@@ -8,7 +8,7 @@ Version:     @@VERSION@@
 Release:     @@RELEASE@@
 Vendor:      Denver Technologies, Inc.
 Url:         https://github.com/nikolaypaskov/warp#readme
-Packager:    Warp Linux Maintainers <linux-maintainers@warp.dev>
+Packager:    Heddle contributors
 License:     https://github.com/nikolaypaskov/warp#readme
 Obsoletes:   warp-cli@@CHANNEL_SUFFIX@@ < %{version}
 Obsoletes:   oz = v0.2026.02.09.06.06.stable_00
@@ -158,7 +158,7 @@ install_yum() {
 	REPO_FILE="$REPO_DIR/@@REPO_NAME@@.repo"
 	if [ -f "$REPO_FILE" ]; then
 		# Migrate existing repo file to use local key instead of URL.
-		sed -i 's|^gpgkey=https://github.com/nikolaypaskov/warp#readme' "$REPO_FILE"
+		sed -i 's|^gpgkey=.*|gpgkey=file://@@GPG_KEY_PATH@@|' "$REPO_FILE"
 		return
 	fi
 
@@ -180,7 +180,7 @@ install_zypp() {
 	REPO_FILE="$REPO_DIR/@@REPO_NAME@@.repo"
 	if [ -f "$REPO_FILE" ]; then
 		# Migrate existing repo file to use local key instead of URL.
-		sed -i 's|^gpgkey=https://github.com/nikolaypaskov/warp#readme' "$REPO_FILE"
+		sed -i 's|^gpgkey=.*|gpgkey=file://@@GPG_KEY_PATH@@|' "$REPO_FILE"
 		return
 	fi
 

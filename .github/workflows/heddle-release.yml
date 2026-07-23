@@ -129,6 +129,19 @@ jobs:
           # makes the documented verification command fail.
           ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
 
+      # Scan the ACTUAL packaged binary, not just the pre-package executable.
+      # Codex flagged that "every release artefact is scanned" was false because
+      # the tarball was assembled after the earlier scan.
+      - name: Verify the packaged binary
+        env:
+          TARGET_NAME: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          name="heddle-${TARGET_NAME}"
+          workdir="$(mktemp -d)"
+          tar -xzf "dist/${name}.tar.gz" -C "$workdir"
+          ./script/heddle/verify-no-warp-endpoints "$workdir/${name}/heddle-tui"
+
       - uses: actions/upload-artifact@v4
         with:
           name: heddle-${{ matrix.target }}

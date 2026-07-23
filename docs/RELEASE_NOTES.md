@@ -1,7 +1,7 @@
 # Heddle
 
 A de-commercialized fork of the [Warp](https://github.com/warpdotdev/Warp) terminal.
-**No account. No telemetry. Heddle's own code never connects to Warp's infrastructure.**
+**No account. No telemetry. No `warp.dev` anywhere in the binary.**
 
 ## Installing (Linux x86_64)
 
@@ -39,22 +39,21 @@ signed macOS builds can follow.
 
 ## What is verified in this build
 
-Every release artefact passes the privacy gate before publication:
-
-- No `app.warp.dev`, `rtc.app.warp.dev`, `sessions.app.warp.dev`,
-  `staging.warp.dev`, or `oz.warp.dev`
-- No Firebase authentication key
-- No RudderStack telemetry destinations
+The compiled binary is scanned before it is packaged, and the release is
+blocked if the scan fails. The scan forbids the `warp.dev` domain wholesale,
+the Firebase authentication key, and RudderStack telemetry destinations.
 
 The scanner is self-tested on every run: CI plants a canary endpoint in a copy
 of the binary and fails the build if the scanner does not reject it. A clean
 result from an uninstrumented scanner would be meaningless.
 
-**Scope of the claim.** This proves those strings are absent from the artefact.
-It does not prove the binary opens no sockets — an endpoint could in principle
-be assembled at runtime, and nothing can stop you typing `curl app.warp.dev`
-into your own terminal. The defensible claim is that **Heddle's own code
-initiates no connection to Warp's infrastructure.**
+**Scope of the claim.** This proves those strings are absent from the compiled
+binary. It does **not** prove the binary opens no sockets — an endpoint could in
+principle be assembled at runtime, and nothing can stop you typing
+`curl app.warp.dev` into your own terminal. What is mechanically enforced is
+narrow and literal: **no `warp.dev` string ships in the binary.** Everything
+beyond that — that Heddle initiates no connection to Warp — is a design intent
+supported by code review and runtime observation, not a proof.
 
 Observed on a logged-out cold start, versus the unmodified upstream build:
 
