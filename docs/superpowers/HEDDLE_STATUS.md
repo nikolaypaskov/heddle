@@ -76,10 +76,51 @@ keep going, framing Heddle as a **privacy-oriented** version. Done in this pass:
   with `server_config: None, oz_config: None, telemetry_config: None,
   crash_reporting_config: None`.
 
-Still visible in the AI agent view (deferred — intricate serde-persisted toolbar
-enum): the "Hand off to cloud" and "Share session" footer chips, the
-"Agent Management" header toolbar, and the "Cloud agent" type selector. These
-come out with the Oz / session-sharing deep removals.
+### Comprehensive flag neutralization (privacy-oriented, live-verified)
+
+Rather than risk the working terminal by surgically unpicking deeply-woven,
+mixed cloud/local modules, the remaining reachable cloud/commercial/telemetry
+surfaces were **neutralized at their feature gates** — every one is a graceful
+runtime `.is_enabled()` check, so the code stays compiled but dormant and the
+feature never activates. Disabled across `app/src/features.rs` +
+`update_session_sharing_enablement`:
+
+- **Session sharing** (create + view + ACLs + shared-with-me + remote-control):
+  CreatingSharedSessions forced off without a server; ViewingSharedSessions,
+  SharedWithMe, SessionSharingAcls, SharedSessionWriteToLongRunningCommands,
+  HOARemoteControl dropped.
+- **Oz cloud agents / ambient**: CloudMode family, AgentManagementView/Details,
+  Sync/Scheduled/CommandLine/ImageUpload/RTC ambient agents, OzPlatformSkills,
+  OzIdentityFederation, OzChangelogUpdates, CreateEnvironmentSlashCommand,
+  Cloud{Environments,Runners,AgentRunners}.
+- **Cloud handoff**: OzHandoff, HandoffLocalCloud, HandoffCloudCloud.
+- **Cloud conversation sync**: ConversationApi, CloudConversations.
+- **Cloud secrets / team**: WarpManagedSecrets, TeamApiKeys.
+- **Telemetry / billing**: GlobalAIAnalytics{Collection,Banner},
+  RecordAppActiveEvents, UsageBasedPricing, DriveObjectsAsContext,
+  BillingAndUsagePageV2 (dead).
+
+**Live verification:** a fresh build logs **zero** cloud/telemetry/ambient/oz/
+fetch activity and starts with every backend config `None`. The "Hand off to
+cloud" / "Share session" chips, "Agent Management" toolbar, and "Cloud agent"
+selector no longer render. No local terminal / Agent Mode / BYOK / CLI-agent /
+workflow / notebook / MCP capability is affected.
+
+Left enabled (verified local, not Warp-cloud): CrossRepoContext, RemoteCodeReview,
+WarpifyFooter, McpServer, SendTelemetryToFile (local file; telemetry_config is
+None so nothing ships).
+
+### Remaining: physical deletion of the now-dormant code
+
+Every deep module intermixes cloud with shared/local code — e.g.
+`agent_management_model.rs` holds both the cloud panel model and the general
+`AgentNotificationsModel` used by the tab bar; `TerminalModel::shared_session_
+status()` is threaded through core rendering. Physically deleting the dormant
+flag-gated code is therefore careful, file-splitting surgery, done module by
+module (session sharing, Warp Drive cloud objects, Oz/ambient runtime) — plus the
+P0 agent transport. The build is fully usable and privacy-clean in the meantime.
+
+### Boundary reached: clean removals vs. preserve-local surgery (historical)
 
 ### Boundary reached: clean removals vs. preserve-local surgery
 
