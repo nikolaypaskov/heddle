@@ -3,7 +3,13 @@ use serde_json::json;
 use strum_macros::{EnumDiscriminants, EnumIter};
 use warp_core::telemetry::{EnablementState, TelemetryEvent, TelemetryEventDesc};
 
-use crate::ai::agent_management::cloud_setup_guide_view::SetupGuideDocs;
+/// Which URL the user clicked in the setup guide (also used in telemetry)
+#[derive(Clone, Copy, Debug, Serialize)]
+pub enum SetupGuideDocs {
+    Main,
+    Environment,
+    Integration,
+}
 
 /// Which setup guide workflow step the user interacted with
 #[derive(Clone, Copy, Debug, Serialize)]
