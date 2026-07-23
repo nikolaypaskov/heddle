@@ -213,7 +213,6 @@ pub struct EnvironmentsPageView {
     edit_button_mouse_states: HashMap<SyncId, MouseStateHandle>,
     share_button_mouse_states: HashMap<SyncId, MouseStateHandle>,
     card_hover_mouse_states: HashMap<SyncId, MouseStateHandle>,
-    view_runs_link_mouse_states: HashMap<SyncId, MouseStateHandle>,
     /// Tracks when each env ID was last copied, for showing checkmark feedback
     copy_feedback_times: HashMap<SyncId, Instant>,
     // List page search state
@@ -254,7 +253,6 @@ impl EnvironmentsPageView {
             self.edit_button_mouse_states.entry(env.id).or_default();
             self.share_button_mouse_states.entry(env.id).or_default();
             self.card_hover_mouse_states.entry(env.id).or_default();
-            self.view_runs_link_mouse_states.entry(env.id).or_default();
         }
     }
     pub fn update_page(&mut self, page: EnvironmentsPage, ctx: &mut ViewContext<Self>) {
@@ -485,7 +483,6 @@ impl EnvironmentsPageView {
         let mut edit_button_mouse_states = HashMap::new();
         let mut share_button_mouse_states = HashMap::new();
         let mut card_hover_mouse_states = HashMap::new();
-        let mut view_runs_link_mouse_states = HashMap::new();
         for env in CloudAmbientAgentEnvironment::get_all(ctx) {
             copy_button_mouse_states
                 .entry(env.id)
@@ -497,9 +494,6 @@ impl EnvironmentsPageView {
                 .entry(env.id)
                 .or_insert_with(MouseStateHandle::default);
             card_hover_mouse_states
-                .entry(env.id)
-                .or_insert_with(MouseStateHandle::default);
-            view_runs_link_mouse_states
                 .entry(env.id)
                 .or_insert_with(MouseStateHandle::default);
         }
@@ -519,7 +513,6 @@ impl EnvironmentsPageView {
             edit_button_mouse_states,
             share_button_mouse_states,
             card_hover_mouse_states,
-            view_runs_link_mouse_states,
             copy_feedback_times: HashMap::new(),
             search_query: String::new(),
             search_editor,
@@ -1016,7 +1009,6 @@ struct EnvironmentCardRenderState<'a> {
     edit_button_mouse_states: &'a HashMap<SyncId, MouseStateHandle>,
     share_button_mouse_states: &'a HashMap<SyncId, MouseStateHandle>,
     card_hover_mouse_states: &'a HashMap<SyncId, MouseStateHandle>,
-    view_runs_link_mouse_states: &'a HashMap<SyncId, MouseStateHandle>,
     copy_feedback_times: &'a HashMap<SyncId, Instant>,
 }
 
@@ -1149,7 +1141,6 @@ impl EnvironmentsPageWidget {
                     edit_button_mouse_states: &view.edit_button_mouse_states,
                     share_button_mouse_states: &view.share_button_mouse_states,
                     card_hover_mouse_states: &view.card_hover_mouse_states,
-                    view_runs_link_mouse_states: &view.view_runs_link_mouse_states,
                     copy_feedback_times: &view.copy_feedback_times,
                 };
 
@@ -1732,11 +1723,6 @@ impl EnvironmentsPageWidget {
             .cloned()
             .unwrap_or_else(MouseStateHandle::default);
 
-        let view_runs_link_mouse_state = card_render_state
-            .view_runs_link_mouse_states
-            .get(&env_id)
-            .cloned()
-            .unwrap_or_else(MouseStateHandle::default);
 
         let last_copied_at = card_render_state.copy_feedback_times.get(&env_id).copied();
 
@@ -1840,26 +1826,8 @@ impl EnvironmentsPageWidget {
 
             let timestamp_color = blended_colors::text_sub(theme, theme.surface_1());
 
-            // Add "Last edited" and "Last used" text. The agent-runs panel was
-            // removed in the OSS build, so the label is no longer a live link.
-            let view_runs_link = appearance
-                .ui_builder()
-                .link(
-                    "View my runs".to_string(),
-                    None,
-                    None,
-                    view_runs_link_mouse_state.clone(),
-                )
-                .soft_wrap(false)
-                .with_style(UiComponentStyles {
-                    font_family_id: Some(appearance.ui_font_family()),
-                    font_size: Some(appearance.ui_font_size() * 0.9),
-                    font_weight: Some(Weight::Normal),
-                    ..Default::default()
-                })
-                .build()
-                .finish();
-
+            // "Last edited" / "Last used" text. (The Oz cloud "View my runs" link
+            // was removed with the agent-management panel in the OSS build.)
             let timestamp_row = Flex::row()
                 .with_cross_axis_alignment(CrossAxisAlignment::Center)
                 .with_child(
@@ -1872,16 +1840,6 @@ impl EnvironmentsPageWidget {
                     .with_selectable(true)
                     .finish(),
                 )
-                .with_child(
-                    Text::new_inline(
-                        " · ",
-                        appearance.ui_font_family(),
-                        appearance.ui_font_size() * 0.9,
-                    )
-                    .with_color(timestamp_color)
-                    .finish(),
-                )
-                .with_child(view_runs_link)
                 .finish();
 
             details_section.add_child(timestamp_row);

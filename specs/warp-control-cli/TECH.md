@@ -1,5 +1,5 @@
 # Context
-`PRODUCT.md` defines a local Warp control CLI (`warpctrl`) with an allowlisted catalog of exactly 84 actions, deterministic addressing across multiple running Warp app processes, and a simple enabled/disabled Scripting setting. `SECURITY.md` is the normative security architecture. If this technical plan and `SECURITY.md` disagree, update the plan before implementing.
+`PRODUCT.md` defines a local Warp control CLI (`warpctrl`) with an allowlisted catalog of exactly 83 actions, deterministic addressing across multiple running Warp app processes, and a simple enabled/disabled Scripting setting. `SECURITY.md` is the normative security architecture. If this technical plan and `SECURITY.md` disagree, update the plan before implementing.
 The design is external-only: all callers are same-user processes. There is no inside-Warp/outside-Warp distinction, no verified-terminal invocation context, and no authenticated-user identity layer. Security relies on owner-only filesystem discovery, same-user Unix credential broker with kernel peer credentials, short-lived instance-bound exact-action credentials, loopback HTTP transport, and app-side enforcement.
 ## Existing building blocks
 - `crates/http_server/src/lib.rs` runs a native-only loopback Axum server on fixed port `9277`.
@@ -22,12 +22,12 @@ Before implementing any local-control listener, CLI command, credential path, or
 - The app bridge verifies the exact granted action before selector resolution or handler dispatch.
 - Close actions (`window.close`, `tab.close`, `pane.close`) flow through normal Warp close behavior so existing app warnings remain authoritative.
 - Input-staging commands never submit the buffer. There is no `input.run` action.
-- The Block, Auth, Drive, and History families are entirely absent from the 84-action catalog. Input is limited to `input.insert` and `input.replace`.
+- The Block, Auth, Drive, and History families are entirely absent from the 83-action catalog. Input is limited to `input.insert` and `input.replace`.
 ### 1. Protocol crate and stable envelope
 Create a shared protocol crate used by both the app server and the `warpctrl` client. It defines:
 - A request protocol version for defensive schema guarding.
 - Discovery/health response types.
-- The 84-action `ActionKind` enum with implementation status metadata. The Block, Auth, Drive, and History families are entirely absent; Input is limited to `input.insert` and `input.replace`.
+- The 83-action `ActionKind` enum with implementation status metadata. The Block, Auth, Drive, and History families are entirely absent; Input is limited to `input.insert` and `input.replace`.
 - Selector types:
   - `InstanceSelector`: `Active`, `Id(InstanceId)`, `Pid(u32)`.
   - `WindowSelector`: `Active`, `Id(WindowId)`, `Index(u32)`, `Title(String)`.
@@ -234,7 +234,7 @@ sequenceDiagram
 - **Input staging:** Only `input.insert` and `input.replace` exist. No `input.run`, `input.get`, `input.clear`, or `input.mode.set`. Tests prove no buffer submission occurs.
 - **Excluded families:** The Block, Auth, Drive, and History families are entirely absent. The CLI rejects their command routes at parse time, the protocol rejects their action names at deserialization (`invalid_request`), and `action.inspect`/`capability.inspect` report non-catalog names as `not_allowlisted`.
 - **Unsupported platforms:** Windows fails closed with no fallback.
-- **Action count:** Tests verify the catalog contains exactly 84 uniformly authorized actions.
+- **Action count:** Tests verify the catalog contains exactly 83 uniformly authorized actions.
 - **Bundled skill gate:** Tests verify the `warpctrl` bundled skill is discoverable and readable only while `FeatureFlag::WarpControlCli` is enabled, without affecting unrelated bundled skills.
 ## Risks and mitigations
 - **Same-user residual risk:** The broker authenticates the OS user, not the calling application. Any process running as the same user can request credentials. Mitigated by: protected enablement, short expiry, exact-action grants, app-side revalidation, normal Warp close warnings for close actions.

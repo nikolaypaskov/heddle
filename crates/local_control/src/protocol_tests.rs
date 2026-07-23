@@ -151,6 +151,7 @@ fn malformed_and_removed_action_names_are_not_deserialized() {
         "drive.object.insert",
         "drive.object.share_to_team",
         "drive.workflow.run",
+        "surface.agent_management.open",
     ] {
         assert!(serde_json::from_value::<ActionKind>(serde_json::json!(action)).is_err());
     }

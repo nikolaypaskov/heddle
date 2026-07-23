@@ -110,7 +110,7 @@ Left enabled (verified local, not Warp-cloud): CrossRepoContext, RemoteCodeRevie
 WarpifyFooter, McpServer, SendTelemetryToFile (local file; telemetry_config is
 None so nothing ships).
 
-### Remaining: physical deletion of the now-dormant code
+### Physical deletion of the now-dormant code (in progress)
 
 Every deep module intermixes cloud with shared/local code — e.g.
 `agent_management_model.rs` holds both the cloud panel model and the general
@@ -119,6 +119,57 @@ status()` is threaded through core rendering. Physically deleting the dormant
 flag-gated code is therefore careful, file-splitting surgery, done module by
 module (session sharing, Warp Drive cloud objects, Oz/ambient runtime) — plus the
 P0 agent transport. The build is fully usable and privacy-clean in the meantime.
+
+**Agent-management panel — DONE (`5a8c33dd`, `0a238c53`).** The first module
+physically removed. The Oz cloud-agent management view (`AgentManagementView`,
+~2.4k lines) and its agent-type selector (475 lines) are deleted, along with the
+full **local-control protocol cascade** that had blocked an earlier attempt:
+`ActionKind::SurfaceAgentManagementOpen` is gone from the `local_control`
+catalog, the `warp_cli` `surface agent-management` subcommand, the app
+bridge/`app_state` dispatch, and `SurfaceDestination::AgentManagement` in the
+metadata handler (catalog action count 84 → 83). The ~40 workspace-crate sites
+(view handle, close-on-activate gates, state setter, toolbar button +
+`HeaderToolbarItemKind::AgentManagement`, `cmd-shift-M` binding, and the
+Toggle/Open/ViewAgentRuns/CloudAgentSetupGuide actions) are removed; the two
+deeplink entry points (`environments_page` "View my runs", `uri` `CloudAgentSetup`)
+are inert. The dead cloud setup-guide sub-view (~680 lines of Oz onboarding copy)
+is deleted too, its tiny `SetupGuideDocs` enum relocated into `telemetry.rs`.
+**Kept** (not cloud surfaces): `AgentNotificationsModel` / `AgentManagementEvent`,
+telemetry, details-action-buttons, and the now-dormant
+`FeatureFlag::AgentManagementView`. `warp` lib suite: 5777 passed / 13 failed
+(the 13 are pre-existing isolation failures); `local_control` 40, `warp_cli` 204.
+
+A Codex `gpt-5.6-sol` (xhigh, read-only) adversarial review of the removal
+initially **rejected** it for one shipped-surface gap and flagged two robustness
+items — all now fixed:
+
+- **(blocking) bundled `warpctrl` skill** still advertised `surface
+  agent-management open`; agents following the default-enabled skill would hit a
+  Clap error. Removed from `resources/bundled/skills/warpctrl/SKILL.md`, and the
+  control-CLI spec (`specs/warp-control-cli/*`) updated 84 → 83 actions with the
+  `surface.agent_management.open` entry dropped.
+- **(robustness) settings forward-compat:** removing a persisted enum variant
+  (`HeaderToolbarItemKind::AgentManagement`) previously made the *whole* custom
+  header-toolbar layout fail to decode and reset to default. Made
+  `Vec<T>::from_file_value` in `settings_value` tolerant — it now skips
+  unparseable elements instead of discarding the list, fixing this for every
+  current and future variant removal (session-sharing, Warp Drive, …). Tested.
+- **(UX) inert "View my runs" link** on the environments page removed outright
+  (label + separator + mouse-state plumbing), rather than left as a dead
+  click/hover target.
+
+Codex confirmed no egress guard was added or removed by the range and the
+protocol code removal is otherwise consistent. Next candidate under
+investigation: the `AgentConversationsModel` + "Agent conversations"
+conversation-list panel + Oz ambient-agent cloud fetches
+(`list_ambient_agent_tasks`). An Explore pass found this is **preserve-local
+surgery, not clean deletion** (~35–40 files): the model is a deliberate
+local+cloud aggregator whose cloud half is already inert in OSS (constructor
+no-ops when `AgentManagementView` is off; the three ambient `ServerApi` calls
+hard-fail with no egress when `server_root_url()` is `None`), but whose local
+conversation-history half still feeds four local-serving surfaces (the panel, the
+terminal inline resume-conversation menu, slash commands, the @-conversation
+context menu) that the fork wants to keep.
 
 ### Boundary reached: clean removals vs. preserve-local surgery (historical)
 
