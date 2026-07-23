@@ -109,15 +109,20 @@ jobs:
           cp target/release/heddle-tui "dist/${name}/"
           cp README.md LICENSE-AGPL LICENSE-MIT "dist/${name}/"
           # AGPL distribution requires the licence texts to travel with the
-          # binary, and dependency attribution must not be dropped.
-          if [ -f THIRD_PARTY_LICENSES.txt ]; then
-            cp THIRD_PARTY_LICENSES.txt "dist/${name}/"
-          else
-            cargo install cargo-about --locked >/dev/null 2>&1 || true
-            cargo about generate about.hbs > "dist/${name}/THIRD_PARTY_LICENSES.txt" \
-              || echo "THIRD_PARTY_LICENSES generation failed" >&2
-          fi
+          # binary, and dependency attribution must not be dropped. Use the
+          # CANONICAL generator (script/prepare_bundled_resources), which emits
+          # both cargo-about output AND the curated non-Cargo notices for
+          # bundled fonts, Alacritty, bash-preexec and others. A plain
+          # `cargo about` run would silently omit those.
+          cargo install cargo-about --locked
+          NO_SKILLS=1 SKIP_SETTINGS_SCHEMA=1 \
+            ./script/prepare_bundled_resources "dist/${name}" oss \
+            || cargo about generate --workspace -c about.toml -o "dist/${name}/THIRD_PARTY_LICENSES.txt" about.hbs
           test -s "dist/${name}/THIRD_PARTY_LICENSES.txt"
+          # Fail loudly if the curated non-Cargo notices are missing, rather
+          # than shipping a partial attribution file.
+          grep -q "Hack Font" "dist/${name}/THIRD_PARTY_LICENSES.txt" \
+            || { echo "::error::THIRD_PARTY_LICENSES.txt is missing curated non-Cargo notices"; exit 1; }
           tar -czf "dist/${name}.tar.gz" -C dist "${name}"
           # Record the checksum with a BARE filename so `shasum -c` works from
           # the directory the user downloaded into. Recording "dist/<name>"
