@@ -37,16 +37,40 @@ Progress on the sweep:
 | P2 · paid onboarding ($18/mo slide) + command-search upgrade CTA | ✅ removed (`f81d4209`) |
 | P2 · Oz / orchestration launch marketing modals | ⏳ (removed with Oz feature) |
 | P1 · Block sharing (modal, hosted API, settings page, context menu, telemetry) | ✅ removed (`4580b9b8`) |
-| P1 · Session sharing, Teams, Warp Drive, cloud conversation history | ⏳ |
+| P1 · Teams settings page (plan/seat/invite/billing/upgrade UI + all triggers) | ✅ removed (`072dbc4b`) |
+| P1 · Session sharing (116 files, terminal-core-woven) | ⏳ deep |
+| P1 · Warp Drive (cloud sync/share over local workflows/notebooks — preserve-local) | ⏳ deep |
+| P1 · Cloud conversation history (cloud loader/retention over local SQLite — preserve-local) | ⏳ deep |
 | P0 · Warp-hosted agent/AI transport, Oz cloud agents | ⏳ (overlaps Phase 6) |
 
 The self-contained **P2 paywall/paid-onboarding tier is complete** and passed an
-independent Codex sign-off (2026-07-23); the only P2 items left are the Oz/
-orchestration launch modals, which are that feature's marketing and go with the
-Oz removal (P0). `UserWorkspaces::upgrade_link[_for_team]` remain as
-`None`-returning stubs for callers inside not-yet-removed features (teams,
-ai_page); they're removed with those features. Privacy scanners
-(`verify-no-warp-endpoints`, `verify-bundled-assets`) still PASS.
+independent Codex sign-off (2026-07-23). Two P1 features that were cleanly
+*removable* (block sharing, the Teams settings page) are also done. Privacy
+scanners (`verify-no-warp-endpoints`, `verify-bundled-assets`) PASS after every
+increment; the OSS TUI binary has shrunk from ~799 MB to ~794 MB across the
+sweep.
+
+### Boundary reached: clean removals vs. preserve-local surgery
+
+The remaining P1 items are a **different class of work** from everything removed
+so far. Block sharing, Teams, and all of P2 were *additive commercial surfaces*
+that could be deleted outright. The rest — **session sharing** (woven through
+terminal-core rendering across 116 files), **Warp Drive** and **cloud
+conversation history** (cloud sync/share/retention layered *on top of* local
+workflows, notebooks, prompts, and SQLite history that must be **kept and
+localized**) — require careful architectural surgery to separate cloud from
+local without breaking legitimate FOSS features. They do not yield clean
+single-pass, always-compiling increments and are genuinely multi-session.
+
+**P0 is the true "no Warp backend" core:** the app still routes AI (even BYOK)
+through `warp_multi_agent_client`/`ServerApi`, and Oz cloud agents remain. Codex
+estimated the agent-transport replacement (Phase 6 / ACP) alone at **9–14
+engineer-weeks**. Reaching a fully backend-free, production-ready build is a
+multi-week program, not a single session.
+
+Residual stubs kept inert until their owning feature is removed:
+`UserWorkspaces::upgrade_link[_for_team]` (→ `None`), plus dead team methods /
+Drive-adjacent components (warnings only) that the Warp Drive removal will clear.
 
 ## Phase 6 decision (owner call, 2026-07-23)
 
