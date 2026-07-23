@@ -1615,6 +1615,13 @@ impl UserWorkspaces {
             return;
         }
 
+        // No Warp server in this fork: there is nothing to share a session to, so
+        // session-sharing creation is always off (a team tier policy could only
+        // ever come from the server).
+        if ChannelState::server_root_url().is_none() {
+            FeatureFlag::CreatingSharedSessions.set_enabled(false);
+            return;
+        }
         let is_session_sharing_enabled_via_tier_policy = self
             .current_team()
             .and_then(|t| t.billing_metadata.tier.session_sharing_policy)

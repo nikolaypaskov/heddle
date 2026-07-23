@@ -448,10 +448,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::WarpControlCli,
         #[cfg(feature = "agent_harness")]
         FeatureFlag::AgentHarness,
-        #[cfg(feature = "oz_handoff")]
-        FeatureFlag::OzHandoff,
-        #[cfg(feature = "handoff_local_cloud")]
-        FeatureFlag::HandoffLocalCloud,
         #[cfg(feature = "hoa_notifications")]
         FeatureFlag::HOANotifications,
         #[cfg(feature = "open_code_notifications")]
@@ -474,8 +470,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::HOAOnboardingFlow,
         #[cfg(feature = "git_operations_in_code_review")]
         FeatureFlag::GitOperationsInCodeReview,
-        #[cfg(feature = "hoa_remote_control")]
-        FeatureFlag::HOARemoteControl,
         #[cfg(feature = "codex_notifications")]
         FeatureFlag::CodexNotifications,
         #[cfg(feature = "codex_plugin")]
