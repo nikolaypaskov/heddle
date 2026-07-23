@@ -8,7 +8,6 @@ use pathfinder_geometry::vector::vec2f;
 use regex::Regex;
 use settings::{Setting, ToggleableSetting};
 use strum::IntoEnumIterator;
-use warp_core::channel::ChannelState;
 use warp_core::context_flag::ContextFlag;
 use warp_core::features::FeatureFlag;
 use warp_core::ui::color::ContrastingColor;
@@ -97,7 +96,7 @@ use crate::settings::{
     GitOperationsAutogenEnabled, IncludeAgentCommandsInHistory, InputSettings,
     IntelligentAutosuggestionsEnabled, LongRunningCommandSubmissionMode, MemoryEnabled,
     NLDInTerminalEnabled, NaturalLanguageAutosuggestionsEnabled, OrchestrationMessageDisplayMode,
-    PromptSubmissionMode, RuleSuggestionsEnabled, SharedBlockTitleGenerationEnabled,
+    PromptSubmissionMode, RuleSuggestionsEnabled,
     ShouldRenderCLIAgentToolbar, ShouldRenderUseAgentToolbarForUserCommands,
     ShouldShowOzUpdatesInZeroState, ShowAgentTips, ShowConversationHistory, ShowHintText,
     ThinkingDisplayMode, VoiceInputEnabled, WarpDriveContextEnabled,
@@ -179,8 +178,6 @@ const PROMPT_SUGGESTIONS_DESCRIPTION: &str = "Let AI suggest natural language pr
 const SUGGESTED_CODE_BANNERS_DESCRIPTION: &str = "Let AI suggest code diffs and queries as inline banners in the blocklist, based on recent commands and their outputs.";
 const NATURAL_LANGUAGE_AUTOSUGGESTIONS: &str =
     "Let AI suggest natural language autosuggestions, based on recent commands and their outputs.";
-const SHARED_BLOCK_TITLE_GENERATION_DESCRIPTION: &str =
-    "Let AI generate a title for your shared block based on the command and output.";
 const GIT_OPERATIONS_AUTOGEN_DESCRIPTION: &str =
     "Let AI generate commit messages and pull request titles and descriptions.";
 const WISPR_FLOW_URL: &str = "https://wisprflow.ai/";
@@ -462,21 +459,6 @@ pub fn init_actions_from_parent_view<T: Action + Clone>(
             )
             .with_group(bindings::BindingGroup::WarpAi)
             .with_enabled(|| FeatureFlag::PredictAMQueries.is_enabled()),
-        ],
-        app,
-    );
-    ToggleSettingActionPair::add_toggle_setting_action_pairs_as_bindings(
-        vec![
-            ToggleSettingActionPair::new(
-                "shared block title generation",
-                builder(SettingsAction::AI(
-                    AISettingsPageAction::ToggleSharedTitleGeneration,
-                )),
-                &(context.clone() & id!(flags::IS_ACTIVE_AI_ENABLED)),
-                flags::SHARED_BLOCK_TITLE_GENERATION_FLAG,
-            )
-            .with_group(bindings::BindingGroup::WarpAi)
-            .with_enabled(|| FeatureFlag::SharedBlockTitleGeneration.is_enabled()),
         ],
         app,
     );
@@ -2865,10 +2847,6 @@ impl AISettingsPageView {
                         && ai_settings
                             .natural_language_autosuggestions_enabled_internal
                             .is_supported_on_current_platform())
-                    || (FeatureFlag::SharedBlockTitleGeneration.is_enabled()
-                        && ai_settings
-                            .shared_block_title_generation_enabled_internal
-                            .is_supported_on_current_platform())
                     || (FeatureFlag::GitOperationsInCodeReview.is_enabled()
                         && ai_settings
                             .git_operations_autogen_enabled_internal
@@ -2914,10 +2892,6 @@ impl AISettingsPageView {
                     || (FeatureFlag::PredictAMQueries.is_enabled()
                         && ai_settings
                             .natural_language_autosuggestions_enabled_internal
-                            .is_supported_on_current_platform())
-                    || (FeatureFlag::SharedBlockTitleGeneration.is_enabled()
-                        && ai_settings
-                            .shared_block_title_generation_enabled_internal
                             .is_supported_on_current_platform())
                     || (FeatureFlag::GitOperationsInCodeReview.is_enabled()
                         && ai_settings
@@ -3667,7 +3641,6 @@ pub enum AISettingsPageAction {
     TogglePromptSuggestions,
     ToggleCodeSuggestions,
     ToggleNaturalLanguageAutosuggestions,
-    ToggleSharedTitleGeneration,
     ToggleGitOperationsAutogen,
     ToggleAIInputAutoDetection,
     ToggleNLDInTerminal,
@@ -3911,28 +3884,6 @@ impl TypedActionView for AISettingsPageView {
                     Err(e) => {
                         log::warn!(
                             "Failed to set value for Natural Language Autosuggestions setting: {e:?}"
-                        );
-                    }
-                }
-                ctx.notify();
-            }
-            AISettingsPageAction::ToggleSharedTitleGeneration => {
-                match AISettings::handle(ctx).update(ctx, |settings, ctx| {
-                    settings
-                        .shared_block_title_generation_enabled_internal
-                        .toggle_and_save_value(ctx)
-                }) {
-                    Ok(_new_value) => {
-                        send_telemetry_from_ctx!(
-                            TelemetryEvent::ToggleSharedBlockTitleGenerationSetting {
-                                is_shared_block_title_generation_enabled: true,
-                            },
-                            ctx
-                        );
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to set value for Shared Block Title Generation setting: {e:?}"
                         );
                     }
                 }
@@ -5292,7 +5243,6 @@ struct ActiveAIWidget {
     prompt_suggestions_toggle: SwitchStateHandle,
     code_suggestions_toggle: SwitchStateHandle,
     natural_language_autosuggestions_toggle: SwitchStateHandle,
-    shared_block_title_generation_toggle: SwitchStateHandle,
     git_operations_autogen_toggle: SwitchStateHandle,
 }
 
@@ -5324,22 +5274,6 @@ impl ActiveAIWidget {
             && AISettings::as_ref(app)
                 .natural_language_autosuggestions_enabled_internal
                 .is_supported_on_current_platform()
-    }
-
-    // TODO: Check if the user's enterprise billing policy allows toggling this feature.
-    fn is_shared_block_title_generation_toggleable(&self, app: &AppContext) -> bool {
-        FeatureFlag::SharedBlockTitleGeneration.is_enabled()
-            && AISettings::as_ref(app)
-                .shared_block_title_generation_enabled_internal
-                .is_supported_on_current_platform()
-            && (!UserWorkspaces::as_ref(app)
-                .current_team()
-                .is_some_and(|team| {
-                    team.billing_metadata.customer_type == CustomerType::Enterprise
-                })
-                // Override the enterprise check for dogfood builds, as our dogfood team
-                // is an enterprise team.
-                || ChannelState::channel().is_dogfood())
     }
 
     fn is_git_operations_autogen_toggleable(&self, app: &AppContext) -> bool {
@@ -5459,33 +5393,6 @@ impl ActiveAIWidget {
             .finish()
     }
 
-    fn render_shared_block_title_generation_section(
-        &self,
-        view: &AISettingsPageView,
-        app: &warpui::AppContext,
-    ) -> Box<dyn warpui::Element> {
-        let ai_settings = AISettings::as_ref(app);
-        let is_toggleable = ai_settings.is_active_ai_enabled(app);
-        Flex::column()
-            .with_child(
-                render_ai_setting_toggle::<SharedBlockTitleGenerationEnabled>(
-                    "Shared Block Title Generation",
-                    AISettingsPageAction::ToggleSharedTitleGeneration,
-                    *ai_settings.shared_block_title_generation_enabled_internal,
-                    is_toggleable,
-                    self.shared_block_title_generation_toggle.clone(),
-                    &view.local_only_icon_tooltip_states,
-                    app,
-                ),
-            )
-            .with_child(render_ai_setting_description(
-                SHARED_BLOCK_TITLE_GENERATION_DESCRIPTION,
-                is_toggleable,
-                app,
-            ))
-            .finish()
-    }
-
     fn render_git_operations_autogen_section(
         &self,
         view: &AISettingsPageView,
@@ -5524,7 +5431,6 @@ impl SettingsWidget for ActiveAIWidget {
             || self.is_prompt_suggestions_toggleable(app)
             || self.is_suggested_code_banners_toggleable(app)
             || self.is_natural_language_autosuggestions_toggleable(app)
-            || self.is_shared_block_title_generation_toggleable(app)
             || self.is_git_operations_autogen_toggleable(app)
     }
 
@@ -5582,10 +5488,6 @@ impl SettingsWidget for ActiveAIWidget {
 
         if self.is_natural_language_autosuggestions_toggleable(app) {
             column.add_child(self.render_natural_language_autosuggestions_section(view, app));
-        }
-
-        if self.is_shared_block_title_generation_toggleable(app) {
-            column.add_child(self.render_shared_block_title_generation_section(view, app));
         }
 
         if self.is_git_operations_autogen_toggleable(app) {

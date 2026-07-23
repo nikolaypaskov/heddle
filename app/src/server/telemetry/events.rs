@@ -50,14 +50,12 @@ use crate::pane_group::PaneDragDropLocation;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search::QueryFilter;
 use crate::search::command_search::searcher::CommandSearchItemAction;
-use crate::server::block::DisplaySetting;
 use crate::server::ids::{ObjectUid, ServerId};
 use crate::settings::AgentModeCodingPermissionsType;
 use crate::settings::import::config::ParsedTerminalSetting;
 use crate::settings::import::model::TerminalType;
 use crate::settings_view::TeamsInviteOption;
 use crate::tab::TabTelemetryAction;
-use crate::terminal::ShareBlockType;
 use crate::terminal::block_list_viewport::InputMode;
 use crate::terminal::cli_agent_sessions::{CLIAgentInputEntrypoint, CLIAgentRichInputCloseReason};
 use crate::terminal::input::TelemetryInputSuggestionsMode;
@@ -1290,7 +1288,6 @@ pub enum TelemetryEvent {
     },
     /// Copy command, output or both for some number of blocks.
     ContextMenuCopy(BlockEntity, BlockSelectionCardinality),
-    ContextMenuOpenShareModal(BlockSelectionCardinality),
     ContextMenuFindWithinBlocks(BlockSelectionCardinality),
     ContextMenuCopyPrompt {
         part: PromptPart,
@@ -1310,13 +1307,6 @@ pub enum TelemetryEvent {
     },
     ReinputCommands(BlockSelectionCardinality),
     JumpToPreviousCommand,
-    CopyBlockSharingLink(ShareBlockType),
-    GenerateBlockSharingLink {
-        share_type: ShareBlockType,
-        display_setting: DisplaySetting,
-        show_prompt: bool,
-        redact_secrets: bool,
-    },
     BlockSelection(BlockSelectionDetails),
     BootstrappingSlow(BootstrappingInfo),
     BootstrappingSlowContents(SlowBootstrapInfo),
@@ -2126,11 +2116,6 @@ pub enum TelemetryEvent {
     /// Emitted when the user toggles the "Natural Language Autosuggestions" setting in the AI settings page.
     ToggleNaturalLanguageAutosuggestionsSetting {
         is_natural_language_autosuggestions_enabled: bool,
-    },
-
-    /// Emitted when the user toggles the "Shared Block Title Auto Generation" setting in the AI settings page.
-    ToggleSharedBlockTitleGenerationSetting {
-        is_shared_block_title_generation_enabled: bool,
     },
 
     /// Emitted when the user toggles the "Git Operations Autogen" setting in the AI settings page.
@@ -3021,9 +3006,6 @@ impl TelemetryEvent {
             TelemetryEvent::ContextMenuFindWithinBlocks(cardinality) => {
                 Some(json!({ "cardinality": cardinality }))
             }
-            TelemetryEvent::ContextMenuOpenShareModal(cardinality) => {
-                Some(json!({ "cardinality": cardinality }))
-            }
             TelemetryEvent::ContextMenuCopyPrompt { part } => Some(json!({ "part": part })),
             TelemetryEvent::ReinputCommands(cardinality) => {
                 Some(json!({ "cardinality": cardinality }))
@@ -3359,17 +3341,6 @@ impl TelemetryEvent {
             TelemetryEvent::ExportObject(object_type) => {
                 Some(json!({ "object_type": object_type }))
             }
-            TelemetryEvent::GenerateBlockSharingLink {
-                share_type,
-                display_setting,
-                show_prompt,
-                redact_secrets,
-            } => Some(
-                json!({"share_type": share_type, "display_setting": display_setting, "show_prompt": show_prompt, "redact_secrets": redact_secrets}),
-            ),
-            TelemetryEvent::CopyBlockSharingLink(share_type) => {
-                Some(json!({ "share_type": share_type }))
-            }
             TelemetryEvent::PageUpDownInEditorPressed {
                 is_empty_editor,
                 is_down,
@@ -3497,11 +3468,6 @@ impl TelemetryEvent {
                 is_natural_language_autosuggestions_enabled,
             } => Some(
                 json!({"is_natural_language_autosuggestions_enabled": is_natural_language_autosuggestions_enabled}),
-            ),
-            TelemetryEvent::ToggleSharedBlockTitleGenerationSetting {
-                is_shared_block_title_generation_enabled,
-            } => Some(
-                json!({"is_shared_block_title_generation_enabled": is_shared_block_title_generation_enabled}),
             ),
             TelemetryEvent::ToggleGitOperationsAutogenSetting {
                 is_git_operations_autogen_enabled,
@@ -4716,7 +4682,6 @@ impl TelemetryEvent {
             | TelemetryEvent::AgentModeRewindExecuted { .. }
             | TelemetryEvent::ConfirmSuggestion { .. }
             | TelemetryEvent::ContextMenuCopy(_, _)
-            | TelemetryEvent::ContextMenuOpenShareModal(_)
             | TelemetryEvent::ContextMenuFindWithinBlocks(_)
             | TelemetryEvent::ContextMenuCopyPrompt { .. }
             | TelemetryEvent::ContextMenuToggleGitPromptDirtyIndicator { .. }
@@ -4725,8 +4690,6 @@ impl TelemetryEvent {
             | TelemetryEvent::PromptEdited { .. }
             | TelemetryEvent::ReinputCommands(_)
             | TelemetryEvent::JumpToPreviousCommand
-            | TelemetryEvent::CopyBlockSharingLink(_)
-            | TelemetryEvent::GenerateBlockSharingLink { .. }
             | TelemetryEvent::BlockSelection(_)
             | TelemetryEvent::BootstrappingSlow(_)
             | TelemetryEvent::SessionAbandonedBeforeBootstrap { .. }
@@ -5014,7 +4977,6 @@ impl TelemetryEvent {
             | TelemetryEvent::AgentModeError { .. }
             | TelemetryEvent::AgentModeRequestRetrySucceeded { .. }
             | TelemetryEvent::ToggleNaturalLanguageAutosuggestionsSetting { .. }
-            | TelemetryEvent::ToggleSharedBlockTitleGenerationSetting { .. }
             | TelemetryEvent::ToggleGitOperationsAutogenSetting { .. }
             | TelemetryEvent::GrepToolSucceeded
             | TelemetryEvent::FileGlobToolSucceeded
@@ -5256,7 +5218,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::Login => EnablementState::Always,
             Self::ConfirmSuggestion => EnablementState::Always,
             Self::ContextMenuCopy => EnablementState::Always,
-            Self::ContextMenuOpenShareModal => EnablementState::Always,
             Self::ContextMenuFindWithinBlocks => EnablementState::Always,
             Self::ContextMenuCopyPrompt => EnablementState::Always,
             Self::ContextMenuToggleGitPromptDirtyIndicator => EnablementState::Always,
@@ -5265,8 +5226,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::PromptEdited => EnablementState::Always,
             Self::ReinputCommands => EnablementState::Always,
             Self::JumpToPreviousCommand => EnablementState::Always,
-            Self::CopyBlockSharingLink => EnablementState::Always,
-            Self::GenerateBlockSharingLink => EnablementState::Always,
             Self::BlockSelection => EnablementState::Always,
             Self::BootstrappingSlow => EnablementState::Always,
             Self::BootstrappingSlowContents => EnablementState::Always,
@@ -5511,9 +5470,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleNaturalLanguageAutosuggestionsSetting => {
                 EnablementState::Flag(FeatureFlag::PredictAMQueries)
             }
-            Self::ToggleSharedBlockTitleGenerationSetting => {
-                EnablementState::Flag(FeatureFlag::SharedBlockTitleGeneration)
-            }
             Self::ToggleGitOperationsAutogenSetting => {
                 EnablementState::Flag(FeatureFlag::GitOperationsInCodeReview)
             }
@@ -5696,10 +5652,7 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::LoginLaterConfirmationButtonClicked => "Login Later Confirmation Button Clicked",
             Self::JumpToPreviousCommand => "Jumped to Previous Command",
             Self::ContextMenuFindWithinBlocks => "Context Menu: Find Within Blocks",
-            Self::ContextMenuOpenShareModal => "Context Menu: Initiate Block Sharing",
             Self::ContextMenuCopy => "Context Menu Copy",
-            Self::CopyBlockSharingLink => "Copy Block Sharing Link",
-            Self::GenerateBlockSharingLink => "Generate Block Sharing Link",
             Self::BlockSelection => "Block Selection",
             Self::BootstrappingSlow => "Bootstrapping Slow",
             Self::BootstrappingSlowContents => "Bootstrap Slow Contents",
@@ -5998,7 +5951,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleNaturalLanguageAutosuggestionsSetting => {
                 "Toggle Natural Language Autosuggestions Setting"
             }
-            Self::ToggleSharedBlockTitleGenerationSetting => "Toggle SharedBlock Title Generation",
             Self::ToggleGitOperationsAutogenSetting => "Toggle Git Operations Autogen Setting",
             Self::AgentModeCodeSuggestionEditedByUser => "AgentMode.Code.SuggestedCodeEditedByUser",
             Self::AgentModeCodeFilesNavigated => "AgentMode.Code.FilesNavigated",
@@ -6278,7 +6230,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             }
             Self::ConfirmSuggestion => "Accepted tab completion suggestion",
             Self::ContextMenuCopy => "Clicked \"Copy\" in context menu",
-            Self::ContextMenuOpenShareModal => "Opened \"Share\" modal via context menu",
             Self::ContextMenuFindWithinBlocks => "Clicked \"find within blocks\" in context menu",
             Self::ContextMenuCopyPrompt => "Clicked  \"Copy Prompt\" in context menu",
             Self::ContextMenuToggleGitPromptDirtyIndicator => {
@@ -6289,8 +6240,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::PromptEdited => "Edited the prompt using the built-in prompt editor",
             Self::ReinputCommands => "Clicked \"reinput commands\" in context menu",
             Self::JumpToPreviousCommand => "Jumped to a previous command",
-            Self::CopyBlockSharingLink => "Clicked \"Share block...\" in context menu",
-            Self::GenerateBlockSharingLink => "Generated Block sharing link",
             Self::BlockSelection => "Selected Block",
             Self::BootstrappingSlow => "Slow bootstrap on session startup",
             Self::BootstrappingSlowContents => {
@@ -6705,9 +6654,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleCodeSuggestionsSetting => "Toggled on/off the code suggestions setting",
             Self::ToggleNaturalLanguageAutosuggestionsSetting => {
                 "Toggled on/off the natural language autosuggestions setting"
-            }
-            Self::ToggleSharedBlockTitleGenerationSetting => {
-                "Toggled on/off the shared block title generation setting"
             }
             Self::ToggleGitOperationsAutogenSetting => {
                 "Toggled on/off the git operations autogen setting"
