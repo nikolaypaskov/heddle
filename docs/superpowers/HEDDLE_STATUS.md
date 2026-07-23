@@ -51,6 +51,28 @@ Codex sign-off (2026-07-23). The two P1 features that were cleanly *removable*
 increment; the OSS TUI binary has shrunk from ~799 MB to ~794 MB across the
 sweep. Every additive commercial *surface* the fork shipped is now gone.
 
+### Visible cloud-residual sweep (after the panel removal)
+
+With the agent-management panel gone and all cloud flags neutralized, a sweep of
+what an OSS user can still *see* found two unguarded visible residuals (dormant
+internal code is invisible; a still-shown page/suggestion is not):
+
+- **Settings → "Cloud platform" umbrella** (Environments, Oz Cloud API Keys) was
+  added to the sidebar unconditionally, and the **"Open Settings: Environments"**
+  editable command (Keyboard Shortcuts + action palette) opened the page
+  directly. Both now gated behind `FeatureFlag::CloudEnvironments` (off in OSS),
+  matching the existing `WarpControlCli`→Scripting / `AgentMode` gating patterns.
+  (The Codex review caught the keybinding path after the sidebar gate alone.)
+- **"Start a new cloud agent conversation"** zero-state suggestion — shown
+  unconditionally in both the terminal and Agent-Mode zero-state blocks (the
+  latter reachable in OSS via BYOK). Removed from both, along with the orphaned
+  `start_cloud_conversation` mouse-state fields and keystroke imports.
+
+Everything else surfaced by the sweep is either a log line, a gated feature, or a
+dormant modal only shown while a cloud agent runs (impossible with no server).
+`/cloud-agent`, the "New Cloud Agent Tab" binding, and the cloud zero-state
+keybinding were already gated by the neutralized `CloudMode` family.
+
 ### Menu audit + privacy pass (owner-requested, after seeing the GUI run)
 
 The de-commercialized GUI was built and run locally; the owner confirmed it

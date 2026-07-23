@@ -1456,6 +1456,9 @@ fn add_open_setting_pages_as_editable_binding(app: &mut AppContext) {
             BindingDescription::new("Open Settings: Environments"),
             WorkspaceAction::ShowSettingsPage(SettingsSection::CloudEnvironments),
         )
+        // Gated off in the OSS build — Cloud Environments configures Warp's Oz
+        // cloud backend, which Heddle does not use.
+        .with_enabled(|| FeatureFlag::CloudEnvironments.is_enabled())
         .with_group(bindings::BindingGroup::Settings.as_str())
         .with_context_predicate(id!("Workspace")),
         EditableBinding::new(

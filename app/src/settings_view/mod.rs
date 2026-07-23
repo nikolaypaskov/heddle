@@ -1266,13 +1266,6 @@ impl SettingsView {
                     SettingsSection::EditorAndCodeReview,
                 ],
             )),
-            SettingsNavItem::Umbrella(SettingsUmbrella::new(
-                "Cloud platform",
-                vec![
-                    SettingsSection::CloudEnvironments,
-                    SettingsSection::OzCloudAPIKeys,
-                ],
-            )),
             SettingsNavItem::Page(SettingsSection::Appearance),
             SettingsNavItem::Page(SettingsSection::Features),
             SettingsNavItem::Page(SettingsSection::Keybindings),
@@ -1281,6 +1274,23 @@ impl SettingsView {
             SettingsNavItem::Page(SettingsSection::Privacy),
             SettingsNavItem::Page(SettingsSection::About),
         ];
+
+        // The "Cloud platform" umbrella (Environments, Oz Cloud API Keys)
+        // configures Warp's hosted cloud agents / Oz backend, which Heddle does
+        // not use, so it is gated off in the OSS build.
+        if FeatureFlag::CloudEnvironments.is_enabled() {
+            let cloud_platform_index = nav_items
+                .iter()
+                .position(|item| matches!(item, SettingsNavItem::Page(SettingsSection::Appearance)))
+                .unwrap_or(nav_items.len());
+            nav_items.insert(
+                cloud_platform_index,
+                SettingsNavItem::Umbrella(SettingsUmbrella::new(
+                    "Cloud platform",
+                    SettingsSection::cloud_platform_subpages().to_vec(),
+                )),
+            );
+        }
 
         if FeatureFlag::WarpControlCli.is_enabled() {
             let scripting_index = nav_items
