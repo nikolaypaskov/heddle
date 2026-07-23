@@ -84,7 +84,7 @@ jobs:
           key: heddle-release-${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release -p warp_tui --bin heddle-tui
+        run: cargo build --release -p warp_tui --bin heddle-tui --features standalone
 
       # A release artefact that phones home is worse than no release at all.
       - name: Privacy gate (self-test, then scan)

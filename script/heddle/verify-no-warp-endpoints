@@ -67,6 +67,20 @@ FORBIDDEN=(
     "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs"  # Firebase auth API key
     "dataplane.rudderstack.com"
     "rudderlabs.com"
+    # Warp-branded embedded assets. rust_embed stores each asset's relative
+    # PATH as a string literal, so a branded PNG/font is detectable by its path
+    # even though its pixels are not. A string-only scan misses these -- Codex
+    # found a Warp logomark banner and a warpLogo glyph shipping this way. The
+    # standalone build excludes the async/ imagery; these entries fail the scan
+    # if any branded asset is ever re-embedded.
+    "openwarp_launch_banner"
+    "oz_agent_management"
+    "oz_agent_automations"
+    "oz_cloud_agents"
+    "oz_launch_credits"
+    "customize_warpdrive"
+    "warp_install_image"
+    "warpLogo"
 )
 
 # Scan RAW BYTES with grep, not `strings`.

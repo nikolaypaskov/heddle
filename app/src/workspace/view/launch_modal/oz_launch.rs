@@ -112,16 +112,16 @@ impl Slide for OzLaunchSlide {
         // TODO: Replace with new images once provided.
         match self {
             OzLaunchSlide::CloudAgents => {
-                bundled_or_fetched_asset!("png/oz_cloud_agents.png")
+                bundled_or_fetched_asset!("svg/heddle-mark.svg")
             }
             OzLaunchSlide::AgentAutomations => {
-                bundled_or_fetched_asset!("png/oz_agent_automations.png")
+                bundled_or_fetched_asset!("svg/heddle-mark.svg")
             }
             OzLaunchSlide::AgentManagement => {
-                bundled_or_fetched_asset!("png/oz_agent_management.png")
+                bundled_or_fetched_asset!("svg/heddle-mark.svg")
             }
             OzLaunchSlide::LaunchCredits => {
-                bundled_or_fetched_asset!("png/oz_launch_credits.png")
+                bundled_or_fetched_asset!("svg/heddle-mark.svg")
             }
         }
     }

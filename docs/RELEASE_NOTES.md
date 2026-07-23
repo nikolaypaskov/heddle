@@ -39,8 +39,8 @@ signed macOS builds can follow.
 
 ## What is verified in this build
 
-The compiled binary is scanned before it is packaged, and the release is
-blocked if the scan fails. The scan forbids the `warp.dev` domain wholesale,
+The packaged binary is extracted from the release tarball and scanned, and
+the release is blocked if the scan fails. The scan forbids the `warp.dev` domain wholesale,
 the Firebase authentication key, and RudderStack telemetry destinations.
 
 The scanner is self-tested on every run: CI plants a canary endpoint in a copy
