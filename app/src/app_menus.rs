@@ -153,7 +153,6 @@ fn make_new_app_menu(ctx: &AppContext) -> Menu {
 
     menu_items.extend([
         MenuItem::Separator,
-        updateable_custom_item_without_checkmark(CustomAction::ReferAFriend, ctx),
         MenuItem::Separator,
     ]);
 
