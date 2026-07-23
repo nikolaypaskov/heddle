@@ -22,17 +22,17 @@ fn vec_recursive() {
 }
 
 #[test]
-fn vec_skips_unparseable_elements() {
-    // A newer build may have removed an enum variant that an older settings
-    // file still references. Unparseable elements are dropped, and the rest of
-    // the list survives instead of the whole setting resetting to default.
+fn vec_rejects_unparseable_element() {
+    // A single unparseable element rejects the whole list (strict by design),
+    // so the settings loader can report the error rather than silently dropping
+    // e.g. a malformed security denylist rule. Types that want to tolerate
+    // unknown elements opt in with a manual impl.
     let file_val = Value::Array(vec![
         Value::Number(10.into()),
         Value::String("not a number".into()),
         Value::Number(30.into()),
     ]);
-    let back = Vec::<u32>::from_file_value(&file_val).unwrap();
-    assert_eq!(back, vec![10u32, 30u32]);
+    assert_eq!(Vec::<u32>::from_file_value(&file_val), None);
 }
 
 #[test]

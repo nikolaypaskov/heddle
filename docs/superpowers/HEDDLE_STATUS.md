@@ -150,10 +150,15 @@ items — all now fixed:
   `surface.agent_management.open` entry dropped.
 - **(robustness) settings forward-compat:** removing a persisted enum variant
   (`HeaderToolbarItemKind::AgentManagement`) previously made the *whole* custom
-  header-toolbar layout fail to decode and reset to default. Made
-  `Vec<T>::from_file_value` in `settings_value` tolerant — it now skips
-  unparseable elements instead of discarding the list, fixing this for every
-  current and future variant removal (session-sharing, Warp Drive, …). Tested.
+  header-toolbar layout fail to decode and reset to default. Fixed with an
+  **opt-in** tolerant `SettingsValue` impl on `HeaderToolbarChipSelection` that
+  drops only unknown toolbar items (mirroring the derive's wire format). A first
+  attempt made `Vec<T>::from_file_value` globally tolerant, but Codex correctly
+  flagged that as unsafe — it would silently swallow malformed elements in
+  security-sensitive list settings (the command-execution denylist, custom
+  secret-redaction regexes), so a dropped deny-rule could vanish unnoticed. The
+  global decoder stays strict; only the toolbar layout opts in. Tested
+  (round-trip + drop-unknown-item + reject-bad-element).
 - **(UX) inert "View my runs" link** on the environments page removed outright
   (label + separator + mouse-state plumbing), rather than left as a dead
   click/hover target.

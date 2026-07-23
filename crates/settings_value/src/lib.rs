@@ -141,17 +141,13 @@ impl<T: SettingsValue> SettingsValue for Vec<T> {
     }
 
     fn from_file_value(value: &Value) -> Option<Self> {
-        // Tolerant element decode: skip array entries that fail to parse (for
-        // example an enum variant that a newer build removed) rather than
-        // discarding the entire list and falling back to the default. A
-        // non-array value is still rejected outright.
-        Some(
-            value
-                .as_array()?
-                .iter()
-                .filter_map(T::from_file_value)
-                .collect(),
-        )
+        // Strict by design: a single unparseable element rejects the whole
+        // list, so the settings loader can report the error and inhibit writes
+        // rather than silently dropping (e.g. a malformed security denylist
+        // rule). Types that want to tolerate unknown elements — e.g. dropping a
+        // removed enum variant during migration — must opt in with a manual
+        // `SettingsValue` impl (see `HeaderToolbarChipSelection`).
+        value.as_array()?.iter().map(T::from_file_value).collect()
     }
 }
 

@@ -117,6 +117,57 @@ fn header_toolbar_chip_selection_custom_with_code_review_on_left_reports_present
 }
 
 #[test]
+fn header_toolbar_chip_selection_round_trips() {
+    use settings_value::SettingsValue as _;
+
+    for config in [
+        HeaderToolbarChipSelection::Default,
+        HeaderToolbarChipSelection::Custom {
+            left: vec![
+                HeaderToolbarItemKind::TabsPanel,
+                HeaderToolbarItemKind::CodeReview,
+            ],
+            right: vec![HeaderToolbarItemKind::NotificationsMailbox],
+        },
+    ] {
+        let file_value = config.to_file_value();
+        assert_eq!(
+            HeaderToolbarChipSelection::from_file_value(&file_value),
+            Some(config)
+        );
+    }
+}
+
+#[test]
+fn header_toolbar_chip_selection_drops_unknown_item_but_keeps_the_rest() {
+    use settings_value::SettingsValue as _;
+
+    // A layout persisted by an older build that still lists the removed
+    // `agent_management` toolbar item must decode to the surviving items rather
+    // than resetting the entire custom arrangement to the default.
+    let stored = serde_json::json!({
+        "custom": {
+            "left": ["tabs_panel", "agent_management", "code_review"],
+            "right": ["agent_management", "notifications_mailbox"],
+        }
+    });
+
+    let decoded = HeaderToolbarChipSelection::from_file_value(&stored)
+        .expect("a custom layout with an unknown item still decodes");
+
+    assert_eq!(
+        decoded,
+        HeaderToolbarChipSelection::Custom {
+            left: vec![
+                HeaderToolbarItemKind::TabsPanel,
+                HeaderToolbarItemKind::CodeReview,
+            ],
+            right: vec![HeaderToolbarItemKind::NotificationsMailbox],
+        }
+    );
+}
+
+#[test]
 fn header_toolbar_chip_selection_custom_empty_reports_all_absent() {
     let config = HeaderToolbarChipSelection::Custom {
         left: vec![],

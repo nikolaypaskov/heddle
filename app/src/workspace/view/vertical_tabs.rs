@@ -2399,9 +2399,8 @@ fn render_tab_group_internal(
         };
 
         // Show the action buttons when the group OR the buttons themselves
-        // are hovered, following the pattern from AgentManagementView.
-        // This prevents flickering when the mouse moves from the group
-        // to the overlay buttons (which may sit outside the group bounds).
+        // are hovered. This prevents flickering when the mouse moves from the
+        // group to the overlay buttons (which may sit outside the group bounds).
         let should_show_action_buttons = !drag_state.is_any_pane_dragging
             && (group_state.is_hovered() || action_buttons_mouse_over || is_menu_open_for_tab);
 

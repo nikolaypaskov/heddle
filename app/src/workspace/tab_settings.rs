@@ -246,7 +246,6 @@ pub fn canonical_directory_key(path: &Path) -> String {
     PartialEq,
     Eq,
     schemars::JsonSchema,
-    settings_value::SettingsValue,
 )]
 #[schemars(
     description = "Configuration for the header toolbar chips in the vertical tab panel header.",
@@ -259,6 +258,59 @@ pub enum HeaderToolbarChipSelection {
         left: Vec<super::header_toolbar_item::HeaderToolbarItemKind>,
         right: Vec<super::header_toolbar_item::HeaderToolbarItemKind>,
     },
+}
+
+// Hand-written `SettingsValue` (instead of the derive) so that a persisted
+// custom layout referencing a toolbar item this build no longer knows about
+// (e.g. `agent_management`, removed with the agent-management panel) drops only
+// the unknown item rather than failing to decode and resetting the user's whole
+// arrangement to default. Tolerance is intentionally scoped here rather than
+// made global for every `Vec<T>` (that would silently swallow malformed
+// security-sensitive settings). The wire format mirrors the derive exactly:
+// `Default` -> "default"; `Custom` -> {"custom": {"left": [...], "right": [...]}}.
+impl settings_value::SettingsValue for HeaderToolbarChipSelection {
+    fn to_file_value(&self) -> serde_json::Value {
+        use settings_value::SettingsValue as _;
+        match self {
+            Self::Default => serde_json::Value::String("default".to_string()),
+            Self::Custom { left, right } => {
+                let mut inner = serde_json::Map::new();
+                inner.insert("left".to_string(), left.to_file_value());
+                inner.insert("right".to_string(), right.to_file_value());
+                let mut obj = serde_json::Map::new();
+                obj.insert("custom".to_string(), serde_json::Value::Object(inner));
+                serde_json::Value::Object(obj)
+            }
+        }
+    }
+
+    fn from_file_value(value: &serde_json::Value) -> Option<Self> {
+        use super::header_toolbar_item::HeaderToolbarItemKind;
+        use settings_value::SettingsValue as _;
+        match value {
+            serde_json::Value::String(s) if s == "default" => Some(Self::Default),
+            serde_json::Value::Object(obj) if obj.contains_key("custom") => {
+                let inner = obj.get("custom")?.as_object()?;
+                // Tolerant: silently drop items that no longer parse (removed
+                // variants) instead of discarding the whole list.
+                let decode = |key: &str| -> Option<Vec<HeaderToolbarItemKind>> {
+                    Some(
+                        inner
+                            .get(key)?
+                            .as_array()?
+                            .iter()
+                            .filter_map(HeaderToolbarItemKind::from_file_value)
+                            .collect(),
+                    )
+                };
+                Some(Self::Custom {
+                    left: decode("left")?,
+                    right: decode("right")?,
+                })
+            }
+            _ => None,
+        }
+    }
 }
 
 impl HeaderToolbarChipSelection {

@@ -1955,7 +1955,7 @@ impl AgentConversationsModel {
     }
 
     /// Fetches tasks matching the given filters from the server, merges them into the model,
-    /// and enforces the task cap. Called when user changes filters in AgentManagementView.
+    /// and enforces the task cap. Called when the user changes conversation-list filters.
     pub fn fetch_tasks_for_filters(
         &mut self,
         filters: &AgentManagementFilters,
