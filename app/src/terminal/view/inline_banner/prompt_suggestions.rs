@@ -29,7 +29,6 @@ use crate::ai::blocklist::prompt::prompt_alert::{
 };
 use crate::ai::predict::prompt_suggestions::ACCEPT_PROMPT_SUGGESTION_KEYBINDING;
 use crate::appearance::Appearance;
-use crate::server::ids::ServerId;
 use crate::server::telemetry::InteractionSource;
 use crate::settings::InputSettings;
 use crate::terminal::view::passive_suggestions::PromptSuggestionResolution;
@@ -331,8 +330,6 @@ fn should_open_unavailable_modal(state: &PromptAlertState, app: &AppContext) -> 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptSuggestionsEvent {
     SignupAnonymousUser,
-    OpenBillingAndUsagePage,
-    OpenBillingPortal { team_uid: ServerId },
 }
 
 pub struct PromptSuggestionsView {
@@ -370,14 +367,6 @@ impl PromptSuggestionsView {
         match event {
             PromptAlertEvent::SignupAnonymousUser => {
                 ctx.emit(PromptSuggestionsEvent::SignupAnonymousUser);
-            }
-            PromptAlertEvent::OpenBillingAndUsagePage => {
-                ctx.emit(PromptSuggestionsEvent::OpenBillingAndUsagePage);
-            }
-            PromptAlertEvent::OpenBillingPortal { team_uid } => {
-                ctx.emit(PromptSuggestionsEvent::OpenBillingPortal {
-                    team_uid: *team_uid,
-                });
             }
         }
     }
@@ -481,14 +470,6 @@ impl TypedActionView for PromptSuggestionsView {
         match action {
             PromptSuggestionsEvent::SignupAnonymousUser => {
                 ctx.emit(PromptSuggestionsEvent::SignupAnonymousUser);
-            }
-            PromptSuggestionsEvent::OpenBillingAndUsagePage => {
-                ctx.emit(PromptSuggestionsEvent::OpenBillingAndUsagePage);
-            }
-            PromptSuggestionsEvent::OpenBillingPortal { team_uid } => {
-                ctx.emit(PromptSuggestionsEvent::OpenBillingPortal {
-                    team_uid: *team_uid,
-                });
             }
         }
     }

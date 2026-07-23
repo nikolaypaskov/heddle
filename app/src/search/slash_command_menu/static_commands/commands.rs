@@ -530,31 +530,11 @@ pub static CONTINUE_LOCALLY: LazyLock<StaticCommand> = LazyLock::new(|| {
     }
 });
 
-pub const USAGE: StaticCommand = StaticCommand {
-    name: "/usage",
-    description: "Open billing and usage settings",
-    icon_path: "bundled/svg/bar-chart-04.svg",
-    availability: Availability::AI_ENABLED,
-    auto_enter_ai_mode: false,
-    argument: None,
-};
-
 pub const REMOTE_CONTROL: StaticCommand = StaticCommand {
     name: "/remote-control",
     description: "Start remote control for this session",
     icon_path: "bundled/svg/phone-01.svg",
     availability: Availability::AI_ENABLED.union(Availability::NOT_CLOUD_AGENT),
-    auto_enter_ai_mode: false,
-    argument: None,
-};
-
-pub const COST: StaticCommand = StaticCommand {
-    name: "/cost",
-    description: "Toggle credit usage details",
-    icon_path: "bundled/svg/bar-chart-04.svg",
-    availability: Availability::AGENT_VIEW
-        .union(Availability::AI_ENABLED)
-        .union(Availability::NOT_CLOUD_AGENT),
     auto_enter_ai_mode: false,
     argument: None,
 };
@@ -684,7 +664,6 @@ fn all_commands(settings_mode: settings::SettingsMode) -> Vec<StaticCommand> {
         ADD_MCP,
         ADD_PROMPT.clone(),
         ADD_RULE,
-        COST,
         FEEDBACK.clone(),
         INDEX,
         INIT,
@@ -697,7 +676,6 @@ fn all_commands(settings_mode: settings::SettingsMode) -> Vec<StaticCommand> {
         RENAME_CONVERSATION.clone(),
         RENAME_TAB.clone(),
         SET_TAB_COLOR.clone(),
-        USAGE,
         CONVERSATIONS,
         EXPORT_TO_CLIPBOARD,
         MODEL.clone(),

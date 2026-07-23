@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ai::api_keys::ApiKeyManager;
 use anyhow::Context as _;
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 use instant::Instant;
 use serde::{Deserialize, Serialize};
 use warp_core::user_preferences::GetUserPreferences as _;
@@ -28,14 +28,6 @@ pub const AMBIENT_AGENT_TRIAL_CREDIT_THRESHOLD: i32 = 20;
 pub enum BonusGrantScope {
     User,
     Workspace(WorkspaceUid),
-}
-
-#[derive(Clone, Debug, PartialEq, Default)]
-pub enum BuyCreditsBannerDisplayState {
-    #[default]
-    Hidden,
-    OutOfCredits,
-    MonthlyLimitReached,
 }
 
 #[derive(Clone, Debug)]
@@ -194,7 +186,6 @@ pub struct AIRequestUsageModel {
     bonus_grants: Vec<BonusGrant>,
 
     /// Whether the buy credits banner has been dismissed by the user.
-    buy_addon_credits_banner_dismissed: bool,
 
     /// Whether the ambient trial credits banner has been dismissed by the user.
     ambient_credits_banner_dismissed: bool,
@@ -227,7 +218,6 @@ impl AIRequestUsageModel {
             request_limit_info,
             last_update_time: None,
             bonus_grants: vec![],
-            buy_addon_credits_banner_dismissed: false,
             ambient_credits_banner_dismissed,
         }
     }
@@ -239,7 +229,6 @@ impl AIRequestUsageModel {
             last_update_time: None,
             request_limit_info: RequestLimitInfo::default(),
             bonus_grants: vec![],
-            buy_addon_credits_banner_dismissed: false,
             ambient_credits_banner_dismissed: get_cached_ambient_credits_banner_dismissed(ctx),
         }
     }
@@ -487,10 +476,6 @@ impl AIRequestUsageModel {
         self.request_limit_info.next_refresh_time.utc()
     }
 
-    pub fn next_refresh_time_local(&self) -> DateTime<Local> {
-        self.next_refresh_time().with_timezone(&Local)
-    }
-
     pub fn is_unlimited(&self) -> bool {
         self.request_limit_info.is_unlimited
     }
@@ -568,82 +553,6 @@ impl AIRequestUsageModel {
             .sum()
     }
 
-    /// Computes the current banner state based on live conditions.
-    /// This is called on-demand and always returns fresh state.
-    pub fn compute_buy_addon_credits_banner_display_state(
-        &self,
-        ctx: &AppContext,
-    ) -> BuyCreditsBannerDisplayState {
-        // Early return if user dismissed
-        if self.buy_addon_credits_banner_dismissed {
-            return BuyCreditsBannerDisplayState::Hidden;
-        }
-        let current_workspace = UserWorkspaces::as_ref(ctx).current_workspace();
-        let policy_allows_purchasing = current_workspace
-            .map(|w| {
-                w.billing_metadata
-                    .tier
-                    .purchase_add_on_credits_policy
-                    .is_some_and(|p| p.enabled)
-            })
-            .unwrap_or(false);
-
-        // TODO: we might want to suggest credits purchase if request_remain/bonus credits is below certain threshold
-        // something to consider after launch
-        // Ambient-only credits are usable for cloud agents and should not suppress this banner.
-        let now = Utc::now();
-        let has_non_ambient_bonus_credits = self
-            .bonus_grants
-            .iter()
-            .filter(|grant| grant.grant_type != BonusGrantType::AmbientOnly)
-            .filter(|grant| grant.expiration.is_none_or(|exp| now < exp))
-            .filter(|grant| grant.request_credits_remaining > 0)
-            .any(|grant| match grant.scope {
-                BonusGrantScope::User => true,
-                BonusGrantScope::Workspace(uid) => {
-                    current_workspace.is_some_and(|workspace| workspace.uid == uid)
-                }
-            });
-        if !policy_allows_purchasing
-            || self.has_requests_remaining()
-            || has_non_ambient_bonus_credits
-        {
-            return BuyCreditsBannerDisplayState::Hidden;
-        }
-
-        let auto_reload_enabled = current_workspace
-            .is_some_and(|w| w.settings.addon_credits_settings.auto_reload_enabled);
-        if !auto_reload_enabled {
-            return BuyCreditsBannerDisplayState::OutOfCredits;
-        }
-
-        let at_monthly_limit =
-            current_workspace.is_some_and(|w| w.is_at_addon_credits_monthly_limit());
-
-        let auto_reload_would_exceed = current_workspace
-            .and_then(|workspace| {
-                let options = PricingInfoModel::as_ref(ctx).addon_credits_options()?;
-                let price = workspace.get_auto_reload_price_cents(options)?;
-                Some(workspace.would_addon_purchase_reach_limit(price))
-            })
-            .unwrap_or(false);
-
-        if at_monthly_limit || auto_reload_would_exceed {
-            BuyCreditsBannerDisplayState::MonthlyLimitReached
-        } else {
-            BuyCreditsBannerDisplayState::Hidden
-        }
-    }
-
-    pub fn dismiss_buy_credits_banner(&mut self, ctx: &mut ModelContext<Self>) {
-        self.buy_addon_credits_banner_dismissed = true;
-        ctx.notify();
-    }
-
-    pub fn enable_buy_credits_banner(&mut self, ctx: &mut ModelContext<Self>) {
-        self.buy_addon_credits_banner_dismissed = false;
-        ctx.notify();
-    }
 }
 
 /// Voice request usage, only available if built with voice input support.

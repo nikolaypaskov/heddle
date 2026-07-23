@@ -1029,9 +1029,6 @@ impl Input {
             _rewind if command.name == commands::REWIND.name => {
                 self.open_rewind_menu(ctx);
             }
-            _usage if command.name == commands::USAGE.name => {
-                ctx.dispatch_typed_action(&TerminalAction::OpenBillingAndUsagePane);
-            }
             _remote_control if command.name == commands::REMOTE_CONTROL.name => {
                 if !FeatureFlag::CreatingSharedSessions.is_enabled()
                     || !FeatureFlag::HOARemoteControl.is_enabled()
@@ -1048,30 +1045,6 @@ impl Input {
                     return true;
                 }
                 ctx.emit(Event::StartRemoteControl);
-            }
-            _cost if command.name == commands::COST.name => {
-                let history = BlocklistAIHistoryModel::handle(ctx);
-                let conversation = history
-                    .as_ref(ctx)
-                    .active_conversation(self.terminal_view_id);
-                if conversation.is_none() {
-                    show_error_toast(
-                        "Cannot show conversation cost: no active conversation".to_owned(),
-                        ctx,
-                    );
-                } else if conversation.is_some_and(|c| c.is_empty()) {
-                    show_error_toast(
-                        "Cannot show conversation cost: conversation is empty".to_owned(),
-                        ctx,
-                    );
-                } else if conversation.is_some_and(|c| !c.status().is_done()) {
-                    show_error_toast(
-                        "Cannot show conversation cost: conversation is in progress".to_owned(),
-                        ctx,
-                    );
-                } else {
-                    ctx.dispatch_typed_action(&TerminalAction::ToggleUsageFooter);
-                }
             }
             #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
             _move_to_cloud if command.name == commands::MOVE_TO_CLOUD.name => {

@@ -274,7 +274,6 @@ use crate::suggestions::ignored_suggestions_model::{
     IgnoredSuggestionsModel, IgnoredSuggestionsModelEvent, SuggestionType,
 };
 use crate::terminal::CLIAgent;
-use crate::terminal::buy_credits_banner::{BuyCreditsBanner, BuyCreditsBannerEvent};
 #[cfg(not(target_family = "wasm"))]
 use crate::terminal::cli_agent_sessions::plugin_manager::PluginModalKind;
 use crate::terminal::cli_agent_sessions::{
@@ -1085,9 +1084,6 @@ pub enum Event {
         document_id: AIDocumentId,
         document_version: AIDocumentVersion,
     },
-    OpenAutoReloadModal {
-        purchased_credits: i32,
-    },
     AuthSecretDeleteConfirmationDialogToggled {
         is_open: bool,
     },
@@ -1737,7 +1733,6 @@ pub struct Input {
     /// Weak handle to this input view for drop target data
     weak_view_handle: WeakViewHandle<Input>,
 
-    buy_credits_banner: ViewHandle<BuyCreditsBanner>,
     agent_status_view: ViewHandle<BlocklistAIStatusBar>,
     /// Optional queued-prompts panel rendered between `agent_status_view` and the input editor.
     /// Constructed in [`Input::new`] when [`FeatureFlag::QueueSlashCommand`] is enabled.
@@ -1852,7 +1847,6 @@ pub fn init(app: &mut AppContext) {
                 & !id!("PromptChipMenuOpen")
                 & !id!(QUEUED_PROMPT_INLINE_EDITOR_OPEN_CONTEXT)
                 & !id!("AIContextMenuOpen")
-                & !id!("BuyCreditsBannerOpen"),
         ),
     ]);
 
@@ -3700,27 +3694,6 @@ impl Input {
             ctx.notify();
         });
 
-        let buy_credits_banner = ctx.add_typed_action_view(BuyCreditsBanner::new);
-        ctx.subscribe_to_view(&buy_credits_banner, |me, _, event, ctx| match event {
-            BuyCreditsBannerEvent::OpenBillingAndUsage => {
-                ctx.emit(Event::OpenSettings(SettingsSection::BillingAndUsage));
-            }
-            BuyCreditsBannerEvent::RefocusInput => {
-                ctx.focus(&me.editor);
-            }
-            BuyCreditsBannerEvent::OpenAutoReloadModal { purchased_credits } => {
-                ctx.emit(Event::OpenAutoReloadModal {
-                    purchased_credits: *purchased_credits,
-                });
-            }
-            BuyCreditsBannerEvent::ShowAutoReloadError { error_message } => {
-                ctx.emit(Event::ShowToast {
-                    message: error_message.to_string(),
-                    flavor: ToastFlavor::Error,
-                });
-            }
-        });
-
         let agent_status_view = ctx.add_typed_action_view(|ctx| {
             BlocklistAIStatusBar::new(
                 ai_controller.clone(),
@@ -3856,7 +3829,6 @@ impl Input {
             cached_agent_mode_hint_text: None,
             is_editor_empty_on_last_edit: is_editor_empty,
             weak_view_handle: ctx.handle(),
-            buy_credits_banner,
             agent_status_view,
             queued_prompts_panel,
             agent_view_controller,
@@ -6618,14 +6590,6 @@ impl Input {
             PromptAlertEvent::SignupAnonymousUser => {
                 ctx.emit(Event::SignupAnonymousUser {
                     entrypoint: AnonymousUserSignupEntrypoint::SignUpAIPrompt,
-                });
-            }
-            PromptAlertEvent::OpenBillingAndUsagePage => {
-                ctx.emit(Event::OpenSettings(SettingsSection::BillingAndUsage));
-            }
-            PromptAlertEvent::OpenBillingPortal { team_uid } => {
-                UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
-                    user_workspaces.generate_stripe_billing_portal_link(*team_uid, ctx);
                 });
             }
         }
@@ -14266,13 +14230,6 @@ impl Input {
             return;
         }
 
-        let has_any_ai = AIRequestUsageModel::as_ref(ctx).has_any_ai_remaining(ctx);
-        if !has_any_ai {
-            AIRequestUsageModel::handle(ctx).update(ctx, |model, ctx| {
-                model.enable_buy_credits_banner(ctx);
-            });
-        }
-
         if PromptAlertView::does_alert_block_ai_requests(ctx) {
             AIRequestUsageModel::handle(ctx).update(ctx, |usage_model, ctx| {
                 // Rate limit requests to fetch the user's AI usage if triggered by enter
@@ -15842,14 +15799,6 @@ impl Input {
             PromptSuggestionsEvent::SignupAnonymousUser => ctx.emit(Event::SignupAnonymousUser {
                 entrypoint: AnonymousUserSignupEntrypoint::SignUpAIPrompt,
             }),
-            PromptSuggestionsEvent::OpenBillingAndUsagePage => {
-                ctx.emit(Event::OpenSettings(SettingsSection::BillingAndUsage))
-            }
-            PromptSuggestionsEvent::OpenBillingPortal { team_uid } => {
-                UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
-                    user_workspaces.generate_stripe_billing_portal_link(*team_uid, ctx);
-                });
-            }
         }
     }
 
@@ -16254,14 +16203,6 @@ impl View for Input {
             .is_conversation_menu()
         {
             ctx.set.insert(flags::OPEN_INLINE_CONVERSATION_MENU);
-        }
-
-        if self
-            .buy_credits_banner
-            .as_ref(app)
-            .is_denomination_dropdown_open(app)
-        {
-            ctx.set.insert("BuyCreditsBannerOpen");
         }
 
         if self.is_editing_queued_prompt(app) {
