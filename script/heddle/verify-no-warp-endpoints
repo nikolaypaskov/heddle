@@ -83,6 +83,13 @@ FORBIDDEN=(
     "warpLogo"
     "warp-loading"  # Warp's animated logomark frames; replaced with a neutral spinner
     "svg/oz-"       # any Oz-branded bundled vector asset path
+    # User-facing branded PROSE (help text, product taglines). This class is not
+    # exhaustively greppable, but the most prominent phrases are pinned so they
+    # cannot silently return. Codex/local-run found "The Oz CLI is a tool"
+    # shipping in the binary's --help.
+    "The Oz CLI is a tool"
+    "orchestration platform for cloud agents"
+    "Log in to Warp"
 )
 
 # Scan RAW BYTES with grep, not `strings`.
@@ -99,7 +106,9 @@ FORBIDDEN=(
 # Validate the instrument before trusting a clean result: a known-present marker
 # must be found, or grep is not reading the file as expected and every pattern
 # would trivially "pass".
-SENTINEL="heddle-tui.log"
+# A string guaranteed present in any Heddle binary (GUI or TUI). Used to prove
+# the scanner is actually reading content before trusting a clean result.
+SENTINEL="Heddle"
 if ! LC_ALL=C grep -aqF -- "${SENTINEL}" "${BINARY}"; then
     echo "INCONCLUSIVE: sentinel '${SENTINEL}' not found in ${BINARY}."
     echo "The scan cannot be trusted; grep is not matching content it should."

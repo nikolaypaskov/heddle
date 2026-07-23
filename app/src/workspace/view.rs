@@ -9037,7 +9037,7 @@ impl Workspace {
                 view.handle_cli_command_result(
                     result,
                     toast,
-                    "Failed to uninstall Warp Control command",
+                    "Failed to uninstall Heddle Control command",
                     ctx,
                 );
             },
@@ -9625,7 +9625,7 @@ impl Workspace {
                     ) =>
                 {
                     items.push(
-                        MenuItemFields::new("Update and relaunch Warp")
+                        MenuItemFields::new("Update and relaunch Heddle")
                             .with_on_select_action(WorkspaceAction::ApplyUpdate)
                             .with_override_text_color(appearance.theme().ansi_fg_red())
                             .into_item(),
@@ -9679,7 +9679,7 @@ impl Workspace {
 
         #[cfg(not(target_family = "wasm"))]
         items.push(
-            MenuItemFields::new("View Warp logs")
+            MenuItemFields::new("View Heddle logs")
                 .with_on_select_action(WorkspaceAction::ViewLogs)
                 .into_item(),
         );

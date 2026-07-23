@@ -24,16 +24,16 @@ impl std::fmt::Display for OnboardingIntention {
 
 pub use callout::{OnboardingCalloutView, OnboardingKeybindings};
 
-/// User-facing descriptions of the AI features enabled when the agent intention is selected.
+/// User-facing descriptions of what this build offers.
 /// Shared by the intention slide's agent card checklist and the login slide's
 /// skip-login confirmation dialog so the two always stay in sync.
 pub const AI_FEATURES: &[&str] = &[
-    "Use frontier and open-weight models with Warp Agent",
-    "Hand off agent work to cloud agents",
-    "Automatically diagnose and fix terminal errors",
-    "Agentic control of long-running commands and TUIs",
-    "Review code diffs and send comments directly to agents",
-    "Remote control for Claude Code, Codex, and other agents",
+    // Heddle has no built-in agent (Warp's is server-side and proprietary).
+    // These describe the fork's actual story: a fast local terminal you can
+    // pair with your own CLI agents.
+    "A fast, GPU-accelerated terminal with blocks and workflows",
+    "Bring your own CLI agent -- Claude Code, Codex, Gemini CLI, and others",
+    "No account, no telemetry, no cloud dependency",
 ];
 
 /// User-facing names of the Warp Drive features enabled when the terminal

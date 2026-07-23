@@ -115,7 +115,7 @@ jobs:
           # both cargo-about output AND the curated non-Cargo notices for
           # bundled fonts, Alacritty, bash-preexec and others. A plain
           # `cargo about` run would silently omit those.
-          cargo install cargo-about --locked
+          cargo install cargo-about --locked --features cli
           NO_SKILLS=1 SKIP_SETTINGS_SCHEMA=1 \
             ./script/prepare_bundled_resources "dist/${name}" oss \
             || cargo about generate --workspace -c about.toml -o "dist/${name}/THIRD_PARTY_LICENSES.txt" about.hbs

@@ -87,7 +87,7 @@ pub const DISABLE_NATURAL_LANGUAGE_DETECTION: StaticCommand = StaticCommand {
 
 pub const EXIT: StaticCommand = StaticCommand {
     name: "/exit",
-    description: "Exit Warp",
+    description: "Exit Heddle",
     icon_path: "bundled/svg/log-out-01.svg",
     availability: Availability::ALWAYS,
     auto_enter_ai_mode: false,

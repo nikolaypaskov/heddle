@@ -9980,7 +9980,7 @@ impl TerminalView {
 
         let a11y_content = AccessibilityContent::new(
             banner_title,
-            "Make sure you have enabled access for Warp notifications in System Preferences.",
+            "Make sure you have enabled access for Heddle notifications in System Preferences.",
             WarpA11yRole::TextRole,
         );
         ctx.emit_a11y_content(a11y_content);

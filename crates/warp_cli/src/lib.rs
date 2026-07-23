@@ -113,16 +113,13 @@ pub struct GlobalOptions {
 /// parser, selected before this parser sees the arguments.
 #[derive(Debug, Default, Parser, Clone)]
 #[command(
-    name = "oz",
-    display_name = "Oz",
-    about = r#"The orchestration platform for cloud agents
+    name = "heddle",
+    display_name = "Heddle",
+    about = r#"Heddle command-line interface
 
-The Oz CLI is a tool for running, managing, and orchestrating coding agents at scale.
-Use the CLI to:
-* Launch and inspect cloud agents
-* Schedule cloud agents to run in the future
-* Manage the environments that cloud agents run in
-* Upload secrets to Oz's secure storage"#
+Most subcommands here drive Warp's proprietary cloud-agent backend (Oz),
+which is not part of this fork and is unavailable. They are retained from
+upstream but will report that no server is configured."#
 )]
 #[clap(subcommand_precedence_over_arg = true)]
 pub struct Args {
@@ -538,7 +535,7 @@ pub enum WorkerCommand {
 /// but it allows scripting some Warp functionality.
 #[derive(Debug, Clone, Subcommand)]
 pub enum CliCommand {
-    /// Interact with Oz.
+    /// Interact with the agent backend (requires a server; unavailable in this build).
     #[command(subcommand)]
     Agent(crate::agent::AgentCommand),
 
@@ -564,9 +561,9 @@ pub enum CliCommand {
     #[command(subcommand)]
     Memory(crate::memory_store::MemoryCommand),
 
-    /// Log in to Warp.
+    /// Log in (requires a Warp server; unavailable in this build).
     Login,
-    /// Log out of Warp.
+    /// Log out (requires a Warp server; unavailable in this build).
     Logout,
     /// Print information about the logged-in user.
     Whoami,
@@ -579,7 +576,7 @@ pub enum CliCommand {
     #[command(subcommand)]
     Integration(crate::integration::IntegrationCommand),
 
-    /// Create and manage scheduled Oz agents. Scheduled agents run a user-defined task periodically, according to a cron schedule.
+    /// Create and manage scheduled agents (requires a server; unavailable in this build).
     ///
     /// As a shorthand, the `schedule` command behaves identically to `schedule create`.
     Schedule(crate::schedule::ScheduleCommand),
