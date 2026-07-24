@@ -4,9 +4,7 @@ use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
 use ai::project_context::model::ProjectContextModel;
 use chrono::Utc;
 use pathfinder_geometry::rect::RectF;
-use persistence::model::{
-    AgentConversation, AgentConversationData, AgentConversationRecord, ConversationUsageMetadata,
-};
+use persistence::model::ConversationUsageMetadata;
 #[cfg(feature = "local_fs")]
 use repo_metadata::RepoMetadataModel;
 use repo_metadata::repositories::DetectedRepositories;
@@ -371,48 +369,6 @@ fn cloud_conversation_with_ambient_task(task_id: AmbientAgentTaskId) -> CloudCon
     CloudConversationData::Oz(Box::new(conversation))
 }
 
-fn persisted_remote_child_conversation(
-    conversation_id: AIConversationId,
-    parent_conversation_id: Option<AIConversationId>,
-    parent_agent_id: Option<String>,
-    task_id: AmbientAgentTaskId,
-) -> AgentConversation {
-    AgentConversation {
-        conversation: AgentConversationRecord {
-            id: 0,
-            conversation_id: conversation_id.to_string(),
-            conversation_data: serde_json::to_string(&AgentConversationData {
-                server_conversation_token: Some("restored-child-token".to_string()),
-                conversation_usage_metadata: None,
-                reverted_action_ids: None,
-                forked_from_server_conversation_token: None,
-                artifacts_json: None,
-                parent_agent_id,
-                agent_name: Some("Agent 1".to_string()),
-                orchestration_harness_type: None,
-                parent_conversation_id: parent_conversation_id.map(|id| id.to_string()),
-                is_remote_child: true,
-                root_task_is_optimistic: None,
-                run_id: Some(task_id.to_string()),
-                autoexecute_override: None,
-                last_event_sequence: None,
-                pinned: false,
-            })
-            .expect("conversation data should serialize"),
-            last_modified_at: Utc::now().naive_utc(),
-            summary: None,
-        },
-        tasks: vec![warp_multi_agent_api::Task {
-            id: Uuid::new_v4().to_string(),
-            messages: vec![],
-            dependencies: None,
-            description: String::new(),
-            summary: String::new(),
-            server_data: String::new(),
-        }],
-    }
-}
-
 fn start_parent_conversation(
     panes: &PaneGroup,
     parent_pane_id: PaneId,
@@ -595,28 +551,6 @@ fn request_ambient_agent_task_id_for_hidden_child(
     let ai_controller = terminal_view.as_ref(ctx).ai_controller().clone();
 
     ai_controller.update(ctx, |controller, _| controller.get_ambient_agent_task_id())
-}
-
-fn ambient_child_session_state(
-    panes: &PaneGroup,
-    child_pane_id: PaneId,
-    ctx: &mut ViewContext<PaneGroup>,
-) -> (Option<AmbientAgentTaskId>, bool, Option<AIConversationId>) {
-    let terminal_view = panes
-        .terminal_view_from_pane_id(child_pane_id, ctx)
-        .expect("child pane should have a terminal view");
-    let terminal_view_ref = terminal_view.as_ref(ctx);
-    let active_conversation_id = terminal_view_ref.active_conversation_id(ctx);
-    let ambient_model = terminal_view_ref
-        .ambient_agent_view_model()
-        .expect("child pane should have an ambient agent model")
-        .as_ref(ctx);
-
-    (
-        ambient_model.task_id(),
-        ambient_model.is_agent_running(),
-        active_conversation_id,
-    )
 }
 
 struct PreAttachReturnsFalsePane {
@@ -922,153 +856,6 @@ fn test_restored_hidden_child_pane_reapplies_ambient_task_id_to_controller() {
     });
 }
 
-#[test]
-fn test_restored_remote_hidden_child_pane_enters_existing_ambient_session() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let parent_pane_id = get_newly_created_pane_id(panes, &[]);
-            let parent_conversation_id = start_parent_conversation(panes, parent_pane_id, ctx);
-            let task_id = new_ambient_agent_task_id();
-
-            // Fix B: inject mock cloud task data so the task-backed hydration
-            // path resolves to the live ambient session via
-            // `resolve_open_action` -> `OpenOrAttachAmbientAgentConversation`.
-            // The default mock task has `is_sandbox_running = false` so it
-            // resolves to the fallback path; we leave it at the default to
-            // ensure the pre-Fix-B "attach to existing ambient session +
-            // tombstone" behavior is preserved.
-            AgentConversationsModel::handle(ctx).update(ctx, |model, _| {
-                model.insert_task_for_test(ambient_agent_task_for_current_user(task_id));
-            });
-
-            let mut child_conversation = AIConversation::new(false, false);
-            child_conversation.set_parent_conversation_id(parent_conversation_id);
-            child_conversation.set_task_id(task_id);
-            child_conversation.mark_as_remote_child();
-            let child_conversation_id = child_conversation.id();
-
-            panes.create_hidden_child_agent_pane(child_conversation, parent_pane_id, ctx);
-
-            let child_pane_id = panes
-                .child_agent_panes
-                .get(&child_conversation_id)
-                .copied()
-                .expect("restored remote hidden child pane should be tracked");
-
-            let (ambient_task_id, is_agent_running, active_conversation_id) =
-                ambient_child_session_state(panes, child_pane_id, ctx);
-
-            assert_eq!(ambient_task_id, Some(task_id));
-            assert!(
-                is_agent_running,
-                "remote child restore should view the existing ambient session"
-            );
-            assert_eq!(active_conversation_id, Some(child_conversation_id));
-
-            // Fix B: the placeholder's local AIConversationId must remain the
-            // canonical key in `child_agent_panes`. Any in-place hydration
-            // (live attach, transcript merge, or fallback) must preserve this
-            // key so the orchestration pill bar and topology indexes can
-            // still find the pane.
-            assert!(
-                panes.child_agent_panes.contains_key(&child_conversation_id),
-                "placeholder AIConversationId must stay the child_agent_panes key after Fix B \
-                 hydration",
-            );
-
-            let terminal_view = panes
-                .terminal_view_from_pane_id(child_pane_id, ctx)
-                .expect("remote child pane should have a terminal view");
-            assert!(
-                terminal_view
-                    .as_ref(ctx)
-                    .is_initial_conversation_details_panel_auto_open_suppressed_for_test(),
-                "remote child panes opened from the parent orchestration UI should not auto-open \
-                 details when the ambient session becomes ready"
-            );
-        });
-    });
-}
-
-/// Fix B: when task data for a restored remote child is NOT yet cached at
-/// `create_hidden_child_agent_pane` time, the placeholder must still be
-/// registered in `child_agent_panes` keyed by its local AIConversationId,
-/// attached to the live ambient session (preserving today's behavior so
-/// streaming runs continue to attach), AND deferred via
-/// `pending_remote_child_hydrations` so the subscription handler can retry
-/// when `TasksUpdated` / `ConversationsLoaded` fires. The pane group must
-/// never produce a worse state than the pre-Fix-B fallback.
-#[test]
-fn test_restored_remote_hidden_child_pane_fallback_when_task_data_unavailable() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let parent_pane_id = get_newly_created_pane_id(panes, &[]);
-            let parent_conversation_id = start_parent_conversation(panes, parent_pane_id, ctx);
-            let task_id = new_ambient_agent_task_id();
-
-            // Deliberately do NOT inject a task into AgentConversationsModel.
-            // `get_or_async_fetch_task_data` will return `None`, which forces
-            // the hydration to:
-            //   1. enter the existing ambient session in place (live-attach
-            //      preserved per Fix B contract);
-            //   2. register a pending hydration entry so the subscription
-            //      handler can retry once task data lands.
-
-            let mut child_conversation = AIConversation::new(false, false);
-            child_conversation.set_parent_conversation_id(parent_conversation_id);
-            child_conversation.set_task_id(task_id);
-            child_conversation.mark_as_remote_child();
-            let child_conversation_id = child_conversation.id();
-
-            panes.create_hidden_child_agent_pane(child_conversation, parent_pane_id, ctx);
-
-            let child_pane_id = panes
-                .child_agent_panes
-                .get(&child_conversation_id)
-                .copied()
-                .expect("remote child pane must be registered even when task data unavailable");
-
-            // The placeholder local AIConversationId remains the canonical key.
-            assert!(
-                panes.child_agent_panes.contains_key(&child_conversation_id),
-                "placeholder AIConversationId must stay the child_agent_panes key in fallback path",
-            );
-
-            // Live-attach preserved: the ambient agent view model is
-            // configured to view the existing session for `task_id`. This
-            // matches the pre-Fix-B behavior so streaming runs continue to
-            // attach.
-            let (ambient_task_id, _is_agent_running, active_conversation_id) =
-                ambient_child_session_state(panes, child_pane_id, ctx);
-            assert_eq!(
-                ambient_task_id,
-                Some(task_id),
-                "fallback path must still call enter_viewing_existing_session on the placeholder",
-            );
-            assert_eq!(active_conversation_id, Some(child_conversation_id));
-
-            // Fix B: pending hydration is recorded so the subscription handler
-            // can re-run hydration when task data lands. The map value is the
-            // placeholder's local AIConversationId, which must match the
-            // conversation we just restored.
-            let pending_placeholder_id =
-                panes.pending_remote_child_hydrations.get(&task_id).copied().expect(
-                    "task-data-unavailable hydration must register a pending entry keyed by task id",
-                );
-            assert_eq!(
-                pending_placeholder_id, child_conversation_id,
-                "pending hydration must record the placeholder's local AIConversationId",
-            );
-        });
-    });
-}
-
 /// Phase 1 integration coverage: validates that after `BlocklistAIHistoryModel`
 /// restoration (the same code path the disk-load Fix C unblocks), the
 /// orchestration topology is fully wired BEFORE the parent's fullscreen
@@ -1250,115 +1037,6 @@ fn test_pane_group_restore_loop_keeps_orchestration_topology_and_materializes_ch
 }
 
 #[test]
-fn test_create_missing_child_agent_panes_restores_remote_child_from_history_model() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let parent_pane_id = get_newly_created_pane_id(panes, &[]);
-            let parent_conversation_id = start_parent_conversation(panes, parent_pane_id, ctx);
-            let child_conversation_id = AIConversationId::new();
-            let task_id = new_ambient_agent_task_id();
-
-            assert!(
-                !panes.child_agent_panes.contains_key(&child_conversation_id),
-                "child pane should not exist before startup restoration runs",
-            );
-
-            BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, _| {
-                history_model
-                    .set_parent_for_conversation(child_conversation_id, parent_conversation_id);
-            });
-            RestoredAgentConversations::handle(ctx).update(ctx, |store, _| {
-                *store = RestoredAgentConversations::new_seeded(vec![
-                    persisted_remote_child_conversation(
-                        child_conversation_id,
-                        Some(parent_conversation_id),
-                        None,
-                        task_id,
-                    ),
-                ]);
-            });
-
-            panes.restore_missing_child_agent_panes_for_parent(
-                parent_conversation_id,
-                parent_pane_id,
-                ctx,
-            );
-
-            let child_pane_id = panes
-                .child_agent_panes
-                .get(&child_conversation_id)
-                .copied()
-                .expect("startup restoration should recreate the remote child pane");
-            let (ambient_task_id, is_agent_running, active_conversation_id) =
-                ambient_child_session_state(panes, child_pane_id, ctx);
-
-            assert_eq!(ambient_task_id, Some(task_id));
-            assert!(
-                is_agent_running,
-                "restored remote child pane should reconnect to the ambient session",
-            );
-            assert_eq!(active_conversation_id, Some(child_conversation_id));
-            assert_eq!(panes.focused_pane_id(ctx), parent_pane_id);
-        });
-    });
-}
-
-#[test]
-fn test_ambient_transcript_restore_creates_cloud_mode_pane_when_handoff_enabled() {
-    let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-    let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-    let _setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-    let _handoff = FeatureFlag::HandoffCloudCloud.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-        let task_id = new_ambient_agent_task_id();
-
-        pane_group.update(&mut app, |panes, ctx| {
-            AgentConversationsModel::handle(ctx).update(ctx, |model, _| {
-                model.insert_task_for_test(ambient_agent_task_for_current_user(task_id));
-            });
-            panes.load_data_into_conversation_transcript_viewer(
-                cloud_conversation_with_ambient_task(task_id),
-                Some(task_id),
-                ctx,
-            );
-        });
-
-        pane_group.read(&app, |panes, ctx| {
-            let terminal_view = panes
-                .active_session_view(ctx)
-                .expect("restored pane should have an active terminal view");
-            let view = terminal_view.as_ref(ctx);
-            let ambient_model = view
-                .ambient_agent_view_model()
-                .expect("ambient restore should create a Cloud Mode view")
-                .as_ref(ctx);
-
-            assert_eq!(ambient_model.task_id(), Some(task_id));
-            assert!(ambient_model.is_agent_running());
-            assert_eq!(
-                view.ambient_agent_task_id_for_details_panel(ctx),
-                Some(task_id)
-            );
-            assert!(view.active_conversation_id(ctx).is_some());
-
-            let model = view.model.lock();
-            assert!(!model.is_conversation_transcript_viewer());
-            assert!(!model.is_read_only());
-            assert!(matches!(
-                model.shared_session_status(),
-                SharedSessionStatus::NotShared
-            ));
-        });
-    });
-}
-
-#[test]
 fn test_ambient_transcript_restore_uses_generic_viewer_when_handoff_disabled() {
     let _handoff = FeatureFlag::HandoffCloudCloud.override_enabled(false);
     let _setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
@@ -1389,40 +1067,6 @@ fn test_ambient_transcript_restore_uses_generic_viewer_when_handoff_disabled() {
             assert_eq!(
                 model.conversation_transcript_viewer_status(),
                 Some(&ConversationTranscriptViewerStatus::ViewingAmbientConversation(task_id))
-            );
-        });
-    });
-}
-
-/// Pins the contract that cloud-mode shared-session viewers (the local pane
-/// of a remote orchestration parent) get an `ambient_agent_view_model` so
-/// the snapshot path in `TerminalPane::snapshot` can emit
-/// `LeafContents::AmbientAgent` with the task id preserved. Without this,
-/// the snapshot falls through to an empty `LeafContents::Terminal` and the
-/// pane restores as a stray local terminal on the next launch.
-#[test]
-fn create_shared_session_viewer_with_cloud_mode_populates_ambient_agent_view_model() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let resources = TerminalViewResources {
-                tips_completed: panes.tips_completed.clone(),
-                server_api: panes.server_api.clone(),
-                model_event_sender: panes.model_event_sender.clone(),
-            };
-            let (terminal_view, _terminal_manager) = PaneGroup::create_shared_session_viewer(
-                SessionId::new(),
-                resources,
-                Vector2F::new(800., 600.),
-                false, // enable_orchestration_polling
-                true,  // is_cloud_mode
-                ctx,
-            );
-            assert!(
-                terminal_view.as_ref(ctx).ambient_agent_view_model().is_some(),
-                "cloud-mode shared-session viewer must construct an ambient_agent_view_model so the snapshot path emits LeafContents::AmbientAgent on restart",
             );
         });
     });
@@ -1584,88 +1228,6 @@ fn test_entering_remote_parent_agent_view_lazily_restores_local_hidden_child_pan
                 ),
                 Some(local_child_task_id)
             );
-        });
-    });
-}
-
-#[test]
-fn test_entering_remote_parent_agent_view_lazily_restores_remote_hidden_child_pane() {
-    let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-        let (
-            parent_pane_id,
-            remote_child_conversation_id,
-            remote_child_task_id,
-            initial_pane_count,
-            initial_visible_pane_count,
-        ) = pane_group.update(&mut app, |panes, ctx| {
-            let parent_pane_id = get_newly_created_pane_id(panes, &[]);
-            let root_conversation_id = start_parent_conversation(panes, parent_pane_id, ctx);
-            let remote_parent_task_id = new_ambient_agent_task_id();
-            let remote_parent_conversation_id = restore_remote_child_conversation(
-                panes,
-                parent_pane_id,
-                root_conversation_id,
-                remote_parent_task_id,
-                ctx,
-            );
-            let remote_child_task_id = new_ambient_agent_task_id();
-            let remote_child_conversation_id = restore_remote_child_conversation(
-                panes,
-                parent_pane_id,
-                remote_parent_conversation_id,
-                remote_child_task_id,
-                ctx,
-            );
-            let initial_pane_count = panes.pane_count();
-            let initial_visible_pane_count = panes.visible_pane_count();
-
-            assert!(
-                !panes
-                    .child_agent_panes
-                    .contains_key(&remote_child_conversation_id)
-            );
-
-            enter_agent_view_for_conversation(
-                panes,
-                parent_pane_id,
-                remote_parent_conversation_id,
-                ctx,
-            );
-            (
-                parent_pane_id,
-                remote_child_conversation_id,
-                remote_child_task_id,
-                initial_pane_count,
-                initial_visible_pane_count,
-            )
-        });
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let child_pane_id = panes
-                .child_agent_panes
-                .get(&remote_child_conversation_id)
-                .copied()
-                .expect(
-                    "remote parent fullscreen restore should materialize the missing remote child pane",
-                );
-            let (ambient_task_id, is_agent_running, active_conversation_id) =
-                ambient_child_session_state(panes, child_pane_id, ctx);
-
-            assert!(panes.has_pane_id(child_pane_id));
-            assert_eq!(panes.pane_count(), initial_pane_count);
-            assert_eq!(panes.visible_pane_count(), initial_visible_pane_count);
-            assert!(!panes.panes.is_pane_in_tree(child_pane_id));
-            assert_eq!(panes.focused_pane_id(ctx), parent_pane_id);
-            assert_eq!(ambient_task_id, Some(remote_child_task_id));
-            assert!(
-                is_agent_running,
-                "remote child restore should reconnect to the existing ambient session",
-            );
-            assert_eq!(active_conversation_id, Some(remote_child_conversation_id));
         });
     });
 }
@@ -1870,76 +1432,6 @@ fn test_ensure_hidden_child_agent_pane_materializes_missing_child_pane() {
             assert!(panes.has_pane_id(child_pane_id));
             assert_eq!(panes.pane_count(), initial_pane_count);
             assert!(!panes.panes.is_pane_in_tree(child_pane_id));
-        });
-    });
-}
-
-#[test]
-fn test_ensure_hidden_child_agent_pane_materializes_restored_remote_child_linked_by_parent_agent_id()
- {
-    let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let parent_pane_id = get_newly_created_pane_id(panes, &[]);
-            let parent_terminal_view_id = panes
-                .terminal_view_from_pane_id(parent_pane_id, ctx)
-                .expect("parent pane should have a terminal view")
-                .id();
-            let parent_conversation_id = start_parent_conversation(panes, parent_pane_id, ctx);
-            let child_conversation_id = AIConversationId::new();
-            let parent_run_id = new_ambient_agent_task_id().to_string();
-            let task_id = new_ambient_agent_task_id();
-            let initial_pane_count = panes.pane_count();
-
-            BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
-                history_model.assign_run_id_for_conversation(
-                    parent_conversation_id,
-                    parent_run_id.clone(),
-                    None,
-                    parent_terminal_view_id,
-                    ctx,
-                );
-                history_model
-                    .set_parent_for_conversation(child_conversation_id, parent_conversation_id);
-            });
-            RestoredAgentConversations::handle(ctx).update(ctx, |store, _| {
-                *store = RestoredAgentConversations::new_seeded(vec![
-                    persisted_remote_child_conversation(
-                        child_conversation_id,
-                        None,
-                        Some(parent_run_id),
-                        task_id,
-                    ),
-                ]);
-            });
-
-            assert!(!panes.child_agent_panes.contains_key(&child_conversation_id));
-            assert!(
-                panes.ensure_hidden_child_agent_pane_for_conversation(child_conversation_id, ctx),
-                "navigation fallback should restore a parent_agent_id-linked remote child pane",
-            );
-
-            let child_pane_id = panes
-                .child_agent_panes
-                .get(&child_conversation_id)
-                .copied()
-                .expect("parent_agent_id-linked child pane should be tracked after restoration");
-            let (ambient_task_id, is_agent_running, active_conversation_id) =
-                ambient_child_session_state(panes, child_pane_id, ctx);
-
-            assert!(panes.has_pane_id(child_pane_id));
-            assert_eq!(panes.pane_count(), initial_pane_count);
-            assert!(!panes.panes.is_pane_in_tree(child_pane_id));
-            assert_eq!(ambient_task_id, Some(task_id));
-            assert!(
-                is_agent_running,
-                "restored remote child pane should reconnect to the ambient session",
-            );
-            assert_eq!(active_conversation_id, Some(child_conversation_id));
         });
     });
 }

@@ -32,8 +32,8 @@ use warp_util::path::LineAndColumnArg;
 use warp_util::path::convert_wsl_to_windows_host_path;
 use warp_util::remote_path::RemotePath;
 use warpui::elements::{
-    ChildView, CrossAxisAlignment, DispatchEventResult, Element, EventHandler, Flex,
-    MainAxisSize, ParentElement, Shrinkable, Stack,
+    ChildView, CrossAxisAlignment, DispatchEventResult, Element, EventHandler, Flex, MainAxisSize,
+    ParentElement, Shrinkable, Stack,
 };
 use warpui::keymap::{Context, EditableBinding, FixedBinding};
 use warpui::notification::NotificationSendError;
@@ -45,10 +45,7 @@ use warpui::{
 
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent::conversation::{AIAgentHarness, AIConversation, AIConversationId};
-use crate::ai::agent_conversations_model::{
-    AgentConversationEntryId, AgentConversationNavigationSubject, AgentConversationsModel,
-    AgentConversationsModelEvent,
-};
+use crate::ai::agent_conversations_model::{AgentConversationsModel, AgentConversationsModelEvent};
 use crate::ai::ai_document_view::AIDocumentView;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 #[cfg(not(target_family = "wasm"))]
@@ -153,8 +150,8 @@ use crate::terminal::view::{
     LeftPanelTargetView, SyncEvent, TerminalViewState,
 };
 use crate::terminal::{
-    MockTerminalManager, ShellLaunchData, ShellLaunchState,
-    TerminalManager, TerminalModel, TerminalView,
+    MockTerminalManager, ShellLaunchData, ShellLaunchState, TerminalManager, TerminalModel,
+    TerminalView,
 };
 use crate::undo_close::{UndoCloseStack, UndoCloseStackEvent};
 #[cfg(target_family = "wasm")]
@@ -177,7 +174,6 @@ pub mod focus_state;
 pub mod pane;
 pub mod tree;
 pub mod working_directories;
-use ambient_pane_restoration::AmbientRestoreKind;
 use focus_state::PaneGroupFocusState;
 
 #[cfg(test)]
@@ -277,8 +273,7 @@ fn resolve_tab_config_shell(name: &str, ctx: &AppContext) -> Option<AvailableShe
 
     AvailableShell::try_from(name).ok()
 }
-const WARP_SHELL_COMPATIBILITY_DOCS: &str =
-    "https://github.com/nikolaypaskov/heddle#readme";
+const WARP_SHELL_COMPATIBILITY_DOCS: &str = "https://github.com/nikolaypaskov/heddle#readme";
 // Default minimum width for a newly created Agent Mode pane so that it is legible. Called "default"
 // because this value may be too large for small windows. In that case, we fall back to 50% of the
 // window width.
@@ -893,7 +888,6 @@ pub struct PaneGroup {
     server_api: Arc<ServerApi>,
 
     /// The terminal session with an open share block modal. Only terminal panes use the share block modal.
-
     // We are only holding one instance of share modal view in the pane group and
     // update it with the correct terminal model and size info when triggered by
     // the context menu event.
@@ -1356,32 +1350,37 @@ impl PaneGroup {
                 };
 
                 let (view, terminal_manager) = match pane_mode {
-                    PaneMode::Cloud => {
-                        Self::create_ambient_agent_terminal(resources, view_size, ctx)
+                    // Heddle (FOSS): the ambient cloud-agent runtime is removed.
+                    // `type = "cloud"` tab configs already map to `PaneMode::Terminal`
+                    // (see tab_config.rs); this arm degrades any residual
+                    // `PaneMode::Cloud` to a normal local session rather than the
+                    // view-model-less cloud viewer, which would render an indefinite
+                    // loading pane.
+                    PaneMode::Terminal | PaneMode::Agent | PaneMode::Cloud => {
+                        PaneGroup::create_session(
+                            // Use cwd from the template iff such path exists, otherwise None
+                            // TODO(CORE-3187): On Windows, support WSL directory restoration.
+                            Some(cwd).filter(|p| p.exists()),
+                            HashMap::new(),
+                            uuid.as_bytes(),
+                            IsSharedSessionCreator::No,
+                            resources,
+                            None,
+                            None, // no conversation restoration for launch config
+                            user_default_shell_unsupported_banner_model_handle,
+                            view_size,
+                            model_event_sender.clone(),
+                            chosen_shell,
+                            None,
+                            ctx,
+                        )
                     }
-                    PaneMode::Terminal | PaneMode::Agent => PaneGroup::create_session(
-                        // Use cwd from the template iff such path exists, otherwise None
-                        // TODO(CORE-3187): On Windows, support WSL directory restoration.
-                        Some(cwd).filter(|p| p.exists()),
-                        HashMap::new(),
-                        uuid.as_bytes(),
-                        IsSharedSessionCreator::No,
-                        resources,
-                        None,
-                        None, // no conversation restoration for launch config
-                        user_default_shell_unsupported_banner_model_handle,
-                        view_size,
-                        model_event_sender.clone(),
-                        chosen_shell,
-                        None,
-                        ctx,
-                    ),
                 };
 
                 let has_commands = !commands.is_empty();
 
-                // Runs saved commands on start (terminal and agent modes only).
-                if has_commands && !matches!(pane_mode, PaneMode::Cloud) {
+                // Runs saved commands on start.
+                if has_commands {
                     let command_queue = commands.into_iter().map(|cmd| cmd.exec).collect();
                     view.update(ctx, |terminal, ctx| {
                         terminal.set_pending_command_queue(command_queue, ctx);
@@ -1578,7 +1577,14 @@ impl PaneGroup {
         model_event_sender: Option<SyncSender<ModelEvent>>,
         #[cfg_attr(not(feature = "local_fs"), allow(unused_variables, clippy::ptr_arg))]
         deferred_panes: &mut Vec<(PaneId, LeafSnapshot)>,
-        pending_ambient_restorations: &mut Vec<(AmbientAgentTaskId, PaneId)>,
+        // Heddle (FOSS): ambient pane restoration is removed; the `AmbientAgent`
+        // snapshot arm now degrades to a local terminal and no longer defers to
+        // this queue. Retained on the signature until the pending-ambient
+        // restoration machinery is deleted wholesale in a later slice.
+        #[allow(unused_variables, clippy::ptr_arg)] pending_ambient_restorations: &mut Vec<(
+            AmbientAgentTaskId,
+            PaneId,
+        )>,
     ) -> anyhow::Result<(PaneData, InitialFocus)> {
         let custom_vertical_tabs_title = leaf.custom_vertical_tabs_title.clone();
         let result = match leaf.contents {
@@ -1859,70 +1865,33 @@ impl PaneGroup {
                 Ok((PaneData::new(pane_id), focus))
             }
             LeafContents::AmbientAgent(snapshot) => {
-                let task_data = snapshot.task_id.map(|task_id| {
-                    let task = AgentConversationsModel::handle(ctx).update(ctx, |model, ctx| {
-                        model.get_or_async_fetch_task_data(&task_id, ctx)
-                    });
-                    (task_id, task)
-                });
-
-                let restore_kind = match &task_data {
-                    Some((task_id, Some(_))) => {
-                        match AgentConversationsModel::resolve_open_action(
-                            AgentConversationNavigationSubject::Entry(
-                                AgentConversationEntryId::AmbientRun(*task_id),
-                            ),
-                            None,
-                            ctx,
-                        ) {
-                            Some(WorkspaceAction::OpenOrAttachAmbientAgentConversation {
-                                session_id,
-                                ..
-                            }) => AmbientRestoreKind::SharedSession { session_id },
-                            // Transcript viewer and other non-session actions depend on conversation metadata from
-                            // BlocklistAIHistoryModel, which is loaded asynchronously.
-                            // Defer to the pending-restoration handler so it can retry once that metadata arrives.
-                            _ => task_data
-                                .as_ref()
-                                .map(|(tid, _)| AmbientRestoreKind::PendingRestoration {
-                                    task_id: *tid,
-                                })
-                                .unwrap_or(AmbientRestoreKind::NewCloudConversation),
-                        }
-                    }
-                    Some((task_id, None)) => {
-                        AmbientRestoreKind::PendingRestoration { task_id: *task_id }
-                    }
-                    None => AmbientRestoreKind::NewCloudConversation,
-                };
-
-                let mut pending_task: Option<AmbientAgentTaskId> = None;
-                let (terminal_view, terminal_manager) = match restore_kind {
-                    AmbientRestoreKind::SharedSession { session_id } => {
-                        Self::create_shared_session_viewer(
-                            session_id, resources, view_size,
-                            true, // enable_orchestration_polling
-                            true, // is_ambient_agent
-                            ctx,
-                        )
-                    }
-                    AmbientRestoreKind::PendingRestoration { task_id } => {
-                        let (view, manager) = Self::create_loading_terminal_manager_and_view(
-                            resources,
-                            view_size,
-                            ctx.window_id(),
-                            ctx,
-                        );
-                        pending_task = Some(task_id);
-                        (view, manager)
-                    }
-                    AmbientRestoreKind::NewCloudConversation => {
-                        Self::create_ambient_agent_terminal(resources, view_size, ctx)
-                    }
-                };
+                // Heddle (FOSS): the ambient cloud-agent runtime is removed. A
+                // persisted "cloud" pane snapshot (only possible via migrated Warp
+                // state, since OSS can no longer create one) restores as a plain
+                // local terminal rather than a view-model-less cloud viewer that
+                // would render an indefinite loading pane. The ambient-specific
+                // snapshot fields (task id / shared session) are intentionally
+                // discarded. Full removal of ambient pane restoration is a later
+                // slice (see the ambient-runtime-removal plan).
+                let uuid = snapshot.uuid;
+                let (terminal_view, terminal_manager) = PaneGroup::create_session(
+                    None,
+                    HashMap::new(),
+                    uuid.as_slice(),
+                    IsSharedSessionCreator::No,
+                    resources,
+                    None,
+                    None,
+                    user_default_shell_unsupported_banner_model_handle,
+                    view_size,
+                    model_event_sender.clone(),
+                    None,
+                    None,
+                    ctx,
+                );
 
                 let pane_data = TerminalPane::new(
-                    snapshot.uuid,
+                    uuid,
                     terminal_manager,
                     terminal_view,
                     model_event_sender,
@@ -1931,11 +1900,6 @@ impl PaneGroup {
                 let terminal_pane_id = pane_data.terminal_pane_id();
                 let pane_id = terminal_pane_id.into();
                 pane_contents.insert(pane_id, Box::new(pane_data));
-
-                if let Some(task_id) = pending_task {
-                    // Defer restoration to after the task data is loaded.
-                    pending_ambient_restorations.push((task_id, pane_id));
-                }
 
                 let focus = InitialFocus {
                     focused_pane: leaf.is_focused.then_some(pane_id),

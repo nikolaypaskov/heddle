@@ -1,4 +1,3 @@
-use session_sharing_protocol::common::SessionId;
 use uuid::Uuid;
 use warp_errors::report_error;
 use warpui::{SingletonEntity, ViewContext, ViewHandle};
@@ -12,19 +11,6 @@ use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::pane_group::{PaneGroup, PaneId, TerminalPane, TerminalViewResources};
 use crate::terminal::TerminalView;
 use crate::workspace::WorkspaceAction;
-
-/// The restoration path for an ambient agent pane.
-pub(in crate::pane_group) enum AmbientRestoreKind {
-    /// Active shared session
-    SharedSession { session_id: SessionId },
-    /// Conversation data isn't loaded yet — show a loading pane and
-    /// defer the real restoration to the pending-restoration subscription
-    /// (which waits for the data to be loaded async).
-    PendingRestoration { task_id: AmbientAgentTaskId },
-    /// If there's no task ID to restore, we open a fresh cloud mode pane
-    /// (this is a valid state from when a user quits with an empty cloud mode pane).
-    NewCloudConversation,
-}
 
 impl PaneGroup {
     /// Stores the pending ambient agent restorations, triggers async fetches for

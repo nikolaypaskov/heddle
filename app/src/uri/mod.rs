@@ -29,15 +29,10 @@ use crate::drive::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
 use crate::features::FeatureFlag;
 use crate::launch_configs::launch_config::LaunchConfig;
 use crate::linear::{LinearAction, LinearIssueWork};
-use crate::root_view::{
-    NewWorkspaceSource, OpenLaunchConfigArg, open_new_window_get_handles,
-    open_new_with_workspace_source,
-};
+use crate::root_view::{OpenLaunchConfigArg, open_new_window_get_handles};
 use crate::server::ids::ServerId;
 use crate::server::telemetry::{LaunchConfigUiLocation, TelemetryEvent};
-use crate::settings_view::{
-    SettingsSection, settings_widget_deeplink_target,
-};
+use crate::settings_view::{SettingsSection, settings_widget_deeplink_target};
 use crate::tab_configs::TabConfig;
 use crate::user_config::{load_launch_configs, load_tab_configs, tab_configs_dir};
 use crate::util::openable_file_type::{
@@ -1028,30 +1023,14 @@ impl Action {
                 log::warn!("cloud agent setup deeplink is not supported in this build");
             }
             Action::NewCloudAgentConversation => {
-                let Some(window_id) = primary_window_id else {
-                    open_new_with_workspace_source(NewWorkspaceSource::AmbientAgent, ctx);
-                    return;
-                };
-
-                let Some(mut workspaces) = ctx.views_of_type::<Workspace>(window_id) else {
-                    log::warn!(
-                        "no workspace found in window {window_id} for new cloud agent conversation action"
-                    );
-                    return;
-                };
-
-                match workspaces.pop() {
-                    Some(workspace) => {
-                        workspace.update(ctx, |workspace, ctx| {
-                            workspace.handle_action(&WorkspaceAction::AddAmbientAgentTab, ctx);
-                        });
-                    }
-                    _ => {
-                        log::warn!(
-                            "no workspace views in window {window_id} for new cloud agent conversation action"
-                        );
-                    }
-                }
+                // Heddle (FOSS): the ambient cloud-agent runtime is removed, so this
+                // deeplink has no destination. Previously the no-window branch opened a
+                // `NewWorkspaceSource::AmbientAgent` workspace, which — with the ambient
+                // runtime gone — would render an inert loading pane; the with-window
+                // branch dispatched `AddAmbientAgentTab`, already a `CloudMode`-gated
+                // no-op. Treat the whole deeplink as unsupported, mirroring
+                // `Action::CloudAgentSetup` above.
+                log::warn!("new cloud agent conversation deeplink is not supported in this build");
             }
             Action::NewAgentConversation => {
                 let window_id =

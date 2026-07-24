@@ -365,7 +365,11 @@ fn resolve_pane_node(
         let pane_mode = match pane_type {
             TabConfigPaneType::Terminal => PaneMode::Terminal,
             TabConfigPaneType::Agent => PaneMode::Agent,
-            TabConfigPaneType::Cloud => PaneMode::Cloud,
+            // Heddle (FOSS): the ambient cloud-agent runtime is removed, so a
+            // `type = "cloud"` pane opens as a normal local terminal rather than a
+            // (view-model-less) cloud viewer that would render an indefinite
+            // loading pane. See the ambient-runtime-removal plan.
+            TabConfigPaneType::Cloud => PaneMode::Terminal,
         };
 
         let cwd = node

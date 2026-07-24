@@ -3076,16 +3076,24 @@ impl TerminalView {
         initial_input_config: Option<InputConfig>,
         conversation_restoration: Option<ConversationRestorationInNewPaneType>,
         inactive_pty_reads_rx: Option<async_broadcast::InactiveReceiver<Arc<Vec<u8>>>>,
-        is_ambient_agent: bool,
+        _is_ambient_agent: bool,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let terminal_view_id = ctx.view_id();
         let active_session = ctx.add_model(|ctx| {
             ActiveSession::new(sessions.clone(), model_events_handle.clone(), ctx)
         });
-        let ambient_agent_view_model = is_ambient_agent.then(|| {
-            ctx.add_model(|ctx| ambient_agent::AmbientAgentViewModel::new(terminal_view_id, ctx))
-        });
+        // Heddle (FOSS): the ambient cloud-agent runtime is removed, so a pane is
+        // never backed by an `AmbientAgentViewModel` at construction. Every consumer's
+        // `Option<ModelHandle<AmbientAgentViewModel>>` is therefore `None`, and a
+        // would-be "cloud" pane (a `NewCloudAgentConversation` deeplink, a `type="cloud"`
+        // tab config, or `EnterCloudAgentView`) degrades gracefully to a normal local
+        // pane. The `_is_ambient_agent` flag is retained on the signature only until the
+        // pane/tab creators are deleted (see the ambient-runtime-removal plan). The lazy
+        // shared-session viewer path (`ensure_ambient_agent_view_model`) needs a live
+        // Warp backend and so is unreachable here.
+        let ambient_agent_view_model: Option<ModelHandle<ambient_agent::AmbientAgentViewModel>> =
+            None;
 
         let ephemeral_message_model = ctx.add_model(|_| EphemeralMessageModel::new());
 
