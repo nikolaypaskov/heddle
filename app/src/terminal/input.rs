@@ -2220,9 +2220,9 @@ impl Input {
         // `Option<ModelHandle<AmbientAgentViewModel>>` must be wired here (via its
         // `set_ambient_agent_view_model` setter) rather than at construction, otherwise the two
         // paths drift. Currently propagated: input subscription, agent input footer (which forwards
-        // to its environment selector, model/harness selector, V2 model selector, and display-chip
-        // config), agent status bar, slash-command data sources, the inline model-selector data
-        // source, and the inline skill-selector data source.
+        // to its environment selector, model/harness selector, and display-chip config), agent
+        // status bar, slash-command data sources, the inline model-selector data source, and the
+        // inline skill-selector data source.
         // Intentionally NOT wired here (verified safe): the UDI button bar's selectors (not rendered
         // in agent view, so unreachable for a cloud viewer) and per-exchange AI blocks / ambient
         // setup-command blocks (created after the model exists).
@@ -15817,17 +15817,12 @@ impl View for Input {
             .agent_input_footer
             .as_ref(app)
             .is_model_selector_open(app);
-        let is_v2_model_selector_open = self
-            .agent_input_footer
-            .as_ref(app)
-            .is_v2_model_selector_open(app);
         let is_v2_environment_selector_open = self
             .agent_input_footer
             .as_ref(app)
             .is_v2_environment_selector_open(app);
         if is_profile_model_selector_open
             || is_agent_footer_model_selector_open
-            || is_v2_model_selector_open
             || is_v2_environment_selector_open
         {
             ctx.set.insert("ProfileModelSelectorOpen");

@@ -2,7 +2,6 @@ mod auth_secret_ftux_dropdown;
 mod auth_secret_ftux_view;
 mod block;
 mod model;
-mod model_selector;
 mod progress;
 mod progress_ui_state;
 mod tips;
@@ -15,9 +14,6 @@ pub(crate) use model::PendingHandoff;
 pub use model::{AgentProgress, AmbientAgentViewModel, AmbientAgentViewModelEvent, Status};
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 pub(crate) use model::{HandoffSubmissionState, SnapshotUploadStatus};
-pub use model_selector::{
-    HarnessSelection, ModelSelection, ModelSelector, ModelSelectorAction, ModelSelectorEvent,
-};
 pub use progress::{ProgressProps, ProgressStep, ProgressStepState, render_progress};
 pub use progress_ui_state::AmbientAgentProgressUIState;
 pub use tips::{CloudModeTip, get_cloud_mode_tips};

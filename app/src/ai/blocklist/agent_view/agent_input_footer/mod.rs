@@ -24,7 +24,6 @@ use tokio::fs;
 use toolbar_item::AgentToolbarItemKind;
 #[cfg(feature = "voice_input")]
 use voice_input::{StartListeningError, VoiceSessionResult};
-use warp_cli::agent::Harness;
 use warp_core::context_flag::ContextFlag;
 use warp_core::ui::color::ContrastingColor;
 use warp_core::ui::color::blend::Blend;
@@ -58,7 +57,6 @@ use crate::ai::blocklist::history_model::{BlocklistAIHistoryEvent, BlocklistAIHi
 use crate::ai::blocklist::prompt::prompt_alert::{PromptAlertEvent, PromptAlertView};
 use crate::ai::blocklist::usage::icon_for_context_window_usage;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::appearance::Appearance;
 use crate::auth::{AuthManager, AuthStateProvider};
 use crate::completer::SessionContext;
@@ -96,9 +94,7 @@ use crate::terminal::session_settings::{
     SessionSettings, SessionSettingsChangedEvent, ToolbarChipSelection,
 };
 use crate::terminal::shared_session::SharedSessionStatus;
-use crate::terminal::view::ambient_agent::{
-    AmbientAgentViewModel, ModelSelector, ModelSelectorEvent,
-};
+use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::terminal::view::init::OPEN_CLI_AGENT_RICH_INPUT_KEYBINDING;
 use crate::terminal::view::{AIQueryRouting, TerminalAction, resolve_ai_query_routing};
 use crate::terminal::{CLIAgent, TerminalModel};
@@ -253,7 +249,6 @@ pub struct AgentInputFooter {
     cli_voice_input_state: CLIVoiceInputState,
     #[cfg(feature = "voice_input")]
     cli_transcription_handle: Option<SpawnedFutureHandle>,
-    v2_model_selector: Option<ViewHandle<ModelSelector>>,
 
     /// Pending one-shot timer that refreshes the context-window button at the
     /// prompt-cache expiry instant so the notification dot appears while idle.
@@ -314,15 +309,6 @@ impl AgentInputFooter {
         });
         self.environment_selector = Some(environment_selector);
 
-        // Push the model into the V2 model selector chip, which was built with `None` at
-        // construction. Uses the `ModelSelector` setter so construction and lazy attach wire it
-        // identically.
-        if let Some(v2_model_selector) = self.v2_model_selector.clone() {
-            let v2_selector_model = ambient_agent_view_model.clone();
-            v2_model_selector.update(ctx, |selector, ctx| {
-                selector.set_ambient_agent_view_model(v2_selector_model, ctx);
-            });
-        }
 
         // Re-render on ambient model events (mirrors `new`).
         ctx.subscribe_to_model(&ambient_agent_view_model, |_, _, _, ctx| {
@@ -870,31 +856,6 @@ impl AgentInputFooter {
             me.update_display_chips(&model, ctx);
         });
 
-        let v2_model_selector = if FeatureFlag::CloudModeInputV2.is_enabled() {
-            let view = ctx.add_typed_action_view(|ctx| {
-                // Built without the ambient model; the footer's ambient setter attaches it via the
-                // `ModelSelector` setter so construction and the lazy viewer path share one path.
-                ModelSelector::new(
-                    menu_positioning_provider.clone(),
-                    terminal_view_id,
-                    None,
-                    ctx,
-                )
-            });
-            ctx.subscribe_to_view(&view, |_, _, event, ctx| match event {
-                ModelSelectorEvent::MenuVisibilityChanged { open } => {
-                    if *open {
-                        ctx.emit(AgentInputFooterEvent::ModelSelectorOpened);
-                    } else {
-                        ctx.emit(AgentInputFooterEvent::ModelSelectorClosed);
-                    }
-                }
-            });
-            Some(view)
-        } else {
-            None
-        };
-
         let mut me = Self {
             terminal_view_id,
             ambient_agent_view_model: None,
@@ -932,7 +893,6 @@ impl AgentInputFooter {
             cli_voice_input_state: CLIVoiceInputState::default(),
             #[cfg(feature = "voice_input")]
             cli_transcription_handle: None,
-            v2_model_selector,
             prompt_cache_expiry_timer_handle: None,
             prompt_cache_expired: false,
         };
@@ -961,18 +921,6 @@ impl AgentInputFooter {
         // Chips will be rebuilt on the next GitRepoStatusEvent::MetadataChanged.
         // Notify to ensure any existing chips reflect the change.
         ctx.notify();
-    }
-
-    pub fn is_v2_model_selector_open(&self, app: &AppContext) -> bool {
-        self.v2_model_selector
-            .as_ref()
-            .is_some_and(|s| s.as_ref(app).is_menu_open())
-    }
-
-    pub fn open_v2_model_selector(&mut self, ctx: &mut ViewContext<Self>) {
-        if let Some(selector) = self.v2_model_selector.clone() {
-            selector.update(ctx, |s, ctx| s.open_menu(ctx));
-        }
     }
 
     pub fn is_v2_environment_selector_open(&self, app: &AppContext) -> bool {
@@ -1027,24 +975,6 @@ impl AgentInputFooter {
         }
 
         right = right.with_child(ChildView::new(&self.file_button).finish());
-
-        if let Some(model_selector) = self.v2_model_selector.as_ref() {
-            // Only show the model selector when the active harness has available models.
-            // Some harnesses (e.g. Gemini) may not have any server-provided model options.
-            let show_selector = self
-                .ambient_agent_view_model
-                .as_ref()
-                .map(|m| m.as_ref(app).selected_harness())
-                .is_none_or(|harness| match harness {
-                    Harness::Oz | Harness::Unknown => true,
-                    _ => HarnessAvailabilityModel::as_ref(app)
-                        .models_for(harness)
-                        .is_some_and(|models| !models.is_empty()),
-                });
-            if show_selector {
-                right = right.with_child(ChildView::new(model_selector).finish());
-            }
-        }
 
         let content = Flex::row()
             .with_main_axis_size(MainAxisSize::Max)

@@ -962,16 +962,7 @@ impl Input {
                 return true;
             }
             _models if command.name == commands::MODEL.name => {
-                if self.is_cloud_mode_input_v2_composing(ctx) {
-                    self.suggestions_mode_model.update(ctx, |model, ctx| {
-                        model.set_mode(InputSuggestionsMode::Closed, ctx);
-                    });
-                    self.clear_buffer_and_reset_undo_stack(ctx);
-                    self.agent_input_footer.update(ctx, |footer, ctx| {
-                        footer.open_v2_model_selector(ctx);
-                    });
-                    return true;
-                } else if trigger.is_keybinding() {
+                if trigger.is_keybinding() {
                     // A keybinding may carry a pre-existing prompt in the buffer; open
                     // like the model chip so the prompt is parked for search and
                     // restored when a model is selected (or the selector is dismissed).
