@@ -280,14 +280,6 @@ impl AgentInputFooter {
         self.ambient_agent_view_model = Some(ambient_agent_view_model.clone());
         self.display_chip_config.ambient_agent_view_model = Some(ambient_agent_view_model.clone());
 
-        // Push the model into the model/harness selector chip too. It captured `None` at
-        // construction on this link-join path, so without this it shows the local default model
-        // instead of the viewed cloud run's harness/model.
-        let selector_model = ambient_agent_view_model.clone();
-        self.model_selector.update(ctx, |selector, ctx| {
-            selector.set_ambient_agent_view_model(selector_model, ctx);
-        });
-
         // Build the environment selector now that the model exists (mirrors `new`).
         let environment_selector = ctx.add_typed_action_view(|ctx| {
             EnvironmentSelector::new(
@@ -308,7 +300,6 @@ impl AgentInputFooter {
             }
         });
         self.environment_selector = Some(environment_selector);
-
 
         // Re-render on ambient model events (mirrors `new`).
         ctx.subscribe_to_model(&ambient_agent_view_model, |_, _, _, ctx| {
@@ -693,13 +684,10 @@ impl AgentInputFooter {
         });
 
         let profile_model_selector_full = ctx.add_typed_action_view(|ctx| {
-            // Built without the ambient model; the footer's ambient setter attaches it (for both
-            // construction and the lazy viewer path) via `ProfileModelSelector::set_ambient_agent_view_model`.
             let mut selector = ProfileModelSelector::new(
                 menu_positioning_provider.clone(),
                 terminal_view_id,
                 ai_input_model,
-                None,
                 terminal_model.clone(),
                 None,
                 ctx,
