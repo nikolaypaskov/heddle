@@ -130,7 +130,14 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   built as the footer's `v2_model_selector`, gated on `CloudModeInputV2`, absent
   from OSS), NOT a shared local picker as originally believed. No split/relocate
   needed. The `/model` command still reaches the local `InlineModelSelectorView`.
-- **Slice 3b — DEFERRED behind Slice 0.** `profile_model_selector.rs`: drop the
+- **Slice 3b — DONE (`9b9cbc44`), Codex-approved.** Stripped all ambient bits from
+  `ProfileModelSelector` (the LOCAL model picker): removed the field/setter/`new()`
+  param, the cloud-lock predicates + harness-model machinery + `SelectHarnessModel`
+  action, and the `HarnessAvailabilityModel::Changed` subscription; collapsed every
+  consumer to its local branch. Codex confirmed local selection + shared-session
+  viewer/executor protection are unchanged. `universal_developer_input`'s ambient
+  param kept (underscored) for the Slice 4 sweep. 5731/13.
+  Original note: `profile_model_selector.rs`: drop the
   `ambient_agent_view_model` field, `set_ambient_agent_view_model`,
   `is_third_party_harness`, and the harness-model menu paths. This field is fed by
   the shared `attach_ambient_agent_view_model` fan-out (`input.rs`) — the SAME
