@@ -58,7 +58,6 @@ use settings::{Setting as _, ToggleableSetting};
 use string_offset::{ByteOffset, CharOffset};
 use vec1::Vec1;
 use vim::vim::{VimHandler, VimMode};
-use warp_cli::agent::Harness;
 use warp_completer::completer::{
     self, CompleterOptions, CompletionContext, CompletionsFallbackStrategy, Description, Match,
     MatchStrategy, MatchType, PathSeparators, SuggestionResults,
@@ -185,7 +184,6 @@ use crate::ai::blocklist::{
     QueuedQueryOrigin, SlashCommandRequest, ai_brand_color, ai_indicator_height,
     render_ai_agent_mode_icon, render_ai_follow_up_icon,
 };
-use crate::ai::cloud_agent_settings::CloudAgentSettings;
 use crate::ai::cloud_environments::CloudAmbientAgentEnvironment;
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::conversation_export::export_conversation_markdown;
@@ -313,10 +311,6 @@ use crate::terminal::model::session::shell_quote_arg;
 use crate::terminal::package_installers::command_at_cursor_has_common_package_installer_prefix;
 use crate::terminal::prompt_render_helper::should_render_ps1_prompt;
 use crate::terminal::universal_developer_input::AtContextMenuDisabledReason;
-use crate::terminal::view::ambient_agent::{
-    AuthSecretFtuxView, AuthSecretFtuxViewEvent, AuthSecretSelector, AuthSecretSelectorEvent,
-    HarnessSelector, HarnessSelectorEvent, HostSelector, HostSelectorEvent, NakedHeaderButtonTheme,
-};
 use crate::terminal::view::inline_banner::{PromptSuggestionsEvent, PromptSuggestionsView};
 use crate::terminal::view::{AIQueryRouting, CodeDiffAction, resolve_ai_query_routing};
 use crate::ui_components::blended_colors;
@@ -349,7 +343,6 @@ use crate::workspace::{
     CommandSearchOptions, ForkFromExchange, ForkedConversationDestination, InitContent,
     RestoreConversationLayout, ToastStack, WorkspaceAction,
 };
-use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 #[allow(unused_imports)]
 use crate::{AgentModeEntrypoint, ServerApiProvider, cmd_or_ctrl_shift, send_telemetry_from_ctx};
 
@@ -1084,9 +1077,6 @@ pub enum Event {
         document_id: AIDocumentId,
         document_version: AIDocumentVersion,
     },
-    AuthSecretDeleteConfirmationDialogToggled {
-        is_open: bool,
-    },
     ShowToast {
         message: String,
         flavor: ToastFlavor,
@@ -1750,11 +1740,6 @@ pub struct Input {
 
 struct AmbientAgentViewState {
     view_model: ModelHandle<AmbientAgentViewModel>,
-    #[allow(dead_code)]
-    harness_selector: ViewHandle<HarnessSelector>,
-    host_selector: Option<ViewHandle<HostSelector>>,
-    auth_secret_selector: Option<ViewHandle<AuthSecretSelector>>,
-    auth_secret_ftux_view: Option<ViewHandle<AuthSecretFtuxView>>,
 }
 
 impl AmbientAgentViewState {
@@ -2174,209 +2159,10 @@ impl Input {
         });
     }
 
-    /// Builds the cloud-mode harness selector for an ambient agent view model. Shared by
-    /// [`Self::new`] and [`Self::attach_ambient_agent_view_model`] so construction and late
-    /// attach produce the same selector wiring.
-    fn build_harness_selector(
-        view_model: ModelHandle<AmbientAgentViewModel>,
-        menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
-        ctx: &mut ViewContext<Self>,
-    ) -> ViewHandle<HarnessSelector> {
-        let harness_selector = ctx.add_typed_action_view(|ctx| {
-            HarnessSelector::new(menu_positioning_provider.clone(), view_model.clone(), ctx)
-        });
-        if FeatureFlag::CloudModeInputV2.is_enabled() {
-            harness_selector.update(ctx, |selector, ctx| {
-                selector.set_button_theme(NakedHeaderButtonTheme, ctx);
-            });
-        }
-        // Mirror the V2 model selector / host selector refocus path: when the
-        // harness selector menu closes (item picked or dismissed via Esc /
-        // click-outside), restore focus to the input editor so typing resumes
-        // immediately. This powers the "input is focused after the harness
-        // selector closes" UX for the `/harness` slash command.
-        ctx.subscribe_to_view(&harness_selector, |me, _, event, ctx| {
-            let HarnessSelectorEvent::MenuVisibilityChanged { open } = event;
-            if !*open {
-                me.focus_input_box(ctx);
-            }
-        });
-        harness_selector
-    }
-
-    /// Builds the cloud-mode host selector for an ambient agent view model. Composer-only
-    /// (a viewer of an existing run does not choose a host). Shared by
-    /// [`Self::attach_ambient_agent_view_model`], which is the single wiring point for both the
-    /// eager (`Input::new`) and lazy (`SessionJoined`) paths.
-    fn build_host_selector(
-        view_model: ModelHandle<AmbientAgentViewModel>,
-        menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
-        ctx: &mut ViewContext<Self>,
-    ) -> ViewHandle<HostSelector> {
-        let view = ctx
-            .add_typed_action_view(|ctx| HostSelector::new(menu_positioning_provider.clone(), ctx));
-        // Env var takes priority over workspace setting for developer testing.
-        let effective_host = std::env::var("WARP_CLOUD_MODE_DEFAULT_HOST")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                UserWorkspaces::as_ref(ctx)
-                    .default_host_slug()
-                    .map(String::from)
-            });
-        if let Some(slug) = &effective_host {
-            view.update(ctx, |selector, ctx| {
-                selector.set_default_host(slug.clone(), ctx);
-            });
-        }
-        if let Some(slug) = effective_host {
-            view_model.update(ctx, |model, _ctx| {
-                model.set_worker_host(Some(slug));
-            });
-        }
-        // When the host selector menu closes (item picked or dismissed via Esc / click-outside),
-        // restore focus to the input editor so typing resumes immediately.
-        ctx.subscribe_to_view(&view, |me, _, event, ctx| {
-            if matches!(
-                event,
-                HostSelectorEvent::MenuVisibilityChanged { open: false }
-            ) {
-                me.focus_input_box(ctx);
-            }
-        });
-        // Propagate host selection changes to the view model when a host is explicitly selected,
-        // rather than on menu close, to avoid a race where the menu closes before the selection
-        // updates.
-        let vm_for_host = view_model.clone();
-        ctx.subscribe_to_view(&view, move |_me, handle, event, ctx| {
-            if matches!(event, HostSelectorEvent::HostSelected) {
-                let selected = handle.as_ref(ctx).selected().clone();
-                vm_for_host.update(ctx, |model, _ctx| {
-                    model.set_worker_host(selected.worker_host_value());
-                });
-            }
-        });
-        // Keep the host selector and view model in sync when workspace metadata refreshes (e.g.
-        // admin changes default_host_slug).
-        let view_for_ws = view.clone();
-        let vm_for_ws = view_model.clone();
-        ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), move |_me, _, event, ctx| {
-            if !matches!(event, UserWorkspacesEvent::TeamsChanged) {
-                return;
-            }
-            let effective_host = std::env::var("WARP_CLOUD_MODE_DEFAULT_HOST")
-                .ok()
-                .filter(|s| !s.is_empty())
-                .or_else(|| {
-                    UserWorkspaces::as_ref(ctx)
-                        .default_host_slug()
-                        .map(String::from)
-                });
-            if let Some(slug) = &effective_host {
-                view_for_ws.update(ctx, |selector, ctx| {
-                    selector.set_default_host(slug.clone(), ctx);
-                });
-            }
-            if let Some(slug) = effective_host {
-                vm_for_ws.update(ctx, |model, _ctx| {
-                    model.set_worker_host(Some(slug));
-                });
-            }
-        });
-        view
-    }
-
-    /// Builds the cloud-mode auth-secret selector and its FTUX view for an ambient agent view
-    /// model. Composer-only. Shared by [`Self::attach_ambient_agent_view_model`], which is the
-    /// single wiring point for both the eager (`Input::new`) and lazy (`SessionJoined`) paths.
-    fn build_auth_secret_selector(
-        view_model: ModelHandle<AmbientAgentViewModel>,
-        menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
-        ctx: &mut ViewContext<Self>,
-    ) -> (
-        ViewHandle<AuthSecretSelector>,
-        ViewHandle<AuthSecretFtuxView>,
-    ) {
-        let selector = ctx.add_typed_action_view(|ctx| {
-            AuthSecretSelector::new(menu_positioning_provider.clone(), view_model.clone(), ctx)
-        });
-        ctx.subscribe_to_view(&selector, |me, _, event, ctx| match event {
-            AuthSecretSelectorEvent::MenuVisibilityChanged { open: false } => {
-                me.focus_input_box(ctx);
-            }
-            AuthSecretSelectorEvent::NewTypeSelected {
-                harness,
-                type_index,
-            } => {
-                if let Some(ftux_view) = me.auth_secret_ftux_view().cloned() {
-                    let harness = *harness;
-                    let type_index = *type_index;
-                    ftux_view.update(ctx, |view, ctx| {
-                        view.enter_creation_state_public(harness, type_index, ctx);
-                    });
-                }
-                ctx.notify();
-            }
-            AuthSecretSelectorEvent::DeleteConfirmationDialogToggled { is_open } => {
-                ctx.emit(Event::AuthSecretDeleteConfirmationDialogToggled { is_open: *is_open });
-            }
-            AuthSecretSelectorEvent::MenuVisibilityChanged { open: true } => {}
-        });
-        let initial_harness = view_model.as_ref(ctx).selected_harness();
-        let ftux_view =
-            ctx.add_typed_action_view(|ctx| AuthSecretFtuxView::new(initial_harness, ctx));
-
-        // Forward the pane's harness changes into the FTUX view.
-        let ftux_for_harness_sub = ftux_view.clone();
-        ctx.subscribe_to_model(&view_model, move |_me, vm, event, ctx| {
-            if matches!(event, AmbientAgentViewModelEvent::HarnessSelected) {
-                let harness = vm.as_ref(ctx).selected_harness();
-                ftux_for_harness_sub.update(ctx, |view, ctx| {
-                    view.set_harness(harness, ctx);
-                });
-            }
-        });
-
-        // Cloud-mode side effects on FTUX events: update the pane's harness auth secret, persist
-        // `last_selected_auth_secret`, mark FTUX completed.
-        let vm_for_events = view_model.clone();
-        ctx.subscribe_to_view(&ftux_view, move |_me, _, event, ctx| match event {
-            AuthSecretFtuxViewEvent::SecretSelected { harness, name }
-            | AuthSecretFtuxViewEvent::Created { harness, name } => {
-                let harness = *harness;
-                let name = name.clone();
-                vm_for_events.update(ctx, |model, ctx| {
-                    model.set_harness_auth_secret_name(Some(name.clone()), ctx);
-                });
-                CloudAgentSettings::handle(ctx).update(ctx, |settings, ctx| {
-                    settings.mark_harness_auth_ftux_completed(harness, ctx);
-                    let mut map = settings.last_selected_auth_secret.value().clone();
-                    map.insert(harness.config_name().to_string(), name);
-                    let _ = settings.last_selected_auth_secret.set_value(map, ctx);
-                });
-            }
-            AuthSecretFtuxViewEvent::Cancelled => {
-                vm_for_events.update(ctx, |model, ctx| {
-                    model.set_harness(Harness::Oz, ctx);
-                });
-            }
-            AuthSecretFtuxViewEvent::Skipped { harness } => {
-                let harness = *harness;
-                CloudAgentSettings::handle(ctx).update(ctx, |settings, ctx| {
-                    settings.mark_harness_auth_ftux_completed(harness, ctx);
-                });
-            }
-            AuthSecretFtuxViewEvent::Failed { .. } => {}
-        });
-        (selector, ftux_view)
-    }
-
     /// Wires an ambient agent view model into this input. This is the SINGLE wiring point,
     /// invoked by both `Input::new` (eager/composer, when a model is supplied at construction)
     /// and the shared-session viewer's `SessionJoined` path (lazy, e.g. a raw `shared_session`
-    /// link that turns out to be a cloud run). Idempotent: a no-op when already wired. Builds the
-    /// composer-only sub-views (host / auth-secret / FTUX selectors) only for a non-viewer, since
-    /// a viewer of an existing run does not compose a new run.
+    /// link that turns out to be a cloud run). Idempotent: a no-op when already wired.
     pub(crate) fn attach_ambient_agent_view_model(
         &mut self,
         view_model: ModelHandle<AmbientAgentViewModel>,
@@ -2386,11 +2172,6 @@ impl Input {
             return;
         }
         Self::subscribe_to_ambient_agent_view_model(&view_model, ctx);
-        let harness_selector = Self::build_harness_selector(
-            view_model.clone(),
-            self.menu_positioning_provider.clone(),
-            ctx,
-        );
         // Push the model down to the footer (parent -> child) so its environment selector
         // reflects the cloud run. On this link-join path the footer captured `None` at
         // construction, so it must be given the model now to render the environment chip.
@@ -2438,45 +2219,14 @@ impl Input {
         // viewer's `SessionJoined` path (lazy) funnel through here, so any component that captures
         // `Option<ModelHandle<AmbientAgentViewModel>>` must be wired here (via its
         // `set_ambient_agent_view_model` setter) rather than at construction, otherwise the two
-        // paths drift. Currently propagated: input subscription, harness selector, agent input
-        // footer (which forwards to its environment selector, model/harness selector, V2 model
-        // selector, and display-chip config), agent status bar, slash-command data sources, the
-        // inline model-selector data source, and the inline skill-selector data source.
+        // paths drift. Currently propagated: input subscription, agent input footer (which forwards
+        // to its environment selector, model/harness selector, V2 model selector, and display-chip
+        // config), agent status bar, slash-command data sources, the inline model-selector data
+        // source, and the inline skill-selector data source.
         // Intentionally NOT wired here (verified safe): the UDI button bar's selectors (not rendered
         // in agent view, so unreachable for a cloud viewer) and per-exchange AI blocks / ambient
         // setup-command blocks (created after the model exists).
-        //
-        // The host / auth-secret / FTUX selectors are composer-only: a viewer of an existing run
-        // does not compose a new run, so they stay `None` for a shared-session viewer.
-        let is_cloud_mode_composer = self.model.lock().is_dummy_cloud_mode_session();
-        let (host_selector, auth_secret_selector, auth_secret_ftux_view) = if is_cloud_mode_composer
-            && FeatureFlag::CloudModeInputV2.is_enabled()
-        {
-            let host_selector = Self::build_host_selector(
-                view_model.clone(),
-                self.menu_positioning_provider.clone(),
-                ctx,
-            );
-            let (auth_secret_selector, auth_secret_ftux_view) = Self::build_auth_secret_selector(
-                view_model.clone(),
-                self.menu_positioning_provider.clone(),
-                ctx,
-            );
-            (
-                Some(host_selector),
-                Some(auth_secret_selector),
-                Some(auth_secret_ftux_view),
-            )
-        } else {
-            (None, None, None)
-        };
-        self.ambient_agent_view_state = Some(AmbientAgentViewState {
-            view_model,
-            harness_selector,
-            host_selector,
-            auth_secret_selector,
-            auth_secret_ftux_view,
-        });
+        self.ambient_agent_view_state = Some(AmbientAgentViewState { view_model });
         ctx.notify();
     }
 
@@ -2632,9 +2382,8 @@ impl Input {
             )
         });
 
-        // Ambient view state (harness / host / auth selectors) is built in
-        // `attach_ambient_agent_view_model`, the single wiring point shared by this constructor
-        // and the lazy shared-session viewer path.
+        // Ambient view state is set in `attach_ambient_agent_view_model`, the single wiring point
+        // shared by this constructor and the lazy shared-session viewer path.
         let ambient_agent_view_state: Option<AmbientAgentViewState> = None;
         ctx.subscribe_to_view(&agent_input_footer, |me, _, event, ctx| {
             match event {
@@ -4122,58 +3871,6 @@ impl Input {
         if !self.maybe_route_ai_query_to_remote_target(ctx) {
             self.submit_ai_query_local(zero_state_prompt_suggestion_type, ctx);
         }
-    }
-
-    fn harness_selector(&self) -> Option<&ViewHandle<HarnessSelector>> {
-        self.ambient_agent_view_state
-            .as_ref()
-            .map(|state| &state.harness_selector)
-    }
-
-    fn host_selector(&self) -> Option<&ViewHandle<HostSelector>> {
-        self.ambient_agent_view_state
-            .as_ref()
-            .and_then(|state| state.host_selector.as_ref())
-    }
-
-    fn auth_secret_selector(&self) -> Option<&ViewHandle<AuthSecretSelector>> {
-        self.ambient_agent_view_state
-            .as_ref()
-            .and_then(|state| state.auth_secret_selector.as_ref())
-    }
-
-    pub(super) fn auth_secret_delete_confirmation_dialog_element(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<Box<dyn Element>> {
-        self.auth_secret_selector()
-            .map(|selector| selector.as_ref(ctx).delete_confirmation_dialog_element())
-    }
-
-    pub(super) fn auth_secret_ftux_view(&self) -> Option<&ViewHandle<AuthSecretFtuxView>> {
-        self.ambient_agent_view_state
-            .as_ref()
-            .and_then(|state| state.auth_secret_ftux_view.as_ref())
-    }
-
-    /// Opens the V2 cloud-mode host selector popover, if the feature is enabled and the
-    /// selector is constructed. No-op otherwise. Used by the `/host` slash command to
-    /// programmatically open the same popover that the V2 footer's host button toggles.
-    pub(super) fn open_v2_host_selector(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(host_selector) = self.host_selector().cloned() else {
-            return;
-        };
-        host_selector.update(ctx, |selector, ctx| selector.open_menu(ctx));
-    }
-
-    /// Opens the V2 cloud-mode harness selector popover, if the feature is enabled and the
-    /// selector is constructed. No-op otherwise. Used by the `/harness` slash command to
-    /// programmatically open the same popover that the V2 footer's harness button toggles.
-    pub(super) fn open_v2_harness_selector(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(harness_selector) = self.harness_selector().cloned() else {
-            return;
-        };
-        harness_selector.update(ctx, |selector, ctx| selector.open_menu(ctx));
     }
 
     pub(super) fn open_v2_environment_selector(&mut self, ctx: &mut ViewContext<Self>) {
@@ -8873,14 +8570,6 @@ impl Input {
     }
 
     pub fn focus_input_box(&self, ctx: &mut ViewContext<Self>) {
-        if self.should_show_auth_secret_ftux(ctx)
-            && let Some(ftux_view) = self.auth_secret_ftux_view().cloned()
-        {
-            ftux_view.update(ctx, |view, ctx| {
-                view.focus_dropdown_editor(ctx);
-            });
-            return;
-        }
         ctx.focus_self();
     }
 
@@ -8949,25 +8638,6 @@ impl Input {
     }
 
     fn editor_up(&mut self, ctx: &mut ViewContext<Self>) {
-        if self.should_show_auth_secret_ftux(ctx) {
-            if let Some(ftux_view) = self.auth_secret_ftux_view().cloned() {
-                ftux_view.update(ctx, |view, ctx| {
-                    view.select_previous_in_dropdown(ctx);
-                });
-            }
-            return;
-        }
-
-        if let Some(selector) = self.auth_secret_selector()
-            && selector.as_ref(ctx).is_menu_open()
-        {
-            let selector = selector.clone();
-            selector.update(ctx, |selector, ctx| {
-                selector.select_previous(ctx);
-            });
-            return;
-        }
-
         if self.is_editing_queued_prompt(ctx) {
             return;
         }
@@ -16151,12 +15821,6 @@ impl View for Input {
             .agent_input_footer
             .as_ref(app)
             .is_v2_model_selector_open(app);
-        let is_v2_host_selector_open = self
-            .host_selector()
-            .is_some_and(|view| view.as_ref(app).is_menu_open());
-        let is_v2_harness_selector_open = self
-            .harness_selector()
-            .is_some_and(|view| view.as_ref(app).is_menu_open());
         let is_v2_environment_selector_open = self
             .agent_input_footer
             .as_ref(app)
@@ -16164,8 +15828,6 @@ impl View for Input {
         if is_profile_model_selector_open
             || is_agent_footer_model_selector_open
             || is_v2_model_selector_open
-            || is_v2_host_selector_open
-            || is_v2_harness_selector_open
             || is_v2_environment_selector_open
         {
             ctx.set.insert("ProfileModelSelectorOpen");

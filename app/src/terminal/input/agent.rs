@@ -1,4 +1,3 @@
-use warp_cli::agent::Harness;
 use warp_core::settings::Setting;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
@@ -22,7 +21,6 @@ use crate::ai::blocklist::agent_view::AgentViewState;
 use crate::ai::blocklist::agent_view::shortcuts::{
     AgentShortcutsViewContext, render_agent_shortcuts_view,
 };
-use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::appearance::Appearance;
 use crate::context_chips::spacing::{self};
 use crate::editor::position_id_for_cursor;
@@ -110,30 +108,6 @@ impl Input {
             column.add_child(
                 Container::new(images)
                     .with_margin_top(spacing::UDI_CHIP_MARGIN)
-                    .finish(),
-            );
-        }
-
-        let show_harness_row = FeatureFlag::CloudMode.is_enabled()
-            && HarnessAvailabilityModel::as_ref(app).should_show_harness_selector()
-            && self
-                .ambient_agent_view_model()
-                .is_some_and(|ambient_agent_model| {
-                    ambient_agent_model
-                        .as_ref(app)
-                        .is_configuring_ambient_agent()
-                });
-        if show_harness_row && let Some(harness_selector) = self.harness_selector() {
-            // Temporarily render the harness selector in the cloud mode UDI until we fully
-            // implement the new designs.
-            let harness_row = Flex::row()
-                .with_main_axis_size(MainAxisSize::Min)
-                .with_child(ChildView::new(harness_selector).finish())
-                .finish();
-            column.add_child(
-                Container::new(harness_row)
-                    .with_padding_top(spacing::UDI_CHIP_MARGIN)
-                    .with_padding_bottom(4.)
                     .finish(),
             );
         }
@@ -474,31 +448,6 @@ impl Input {
         SavePosition::new(outer_stack.finish(), &self.save_position_id()).finish()
     }
 
-    pub(super) fn should_show_auth_secret_ftux(&self, app: &AppContext) -> bool {
-        let Some(view_model) = self.ambient_agent_view_model() else {
-            return false;
-        };
-        let vm = view_model.as_ref(app);
-        let harness = vm.selected_harness();
-        if harness == Harness::Oz {
-            return false;
-        }
-        // Skip FTUX for harnesses that have no auth secret types defined.
-        if crate::ai::auth_secret_types::auth_secret_types_for_harness(harness).is_empty() {
-            return false;
-        }
-        if let Some(ftux_view) = self.auth_secret_ftux_view()
-            && ftux_view.as_ref(app).has_creation_state()
-        {
-            return true;
-        }
-        if crate::ai::cloud_agent_settings::CloudAgentSettings::as_ref(app)
-            .is_harness_auth_ftux_completed(harness)
-        {
-            return false;
-        }
-        vm.selected_harness_auth_secret_name().is_none()
-    }
 
     fn render_cloud_mode_v2_content(
         &self,
@@ -518,11 +467,7 @@ impl Input {
             column.add_child(ChildView::new(panel).finish());
         }
 
-        if self.should_show_auth_secret_ftux(app) {
-            column.add_child(self.render_auth_secret_ftux_content());
-        } else {
-            column.add_child(self.render_cloud_mode_v2_input_container(appearance, app));
-        }
+        column.add_child(self.render_cloud_mode_v2_input_container(appearance, app));
 
         Align::new(
             ConstrainedBox::new(column.finish())
@@ -530,13 +475,6 @@ impl Input {
                 .finish(),
         )
         .finish()
-    }
-
-    fn render_auth_secret_ftux_content(&self) -> Box<dyn Element> {
-        match self.auth_secret_ftux_view() {
-            Some(view) => ChildView::new(view).finish(),
-            None => Empty::new().finish(),
-        }
     }
 
     fn render_cloud_mode_v2_history_menu(&self, app: &AppContext) -> Option<Box<dyn Element>> {
@@ -551,33 +489,15 @@ impl Input {
         Some(ChildView::new(view).finish())
     }
 
-    fn render_cloud_mode_v2_top_row(&self, app: &AppContext) -> Box<dyn Element> {
-        let mut row = Flex::row()
+    fn render_cloud_mode_v2_top_row(&self, _app: &AppContext) -> Box<dyn Element> {
+        // The cloud-mode composer selectors (host / harness / auth-secret) were
+        // removed with the ambient runtime; this row is now empty and is deleted
+        // with the rest of the cloud-mode UI when the model goes.
+        Flex::row()
             .with_main_axis_size(MainAxisSize::Min)
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_spacing(CLOUD_MODE_V2_TOP_ROW_INNER_GAP);
-
-        // Only show the host selector when a default host is configured.
-        if let Some(host) = self.host_selector()
-            && host.as_ref(app).has_default_host()
-        {
-            row.add_child(ChildView::new(host).finish());
-        }
-        if let Some(harness_selector) = self.harness_selector() {
-            row.add_child(ChildView::new(harness_selector).finish());
-        }
-
-        if let Some(auth_secret_selector) = self.auth_secret_selector() {
-            let harness = self
-                .ambient_agent_view_model()
-                .map(|m| m.as_ref(app).selected_harness())
-                .unwrap_or(warp_cli::agent::Harness::Oz);
-            if harness != warp_cli::agent::Harness::Oz && !self.should_show_auth_secret_ftux(app) {
-                row.add_child(ChildView::new(auth_secret_selector).finish());
-            }
-        }
-
-        row.finish()
+            .with_spacing(CLOUD_MODE_V2_TOP_ROW_INNER_GAP)
+            .finish()
     }
 
     fn render_cloud_mode_v2_input_container(

@@ -71,7 +71,7 @@ pub enum AuthSecretFtuxAction {
     /// Toggle the "Share with team" checkbox on the creation form.
     ToggleTeamScope,
     /// Toggle the compact-mode harness picker. Ignored when compact mode
-    /// is disabled (cloud mode).
+    /// is disabled.
     ToggleHarnessMenu,
     /// Picks a harness in compact mode. The view forwards to
     /// `set_harness`, which clears in-progress creation state and
@@ -81,7 +81,7 @@ pub enum AuthSecretFtuxAction {
 
 /// Lifecycle events the view emits to its host. Side effects (persist
 /// selection, mark FTUX complete, etc.) are the host's responsibility so the
-/// same view can be embedded in cloud mode or in a workspace-level modal.
+/// view can be embedded in a workspace-level modal.
 #[derive(Debug, Clone)]
 pub enum AuthSecretFtuxViewEvent {
     /// User picked an existing secret from the in-view dropdown.
@@ -128,8 +128,8 @@ pub struct AuthSecretFtuxView {
     continue_mouse_state: MouseStateHandle,
     learn_more_mouse_state: MouseStateHandle,
     team_checkbox_mouse_state: MouseStateHandle,
-    /// Suppresses the in-dropdown "Skip" item; default `false` (cloud mode
-    /// keeps Skip, orchestration modal hides it).
+    /// Suppresses the in-dropdown "Skip" item; default `false` (the
+    /// orchestration modal sets it to hide Skip).
     skip_hidden: bool,
     /// Compact (orchestration-modal) presentation: no description, dropdown
     /// hides existing secrets and Skip, auto-enters creation for the first

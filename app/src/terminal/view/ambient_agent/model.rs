@@ -254,8 +254,7 @@ pub struct AmbientAgentViewModel {
     /// Selected execution harness for the cloud agent run.
     /// Defaults to `Harness::Oz`. Used to populate `AgentConfigSnapshot.harness` on spawn.
     harness: Harness,
-    /// Selected worker host for the cloud agent run. Populated from the HostSelector
-    /// (which resolves env var > workspace setting) and read by `spawn_agent`.
+    /// Selected worker host for the cloud agent run, read by `spawn_agent`.
     worker_host: Option<String>,
     /// Selected model id for a third-party harness (e.g. `"opus"` for Claude).
     harness_model_id: Option<String>,
@@ -1820,7 +1819,7 @@ pub enum AmbientAgentViewModelEvent {
     HarnessSelected,
     /// A shared-session viewer resolved the run harness from the server task.
     ViewerHarnessResolved,
-    /// The selected worker host changed via the HostSelector.
+    /// The selected worker host changed.
     HostSelected,
     /// The selected third-party harness model id changed (e.g. user picked `"opus"` for Claude).
     HarnessModelSelected,

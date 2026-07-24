@@ -939,35 +939,16 @@ impl Input {
                 self.open_invoke_skill_selector(ctx);
             }
             _host if command.name == commands::HOST.name => {
-                if !self.is_cloud_mode_input_v2_composing(ctx) {
-                    return false;
-                }
-                // Only open the host selector when a default host is configured.
-                if self
-                    .host_selector()
-                    .is_none_or(|h| !h.as_ref(ctx).has_default_host())
-                {
-                    return false;
-                }
-                self.suggestions_mode_model.update(ctx, |model, ctx| {
-                    model.set_mode(InputSuggestionsMode::Closed, ctx);
-                });
-                self.clear_buffer_and_reset_undo_stack(ctx);
-                self.open_v2_host_selector(ctx);
-                return true;
+                // The cloud-mode host selector was removed with the ambient runtime;
+                // the command is only registered in a cloud-mode-V2 composer, which
+                // does not exist in this build.
+                return false;
             }
             _harness if command.name == commands::HARNESS.name => {
-                if !self.is_cloud_mode_input_v2_composing(ctx) {
-                    // Defensive: the command is registered only when the V2 flag is on and its
-                    // availability requires CLOUD_MODE_V2_COMPOSER, so this branch should be unreachable.
-                    return false;
-                }
-                self.suggestions_mode_model.update(ctx, |model, ctx| {
-                    model.set_mode(InputSuggestionsMode::Closed, ctx);
-                });
-                self.clear_buffer_and_reset_undo_stack(ctx);
-                self.open_v2_harness_selector(ctx);
-                return true;
+                // The cloud-mode harness selector was removed with the ambient runtime;
+                // the command is only registered in a cloud-mode-V2 composer, which
+                // does not exist in this build.
+                return false;
             }
             _environment if command.name == commands::ENVIRONMENT.name => {
                 if !self.is_cloud_mode_input_v2_composing(ctx) {
