@@ -54,7 +54,13 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   them separately is churn. Sites: `rich_content.rs:259-269` (2 variants),
   `block_list_element.rs:4335` (a `matches!` → make `true`), `view_impl.rs:397,~500,~828`
   (constructions + `maybe_insert_setup_command_blocks`), `view.rs:12000` (caller).
-- **Slice 2 (composer selectors)** — MAPPED, ready. All cloud-only: `harness_selector`,
+- **Slice 2 (composer selectors)** — DONE (`5a3763f4`), Codex-approved (4 rounds; the key
+  round caught that the `AuthSecretFtuxView` + workspace "New API key…" modal are SHARED with
+  local Agent Mode orchestration — restored those, removed only the cloud composer selectors +
+  the dead delete-confirmation event chain). LESSON: the auth-secret FTUX is NOT cloud-only.
+  Remaining orphans (delete_auth_secret, remove_deleted_auth_secret_entry,
+  is_harness_auth_ftux_completed) left for a later slice.
+- **(historical mapping) Slice 2** — All cloud-only: `harness_selector`,
   `host_selector`, `auth_secret_selector`, `auth_secret_ftux_view`, `auth_secret_ftux_dropdown`,
   `delete_auth_secret_confirmation_dialog` are fields of the `Option<AmbientAgentViewState>` on
   `Input` (built only in `attach_ambient_agent_view_model`). Deleting the 6 files gives a
