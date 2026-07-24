@@ -24753,7 +24753,7 @@ impl TypedActionView for Workspace {
                                     || terminal
                                         .input()
                                         .as_ref(ctx)
-                                        .is_cloud_mode_input_v2_composing(ctx);
+                                        .is_cloud_mode_input_v2_composing();
                                 let conversation_id =
                                     terminal.active_conversation_id(ctx).or_else(|| {
                                         BlocklistAIHistoryModel::as_ref(ctx)

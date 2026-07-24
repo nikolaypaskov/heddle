@@ -69,7 +69,7 @@ impl TuiSlashCommandDataSource {
     /// `AmbientAgentViewModel`, so shared-session state comes from the terminal model.
     pub fn local_skills_available(&self, app: &AppContext) -> bool {
         let terminal_model = self.terminal_model.lock();
-        resolve_ai_query_routing(self.terminal_view_id(), None, &terminal_model, app).is_local()
+        resolve_ai_query_routing(self.terminal_view_id(), &terminal_model, app).is_local()
     }
     pub fn set_active_repo_root(
         &mut self,

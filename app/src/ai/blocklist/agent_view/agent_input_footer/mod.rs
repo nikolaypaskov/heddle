@@ -2086,7 +2086,7 @@ impl View for AgentInputFooter {
 
         // Indicate whether the next follow-up continues on the live remote VM or starts a new one.
         // The new-cloud-VM chip uses a yellow icon; the live-session chip uses the default color.
-        match resolve_ai_query_routing(self.terminal_view_id, None, &terminal_model, app) {
+        match resolve_ai_query_routing(self.terminal_view_id, &terminal_model, app) {
             AIQueryRouting::LiveRemoteVm {
                 ambient_agent_task_id: Some(_),
                 ..

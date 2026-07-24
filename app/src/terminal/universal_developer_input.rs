@@ -59,7 +59,6 @@ use crate::terminal::profile_model_selector::{
 };
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{
     ActionButton, ActionButtonTheme, ButtonSize, NakedTheme, TooltipAlignment,
@@ -332,9 +331,6 @@ impl UniversalDeveloperInputButtonBar {
         terminal_view_id: EntityId,
         input_model: ModelHandle<BlocklistAIInputModel>,
         cli_subagent_controller: ModelHandle<CLISubagentController>,
-        // Heddle (FOSS): retained on the signature until this consumer is excised in
-        // the Slice 4 sweep; the ambient runtime is removed so it is always `None`.
-        _ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         terminal_model: std::sync::Arc<parking_lot::FairMutex<crate::terminal::TerminalModel>>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {

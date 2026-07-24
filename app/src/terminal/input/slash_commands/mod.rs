@@ -311,7 +311,7 @@ impl Input {
         {
             return false;
         }
-        let slash_command_data_source = if self.is_cloud_mode_input_v2_composing(ctx) {
+        let slash_command_data_source = if self.is_cloud_mode_input_v2_composing() {
             let Some(data_source) = self.cloud_mode_composer_slash_command_data_source.as_ref()
             else {
                 return false;
@@ -632,7 +632,7 @@ impl Input {
                 ctx.emit(Event::CreateDockerSandbox);
             }
             _conversations if command.name == commands::CONVERSATIONS.name => {
-                if self.is_cloud_mode_input_v2_composing(ctx) {
+                if self.is_cloud_mode_input_v2_composing() {
                     self.suggestions_mode_model.update(ctx, |model, ctx| {
                         model.set_mode(InputSuggestionsMode::Closed, ctx);
                     });
@@ -927,7 +927,7 @@ impl Input {
                 if !FeatureFlag::ListSkills.is_enabled() {
                     return false;
                 }
-                if self.is_cloud_mode_input_v2_composing(ctx) {
+                if self.is_cloud_mode_input_v2_composing() {
                     self.apply_v2_slash_section_filter(CloudModeV2Section::Skills, ctx);
                     return true;
                 }
@@ -979,7 +979,7 @@ impl Input {
                 self.open_profile_selector(ctx);
             }
             _prompts if command.name == commands::PROMPTS.name => {
-                if self.is_cloud_mode_input_v2_composing(ctx) {
+                if self.is_cloud_mode_input_v2_composing() {
                     self.apply_v2_slash_section_filter(CloudModeV2Section::Prompts, ctx);
                     return true;
                 }
@@ -1254,7 +1254,7 @@ impl Input {
             self.suggestions_mode_model.as_ref(ctx).mode(),
             InputSuggestionsMode::SlashCommands
         ) {
-            if self.is_cloud_mode_input_v2_composing(ctx) {
+            if self.is_cloud_mode_input_v2_composing() {
                 if let Some(view) = self.cloud_mode_v2_slash_commands_view.clone() {
                     view.update(ctx, |view, ctx| {
                         view.accept_selected_item(true, ctx);
@@ -1286,9 +1286,7 @@ impl Input {
                     ctx,
                 )
             }
-            SlashCommandEntryState::SkillCommand(_)
-                if self.is_cloud_mode_input_v2_composing(ctx) =>
-            {
+            SlashCommandEntryState::SkillCommand(_) if self.is_cloud_mode_input_v2_composing() => {
                 false
             }
             SlashCommandEntryState::SkillCommand(detected_skill) => {
@@ -1319,7 +1317,7 @@ impl Input {
         &mut self,
         ctx: &mut ViewContext<Self>,
     ) -> bool {
-        if !self.is_cloud_mode_input_v2_composing(ctx) {
+        if !self.is_cloud_mode_input_v2_composing() {
             return false;
         }
         let Some(view) = self.cloud_mode_v2_slash_commands_view.clone() else {
@@ -1354,7 +1352,7 @@ impl Input {
             self.suggestions_mode_model.as_ref(ctx).mode(),
             InputSuggestionsMode::SlashCommands
         ) {
-            if self.is_cloud_mode_input_v2_composing(ctx) {
+            if self.is_cloud_mode_input_v2_composing() {
                 if let Some(view) = self.cloud_mode_v2_slash_commands_view.clone() {
                     view.update(ctx, |view, ctx| {
                         view.accept_selected_item(false, ctx);
@@ -1385,9 +1383,7 @@ impl Input {
                     ctx,
                 )
             }
-            SlashCommandEntryState::SkillCommand(_)
-                if self.is_cloud_mode_input_v2_composing(ctx) =>
-            {
+            SlashCommandEntryState::SkillCommand(_) if self.is_cloud_mode_input_v2_composing() => {
                 false
             }
             SlashCommandEntryState::SkillCommand(detected_skill) => {

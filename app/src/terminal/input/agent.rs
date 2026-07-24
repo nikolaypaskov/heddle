@@ -2,7 +2,7 @@ use warp_core::settings::Setting;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
     Align, AnchorPair, Border, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
-    DispatchEventResult, DropTarget, Element, Empty, EventHandler, Expanded, Flex, Hoverable,
+    DispatchEventResult, DropTarget, Element, EventHandler, Expanded, Flex, Hoverable,
     MainAxisSize, OffsetPositioning, OffsetType, ParentElement, PositionedElementOffsetBounds,
     PositioningAxis, Radius, SavePosition, Stack, XAxisAnchor, YAxisAnchor,
 };
@@ -11,8 +11,7 @@ use warpui::{AppContext, SingletonEntity as _};
 
 use super::common::{
     add_command_xray_overlay, add_input_suggestions_overlays, add_voltron_overlay,
-    add_workflow_info_overlay,
-    wrap_input_with_terminal_padding_and_focus_handler,
+    add_workflow_info_overlay, wrap_input_with_terminal_padding_and_focus_handler,
 };
 use super::{Input, InputAction, InputDropTargetData};
 use crate::BlocklistAIHistoryModel;
@@ -56,30 +55,24 @@ const CLOUD_MODE_V2_HORIZONTAL_GUTTER: f32 = 16.;
 const CLOUD_MODE_V2_CHIPS_ROW_TOP_PADDING: f32 = 4.;
 
 impl Input {
-    pub fn is_cloud_mode_input_v2_composing(&self, app: &AppContext) -> bool {
-        FeatureFlag::CloudModeInputV2.is_enabled()
-            && FeatureFlag::CloudMode.is_enabled()
-            && self.ambient_agent_view_model().is_some_and(|model| {
-                let view_model = model.as_ref(app);
-                view_model.is_configuring_ambient_agent()
-                    // The handoff pane intentionally stays on the existing input UI even
-                    // when V2 is on — V2 is for fresh cloud-mode runs only, and handoff has
-                    // its own pre-spawn flow (submit interception).
-                    && !view_model.is_local_to_cloud_handoff()
-            })
+    /// Heddle (FOSS): the cloud-mode-V2 composer cannot exist — `CloudModeInputV2` and
+    /// `CloudMode` are off and the ambient view-model is removed — so this is always
+    /// false. Kept (rather than inlined at ~30 call sites) until the CloudModeInputV2
+    /// branch cleanup pass removes the callers wholesale.
+    pub fn is_cloud_mode_input_v2_composing(&self) -> bool {
+        false
     }
 
     /// Renders the input when there is an active `AgentView`.
     ///
     /// Only used when `FeatureFlag::AgentView` is enabled.
     pub(super) fn render_agent_input(&self, app: &AppContext) -> Box<dyn Element> {
-        if self.is_cloud_mode_input_v2_composing(app) {
+        if self.is_cloud_mode_input_v2_composing() {
             return self.render_cloud_mode_v2_composing_input(app);
         }
 
         let appearance = Appearance::as_ref(app);
         let menu_positioning = self.menu_positioning(app);
-
 
         // We should likely rework this stack to not need to use `with_constrain_absolute_children`,
         // by reworking the positioning of the children to not depend on this.
@@ -218,7 +211,7 @@ impl Input {
         {
             column.add_child(ChildView::new(&self.inline_profile_selector_view).finish());
         } else if self.suggestions_mode_model.as_ref(app).is_slash_commands()
-            && !self.is_cloud_mode_input_v2_composing(app)
+            && !self.is_cloud_mode_input_v2_composing()
         {
             column.add_child(ChildView::new(&self.inline_slash_commands_view).finish());
         } else if self.suggestions_mode_model.as_ref(app).is_prompts_menu() {
@@ -448,7 +441,6 @@ impl Input {
         SavePosition::new(outer_stack.finish(), &self.save_position_id()).finish()
     }
 
-
     fn render_cloud_mode_v2_content(
         &self,
         appearance: &Appearance,
@@ -562,38 +554,6 @@ impl Input {
                 CLOUD_MODE_V2_INPUT_RADIUS,
             )))
             .finish()
-    }
-
-    pub(super) fn render_ambient_agent_status_footer(&self, app: &AppContext) -> Box<dyn Element> {
-        let Some(ambient_agent_model) = self.ambient_agent_view_model() else {
-            return Empty::new().finish();
-        };
-        let ambient_agent_model = ambient_agent_model.as_ref(app);
-        let stack = Stack::new().with_constrain_absolute_children();
-
-        // Don't render status bar when agent has failed or is waiting for session
-        let show_status_bar = ambient_agent_model.error_message().is_none()
-            && !ambient_agent_model.is_waiting_for_session();
-
-        let save_position =
-            SavePosition::new(stack.finish(), &self.status_free_input_save_position_id()).finish();
-
-        let input = Hoverable::new(self.hoverable_handle.clone(), |_| save_position)
-            .on_hover(|is_hovered, ctx, _app, _position| {
-                ctx.dispatch_typed_action(InputAction::SetUDIHovered(is_hovered));
-            })
-            .on_middle_click(|ctx, _app, _position| {
-                ctx.dispatch_typed_action(TerminalAction::MiddleClickOnInput);
-            })
-            .finish();
-
-        let mut column = Flex::column();
-        if show_status_bar {
-            column.add_child(ChildView::new(&self.agent_status_view).finish());
-        }
-        column.add_child(input);
-
-        SavePosition::new(column.finish(), &self.save_position_id()).finish()
     }
 }
 

@@ -3725,9 +3725,6 @@ impl TerminalView {
                 None, // current_repo_path - will be set when CWD is determined
                 model_events_handle.clone(),
                 agent_view_controller.clone(),
-                // Pass the model in so `Input::new` self-wires internally through
-                // `attach_ambient_agent_view_model` (the same setter the lazy viewer path uses).
-                ambient_agent_view_model.clone(),
                 active_session.clone(),
                 ephemeral_message_model.clone(),
                 ctx,
@@ -7917,10 +7914,10 @@ impl TerminalView {
         model
     }
 
-    /// Wires an ambient agent view model into this terminal view: stores it, routes its events to
-    /// [`Self::handle_ambient_agent_event`], and attaches it to the input. The single wiring point
-    /// shared by the upfront construction path (`TerminalView::new`) and the lazy `SessionJoined`
-    /// path (`ensure_ambient_agent_view_model`) so the two cannot drift.
+    /// Wires an ambient agent view model into this terminal view: stores it and routes its
+    /// events to [`Self::handle_ambient_agent_event`]. Reachable only via the lazy
+    /// `SessionJoined` shared-session viewer path (`ensure_ambient_agent_view_model`), which
+    /// needs a live backend; the input no longer holds ambient state (Heddle removed it).
     fn wire_ambient_agent_view_model(
         &mut self,
         model: ModelHandle<ambient_agent::AmbientAgentViewModel>,
@@ -7929,9 +7926,6 @@ impl TerminalView {
         self.ambient_agent_view_model = Some(model.clone());
         ctx.subscribe_to_model(&model, |me, _, event, ctx| {
             me.handle_ambient_agent_event(event, ctx);
-        });
-        self.input.update(ctx, |input, ctx| {
-            input.attach_ambient_agent_view_model(model.clone(), ctx);
         });
     }
 
@@ -20189,7 +20183,7 @@ impl TerminalView {
                 #[cfg(not(target_family = "wasm"))]
                 let command_name = {
                     let is_cloud_agent_context = self.is_ambient_agent_session(ctx)
-                        || self.input.as_ref(ctx).is_cloud_mode_input_v2_composing(ctx);
+                        || self.input.as_ref(ctx).is_cloud_mode_input_v2_composing();
                     let conversation_id = self
                         .agent_view_controller
                         .as_ref(ctx)
@@ -21367,7 +21361,7 @@ impl TerminalView {
                 // where the input is always AI.
                 if FeatureFlag::AgentView.is_enabled()
                     && *is_empty
-                    && !self.input.as_ref(ctx).is_cloud_mode_input_v2_composing(ctx)
+                    && !self.input.as_ref(ctx).is_cloud_mode_input_v2_composing()
                     && self
                         .ai_input_model
                         .as_ref(ctx)
@@ -27355,7 +27349,7 @@ impl View for TerminalView {
                 self.render_waterfall_gap_element(&model, &viewport, active_gap, appearance, app)
             }
             (input_mode, _, _) => {
-                if self.input.as_ref(app).is_cloud_mode_input_v2_composing(app) {
+                if self.input.as_ref(app).is_cloud_mode_input_v2_composing() {
                     column.add_child(Expanded::new(1., self.render_input()).finish());
 
                     Stack::new()

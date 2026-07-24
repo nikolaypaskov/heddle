@@ -1,5 +1,5 @@
 use warp_cli::agent::Harness;
-use warpui::{AppContext, EntityId, ModelHandle, SingletonEntity};
+use warpui::{AppContext, EntityId, SingletonEntity};
 
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::{
@@ -15,7 +15,6 @@ use crate::auth::AuthStateProvider;
 use crate::cloud_object::{Owner, ServerGuestSubject};
 use crate::drive::sharing::SharingAccessLevel;
 use crate::terminal::TerminalModel;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,24 +145,23 @@ pub(in crate::terminal::view) fn resolve_cloud_conversation_continuation_ui_stat
     }
 }
 
-/// Resolves the [`AIQueryRouting`] for a pane from its terminal model and optional ambient
-/// view model. `terminal_model` must already be locked by the caller; this function does not lock
-/// it, and reuses [`resolve_cloud_conversation_continuation_ui_state`] for the disconnected case.
+/// Resolves the [`AIQueryRouting`] for a pane from its terminal model. `terminal_model` must
+/// already be locked by the caller; this function does not lock it, and reuses
+/// [`resolve_cloud_conversation_continuation_ui_state`] for the disconnected case.
 pub(crate) fn resolve_ai_query_routing(
     terminal_view_id: EntityId,
-    ambient_agent_view_model: Option<&ModelHandle<AmbientAgentViewModel>>,
     terminal_model: &TerminalModel,
     app: &AppContext,
 ) -> AIQueryRouting {
+    // Heddle (FOSS): the ambient view-model is removed, so ambient-ness and the task id
+    // come solely from live terminal state. `LiveRemoteVm` still serves shared-LOCAL-session
+    // viewers (forwarding follow-ups to the sharer), so the variants must stay.
     let status = terminal_model.shared_session_status();
-    let is_ambient = terminal_model.is_shared_ambient_agent_session()
-        || ambient_agent_view_model.is_some_and(|model| model.as_ref(app).is_ambient_agent());
+    let is_ambient = terminal_model.is_shared_ambient_agent_session();
     let is_transcript_viewer = terminal_model.is_conversation_transcript_viewer();
     // The ambient task this pane is associated with, if any. `None` for a shared *local* session,
     // which keeps the footer's live-VM indicator hidden for non-ambient shared sessions.
-    let ambient_agent_task_id = ambient_agent_view_model
-        .and_then(|model| model.as_ref(app).task_id())
-        .or_else(|| terminal_model.ambient_agent_task_id());
+    let ambient_agent_task_id = terminal_model.ambient_agent_task_id();
 
     // A live shared-session viewer forwards its follow-up to the sharer via the viewer prompt path,
     // whether the shared session is an ambient cloud run or a shared local session. `is_executor`
