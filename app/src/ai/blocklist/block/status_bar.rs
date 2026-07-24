@@ -1290,7 +1290,7 @@ impl View for BlocklistAIStatusBar {
                                         .is_waiting_for_session()
                                 },
                             ) {
-                                // Don't render warping indicator - the loading screen is shown in the main view
+                                // The cloud waiting-for-session state renders no status-bar indicator.
                                 return Empty::new().finish();
                             } else if agent_view_controller.is_active() {
                                 // The orchestration pill bar in the agent view header

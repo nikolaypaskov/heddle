@@ -6,18 +6,10 @@ use std::rc::Rc;
 use warp_cli::agent::Harness;
 use warp_core::features::FeatureFlag;
 use warp_core::send_telemetry_from_ctx;
-use warp_core::ui::appearance::Appearance;
 use warp_terminal::model::BlockId;
-use warpui::elements::Align;
-use warpui::prelude::{Empty, Vector2F};
-use warpui::{
-    AppContext, Element, EntityId, ModelHandle, SingletonEntity, ViewContext, ViewHandle,
-};
+use warpui::prelude::Vector2F;
+use warpui::{AppContext, EntityId, ModelHandle, SingletonEntity, ViewContext, ViewHandle};
 
-use super::loading_screen::{
-    render_cloud_mode_cancelled_screen, render_cloud_mode_error_screen,
-    render_cloud_mode_github_auth_required_screen, render_cloud_mode_loading_screen,
-};
 use super::{AmbientAgentEntryBlock, AmbientAgentViewModel, AmbientAgentViewModelEvent};
 use crate::ai::AIRequestUsageModel;
 use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
@@ -107,8 +99,8 @@ impl TerminalView {
         };
 
         // Tear down the Cloud Mode pending prompt on terminal / transition events that replace it.
-        // Legacy `Failed`, `NeedsGithubAuth`, and `Cancelled` hand off to the existing error /
-        // auth / cancelled UI; `HarnessCommandStarted` hands off to the live harness CLI block.
+        // Legacy `Failed`, `NeedsGithubAuth`, and `Cancelled` events retire the pending prompt;
+        // `HarnessCommandStarted` hands off to the live harness CLI block.
         // The V2 queue-row removal shares this gate so the locked initial row disappears on the
         // same lifecycle events that retire the legacy block — no V2/non-V2 divergence.
         let should_clean_up_pending_cloud_query = match event {
@@ -186,7 +178,7 @@ impl TerminalView {
                         model.reset_cooldown(model_ctx);
                     });
                 }
-                // Re-render to show loading state.
+                // Re-render to reflect the updated state.
                 ctx.emit(TerminalViewEvent::TerminalViewStateChanged);
                 ctx.notify();
             }
@@ -235,7 +227,7 @@ impl TerminalView {
                 } else {
                     self.maybe_auto_open_conversation_details_panel(ctx);
                 }
-                // Re-render to hide the loading screen now that the session is ready.
+                // Re-render now that the session is ready.
                 ctx.emit(TerminalViewEvent::TerminalViewStateChanged);
                 ctx.notify();
             }
@@ -309,7 +301,7 @@ impl TerminalView {
                         ctx,
                     );
                 }
-                // Re-render to show the GitHub auth required state in the footer.
+                // Re-render to reflect the GitHub auth required state.
                 ctx.emit(TerminalViewEvent::TerminalViewStateChanged);
                 ctx.notify();
             }
@@ -324,7 +316,7 @@ impl TerminalView {
                 if self.is_conversation_details_panel_open {
                     self.fetch_and_update_conversation_details_panel(ctx);
                 }
-                // Re-render to show the cancelled state in the footer.
+                // Re-render to reflect the cancelled state.
                 ctx.emit(TerminalViewEvent::TerminalViewStateChanged);
                 ctx.notify();
             }
@@ -870,58 +862,6 @@ impl TerminalView {
         Some((terminal_view, ambient_agent_view_model))
     }
 
-    /// Renders the ambient agent progress view based on agent progress.
-    pub(in crate::terminal::view) fn render_ambient_agent_progress(
-        &self,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
-        let Some(ambient_agent_view_model) = self.ambient_agent_view_model.as_ref() else {
-            return Empty::new().finish();
-        };
-        let ambient_agent_model = ambient_agent_view_model.as_ref(app);
-        let Some(progress) = ambient_agent_model.agent_progress() else {
-            return Empty::new().finish();
-        };
-
-        // Show appropriate screen based on agent status
-        let ui_state = &ambient_agent_model.ui_state;
-        let screen = if ambient_agent_model.is_cancelled() {
-            // Show cancelled screen
-            render_cloud_mode_cancelled_screen(appearance)
-        } else if let Some(auth_url) = ambient_agent_model.github_auth_url() {
-            // Show GitHub auth required screen
-            render_cloud_mode_github_auth_required_screen(
-                auth_url,
-                appearance,
-                &ui_state.auth_button_mouse_state,
-                app,
-            )
-        } else if let Some(error_message) = ambient_agent_model.error_message() {
-            // Show error screen
-            render_cloud_mode_error_screen(
-                error_message,
-                appearance,
-                &ui_state.error_selection_handle,
-                &ui_state.error_selected_text,
-                app,
-            )
-        } else {
-            // Show loading screen - determine the message based on progress state
-            let message = progress.setup_status_text();
-
-            render_cloud_mode_loading_screen(
-                message,
-                appearance,
-                &ui_state.loading_shimmer_handle,
-                &ui_state.tip_model,
-                app,
-            )
-        };
-
-        // Center the screen within the terminal view
-        Align::new(screen).finish()
-    }
 
     /// Fetches task data and updates the conversation details panel.
     ///

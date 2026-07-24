@@ -3,10 +3,8 @@ mod auth_secret_ftux_view;
 pub(crate) mod auth_secret_selector;
 mod block;
 mod delete_auth_secret_confirmation_dialog;
-mod footer;
 mod harness_selector;
 mod host_selector;
-mod loading_screen;
 mod model;
 mod model_selector;
 mod progress;
@@ -21,12 +19,10 @@ pub use auth_secret_selector::{
     AuthSecretSelector, AuthSecretSelectorAction, AuthSecretSelectorEvent,
 };
 pub use block::*;
-pub use footer::{render_error_footer, render_loading_footer};
 pub use harness_selector::{HarnessSelector, HarnessSelectorAction, HarnessSelectorEvent};
 pub use host_selector::{
     Host, HostSelector, HostSelectorAction, HostSelectorEvent, NakedHeaderButtonTheme,
 };
-pub use loading_screen::{render_cloud_mode_error_screen, render_cloud_mode_loading_screen};
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 pub(crate) use model::PendingHandoff;
 pub use model::{AgentProgress, AmbientAgentViewModel, AmbientAgentViewModelEvent, Status};
@@ -156,8 +152,8 @@ pub fn wire_ambient_agent_session_events(
 }
 
 /// Returns `true` when a cloud agent shared session is in any pre-first-exchange phase —
-/// either still spawning (loading screen) or running setup commands before the first
-/// agent turn. In this state, we hide the interactive input and render a loading footer.
+/// either still spawning or running setup commands before the first agent turn. In this
+/// state the interactive input is hidden.
 pub fn is_cloud_agent_pre_first_exchange(
     ambient_agent_view_model: Option<&ModelHandle<AmbientAgentViewModel>>,
     agent_view_controller: &ModelHandle<AgentViewController>,

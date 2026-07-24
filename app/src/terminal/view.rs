@@ -8280,8 +8280,7 @@ impl TerminalView {
         }
 
         // In cloud agent conversations, once the shared session is ready but before the first
-        // agent exchange arrives, we hide the interactive input view. A non-interactive footer is
-        // rendered instead (see `TerminalView::render`).
+        // agent exchange arrives, we hide the interactive input view.
         if !FeatureFlag::CloudModeSetupV2.is_enabled()
             && !FeatureFlag::HandoffCloudCloud.is_enabled()
             && ambient_agent::is_cloud_agent_pre_first_exchange(
@@ -8360,22 +8359,6 @@ impl TerminalView {
         }
 
         true
-    }
-
-    fn should_render_legacy_ambient_agent_loading_footer(
-        &self,
-        model: &TerminalModel,
-        app: &AppContext,
-    ) -> bool {
-        !model.is_read_only()
-            && !FeatureFlag::CloudModeSetupV2.is_enabled()
-            && !FeatureFlag::HandoffCloudCloud.is_enabled()
-            && ambient_agent::is_cloud_agent_pre_first_exchange(
-                self.ambient_agent_view_model.as_ref(),
-                &self.agent_view_controller,
-                model,
-                app,
-            )
     }
 
     /// Give the agent control of the active long running command
@@ -27430,8 +27413,6 @@ impl View for TerminalView {
                     let input_box_visible = self.is_input_box_visible(&model, app);
                     if input_box_visible {
                         column.add_child(self.render_input());
-                    } else if self.should_render_legacy_ambient_agent_loading_footer(&model, app) {
-                        column.add_child(ambient_agent::render_loading_footer(appearance));
                     } else if self.show_remote_server_loading_footer(&model, app) {
                         column.add_child(
                             self.render_remote_server_loading_footer(&model, appearance, app),
@@ -27454,14 +27435,6 @@ impl View for TerminalView {
             self.render_grid_tooltip(&mut stack, &model, appearance, app);
         }
 
-        // Show progress steps while waiting for an ambient agent to start. CloudModeSetupV2 uses
-        // the agent status bar for setup/follow-up progress.
-        if self.ambient_agent_view_model.as_ref().is_some_and(|model| {
-            let model = model.as_ref(app);
-            model.agent_progress().is_some() && !FeatureFlag::CloudModeSetupV2.is_enabled()
-        }) {
-            stack.add_child(self.render_ambient_agent_progress(appearance, app));
-        }
 
         // For shared session viewers, we want to show a "Request edit access"
         // button near the input if the input (or the button) are being hovered.

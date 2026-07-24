@@ -1,4 +1,5 @@
-//! Tips for cloud mode loading screen.
+//! Tips that were shown on the (now-removed) cloud mode loading screen. Retained
+//! only because they hang off the `AmbientAgentViewModel`; removed with it.
 
 use warpui::AppContext;
 use warpui::keymap::Keystroke;
@@ -37,7 +38,7 @@ impl AITip for CloudModeTip {
     // Uses the default implementation which adds "Tip: " prefix and parses backticks as inline code
 }
 
-/// Returns a collection of tips for the cloud mode loading screen.
+/// Returns the collection of tips formerly shown on the cloud mode loading screen.
 pub fn get_cloud_mode_tips() -> Vec<CloudModeTip> {
     vec![
         CloudModeTip::new(

@@ -1,4 +1,8 @@
-//! UI state for the ambient agent progress/loading screen.
+//! UI state formerly used by the ambient agent progress/loading screen.
+//!
+//! The cloud-agent loading/error screen rendering has been removed in Heddle; this
+//! state is retained only because it hangs off the `AmbientAgentViewModel` and is
+//! deleted together with that model in a later slice of the ambient removal.
 
 use warpui::ModelHandle;
 use warpui::elements::shimmering_text::ShimmeringTextStateHandle;
@@ -8,22 +12,22 @@ use crate::ai::agent_tips::AITipModel;
 use crate::terminal::view::ambient_agent::CloudModeTip;
 use crate::terminal::view::ambient_agent::model::AmbientAgentViewModel;
 
-/// UI state for rendering the ambient agent progress screen (loading or error).
-/// This keeps all cloud mode UI handles together and separates them from the main TerminalView.
+/// UI state that backed the (now-removed) ambient agent progress screen. Retained
+/// on the `AmbientAgentViewModel` until that model is removed.
 pub struct AmbientAgentProgressUIState {
-    /// State handle for the shimmering text animation in the cloud mode loading screen.
+    /// Shimmering-text animation handle (formerly the loading screen).
     pub loading_shimmer_handle: ShimmeringTextStateHandle,
 
-    /// Model for displaying tips in the cloud mode loading screen (with 60s cooldown).
+    /// Tip model with a 60s cooldown (formerly the loading screen).
     pub tip_model: ModelHandle<AITipModel<CloudModeTip>>,
 
-    /// Selection handle for making error text selectable in the cloud mode error screen.
+    /// Selection handle for error text (formerly the error screen).
     pub error_selection_handle: SelectionHandle,
 
-    /// Stores selected text from the cloud mode error screen for copying.
+    /// Selected error text for copying (formerly the error screen).
     pub error_selected_text: std::rc::Rc<parking_lot::RwLock<Option<String>>>,
 
-    /// Mouse state handle for the authenticate button in the GitHub auth screen.
+    /// Authenticate-button mouse state (formerly the GitHub auth screen).
     pub auth_button_mouse_state: MouseStateHandle,
 }
 
