@@ -763,7 +763,7 @@ impl CategoriesView {
                 .link(
                     "creating your own workflow".into(),
                     Some(
-                        "https://github.com/nikolaypaskov/warp#readme"
+                        "https://github.com/nikolaypaskov/heddle#readme"
                             .into(),
                     ),
                     None,

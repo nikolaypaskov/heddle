@@ -31,7 +31,7 @@ use crate::view_components::{Dropdown as DropdownView, DropdownItem, FilterableD
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 const API_KEY_DOCS_URL: &str =
-    "https://github.com/nikolaypaskov/warp#readme";
+    "https://github.com/nikolaypaskov/heddle#readme";
 
 const LABEL_FONT_SIZE: f32 = 14.;
 const INPUT_WIDTH: f32 = 428.; // 460px - (2 * 16px) padding

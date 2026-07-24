@@ -11,7 +11,7 @@ use clap::{Arg, Args, Command, ValueEnum};
 pub struct ShareArgs {
     /// Share the agent's session
     ///
-    /// Learn more at https://github.com/nikolaypaskov/warp#readme
+    /// Learn more at https://github.com/nikolaypaskov/heddle#readme
     #[arg(long = "share", value_name = "RECIPIENTS", num_args=0..=1)]
     pub share: Option<Vec<ShareRequest>>,
 }

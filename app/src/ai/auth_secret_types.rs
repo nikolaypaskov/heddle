@@ -36,9 +36,9 @@ pub fn learn_more_url_for_harness(harness: Harness) -> &'static str {
 }
 
 const DEFAULT_LEARN_MORE_URL: &str =
-    "https://github.com/nikolaypaskov/warp#readme";
-const CODEX_LEARN_MORE_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
-const CLAUDE_LEARN_MORE_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
+    "https://github.com/nikolaypaskov/heddle#readme";
+const CODEX_LEARN_MORE_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
+const CLAUDE_LEARN_MORE_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 pub fn build_managed_secret_value(
     info: &AuthSecretTypeInfo,

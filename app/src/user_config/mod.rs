@@ -32,7 +32,7 @@ lazy_static! {
 #
 # This file defines your launch configuration.
 # More on how to do so here:
-# https://github.com/nikolaypaskov/warp#readme
+# https://github.com/nikolaypaskov/heddle#readme
 #
 # All launch configurations are stored under {}.
 # Edit them anytime!

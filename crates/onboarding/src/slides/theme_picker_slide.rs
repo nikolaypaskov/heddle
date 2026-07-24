@@ -53,7 +53,7 @@ pub enum ThemePickerSlideAction {
     PrivacySettingsClicked,
 }
 
-const TOS_URL: &str = "https://github.com/nikolaypaskov/warp/blob/master/LICENSE-AGPL";
+const TOS_URL: &str = "https://github.com/nikolaypaskov/heddle/blob/master/LICENSE-AGPL";
 
 #[derive(Debug, Clone)]
 struct ThemeOption {

@@ -6,7 +6,7 @@ Recommends: libgl1-mesa-dri, yaru-icon-theme | adwaita-icon-theme-full
 Priority: optional
 Architecture: @@ARCH@@
 Maintainer: Heddle contributors
-Homepage: https://github.com/nikolaypaskov/warp#readme
+Homepage: https://github.com/nikolaypaskov/heddle#readme
 Description: Warp, the Rust-based terminal for developers and teams
  Warp is a modern, Rust-based terminal with AI built in so teams can
  build great software, faster. Bringing collaboration to the command line,

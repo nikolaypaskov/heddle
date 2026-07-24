@@ -512,7 +512,7 @@ impl AccountWidget {
                             .ui_builder()
                             .link(
                                 "Contact support".into(),
-                                Some("https://github.com/nikolaypaskov/warp/issues".into()),
+                                Some("https://github.com/nikolaypaskov/heddle/issues".into()),
                                 None,
                                 self.ui_state_handles.enterprise_contact_us_link.clone(),
                             )
@@ -707,7 +707,7 @@ impl SettingsWidget for SettingsSyncWidget {
         let label_info = AdditionalInfo {
             mouse_state: self.tooltip_state.clone(),
             on_click_action: Some(MainPageAction::OpenUrl(
-                "https://github.com/nikolaypaskov/warp#readme".into(),
+                "https://github.com/nikolaypaskov/heddle#readme".into(),
             )),
             secondary_text: None,
             tooltip_override_text: None,

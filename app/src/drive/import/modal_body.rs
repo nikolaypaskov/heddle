@@ -36,7 +36,7 @@ pub(super) const INDENT_MARGIN: f32 = 22.;
 pub(super) const BASE_INDENT: f32 = 30.;
 
 const FILE_TYPE_DOCS_URL: &str =
-    "https://github.com/nikolaypaskov/warp#readme";
+    "https://github.com/nikolaypaskov/heddle#readme";
 const SUPPORTED_FILE_TYPE_TEXT: &str = "md, yaml, yml";
 
 #[cfg(test)]

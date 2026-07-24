@@ -37,7 +37,7 @@ pub fn make_router() -> Router {
         AllowOrigin::predicate(|origin: &HeaderValue, _request_parts: &Parts| {
             origin == "http://localhost:8080"
                 || origin == "http://localhost:8082"
-                || origin == "https://github.com/nikolaypaskov/warp#readme"
+                || origin == "https://github.com/nikolaypaskov/heddle#readme"
                 || origin.as_bytes().ends_with(b".heddle.invalid")
         });
 

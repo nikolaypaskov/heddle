@@ -1,14 +1,28 @@
 # Security Policy
 
-We take security seriously at Warp and appreciate the efforts of security researchers who help keep our users safe.
+Heddle is a privacy-oriented, community fork of the open-source
+[Warp](https://github.com/warpdotdev/Warp) client. It is **not** affiliated with
+Warp / Denver Technologies, and Warp does not handle Heddle security reports.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-If you believe you've found a security vulnerability, please follow responsible disclosure practices and **do not** open a public GitHub issue or pull request, as this could expose the vulnerability before a fix is available.
+Please practice responsible disclosure: **do not** open a public issue or pull
+request for a suspected vulnerability, as that can expose it before a fix exists.
 
-Instead, please report it through one of the following channels:
+Report it privately through this repository's GitHub Security Advisories:
 
-- **Email:** [security@warp.dev](mailto:security@warp.dev)
-- **GitHub Security Advisory:** [Open a private advisory](https://github.com/warpdotdev/Warp/security/advisories/new)
+- **[Open a private security advisory](https://github.com/nikolaypaskov/heddle/security/advisories/new)**
 
-We will acknowledge your report promptly and work with you to understand and resolve the issue as quickly as possible.
+If you cannot use GitHub Security Advisories, open a normal issue that says only
+*"security report — please contact me privately"* (with no details) so a
+maintainer can arrange a private channel.
+
+We will acknowledge your report as promptly as a small volunteer project can, and
+work with you to understand and resolve the issue. There is no bug-bounty program.
+
+## Scope
+
+Heddle removes Warp's cloud backend, telemetry, and hosted authentication, so
+whole classes of network/account issues do not apply. Reports about Warp's
+servers, `warp.dev`, or hosted services should go to
+**[Warp](https://github.com/warpdotdev/Warp/security)**, not here.

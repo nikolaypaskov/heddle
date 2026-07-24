@@ -1,5 +1,5 @@
 // Hard coded constants to divide keybindings into their respective categories/sections.
-// This should always align with documentation: https://github.com/nikolaypaskov/warp#readme
+// This should always align with documentation: https://github.com/nikolaypaskov/heddle#readme
 
 use warpui::keymap::Keystroke;
 

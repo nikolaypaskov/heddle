@@ -361,7 +361,7 @@ impl View for ExternalEditorView {
             Some(AdditionalInfo {
                 mouse_state: self.markdown_viewer_mouse_state.clone(),
                 on_click_action: Some(ExternalEditorAction::OpenUrl(
-                    "https://github.com/nikolaypaskov/warp#readme".to_string(),
+                    "https://github.com/nikolaypaskov/heddle#readme".to_string(),
                 )),
                 secondary_text: None,
                 tooltip_override_text: None,

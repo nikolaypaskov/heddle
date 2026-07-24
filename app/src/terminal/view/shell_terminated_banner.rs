@@ -226,7 +226,7 @@ impl TerminationType {
                         .build()
                         .on_click(|ctx, _, _| {
                             ctx.dispatch_typed_action(Action::OpenUrl(
-                                "https://github.com/nikolaypaskov/warp#readme".to_string(),
+                                "https://github.com/nikolaypaskov/heddle#readme".to_string(),
                             ));
                         })
                         .finish(),
@@ -264,7 +264,7 @@ impl TerminationType {
                         .build()
                         .on_click(|ctx, _, _| {
                             ctx.dispatch_typed_action(Action::OpenUrl(
-                                "https://github.com/nikolaypaskov/warp#readme".to_string(),
+                                "https://github.com/nikolaypaskov/heddle#readme".to_string(),
                             ));
                         })
                         .finish(),

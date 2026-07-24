@@ -2,27 +2,25 @@
 
 This file provides guidance when working with code in this repository.
 
+> **This is Heddle**, a privacy-oriented, de-commercialized fork of the
+> open-source [Warp](https://github.com/warpdotdev/Warp) client. It has **no
+> server, no cloud backend, no hosted authentication, and no telemetry** — the
+> dependence on Warp's proprietary backend has been removed. When working here,
+> do not reintroduce network calls to `warp.dev`, telemetry, account/sign-in
+> flows, or Warp Drive cloud sync. Many types still carry `Warp`/`Oz`/cloud names
+> from upstream; that code is being removed incrementally (see
+> [`docs/superpowers/`](docs/superpowers/)). The `warp_tui` binary is verified
+> endpoint-free by `script/heddle/verify-no-warp-endpoints` on every change.
+
 ## Development Commands
 
 ### Build and Run
 - `cargo run` / `./script/run` - Build and run the GUI desktop app locally
 - `./script/run-tui` - Build and run the headless TUI front-end (`crates/warp_tui`)
-- `cargo bundle --bin warp` - Bundle the main (GUI) app
+- `cargo bundle` - Bundle the main (GUI) app (produces `Heddle.app`)
 
-### Running with local warp-server
-To connect Warp client to a local warp-server instance:
-
-```bash
-# Connect to server on default port 8080
-WITH_LOCAL_SERVER=1 ./script/run
-
-# Connect to server on custom port (e.g., 8082)
-WITH_LOCAL_SERVER=1 SERVER_ROOT_URL=http://localhost:8082 WS_SERVER_URL=ws://localhost:8082/graphql/v2 ./script/run
-```
-
-Environment variables:
-- `SERVER_ROOT_URL` - HTTP endpoint (default: `http://localhost:8080`)
-- `WS_SERVER_URL` - WebSocket endpoint (default: `ws://localhost:8080/graphql/v2`)
+There is no server to connect to — Heddle removed the backend, so the upstream
+`WITH_LOCAL_SERVER` / `SERVER_ROOT_URL` workflow does not apply.
 
 ### Testing
 - `cargo nextest run --no-fail-fast --workspace --exclude command-signatures-v2` - Run tests with nextest

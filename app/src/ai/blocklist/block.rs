@@ -6392,7 +6392,7 @@ impl TypedActionView for AIBlock {
                     .write(ClipboardContent::plain_text(debug_id.clone()));
             }
             AIBlockAction::OpenFeedbackDocs => {
-                ctx.open_url("https://github.com/nikolaypaskov/warp#readme");
+                ctx.open_url("https://github.com/nikolaypaskov/heddle#readme");
             }
             AIBlockAction::CancelRequestedAction { action_id } => {
                 self.cancel_action(action_id, ctx);

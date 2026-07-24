@@ -31,8 +31,8 @@ const WARP_DRIVE_ENV_VAR_COLLECTION_ICON_COLOR: u32 = 0xC464FFFF;
 const ICON_MARGIN: f32 = 4.;
 const TERMINAL_ICON: &str = "bundled/svg/terminal.svg";
 pub const HORIZONTAL_TEXT_MARGIN: f32 = 20.;
-pub const SSH_DOCS_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
-pub const SUBSHELL_DOCS_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
+pub const SSH_DOCS_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
+pub const SUBSHELL_DOCS_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 /// Errored blocks have a red stripe, and subshells have a gray one.
 pub const LEFT_STRIPE_WIDTH: f32 = 5.;

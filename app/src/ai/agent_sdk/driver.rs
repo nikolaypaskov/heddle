@@ -3622,7 +3622,7 @@ impl AgentDriver {
                     "slow bootstrap"
                 );
                 eprintln!(
-                    "Warning: Terminal session is slow to bootstrap. See https://github.com/nikolaypaskov/warp#readme to troubleshoot."
+                    "Warning: Terminal session is slow to bootstrap. See https://github.com/nikolaypaskov/heddle#readme to troubleshoot."
                 );
             }
             TerminalDriverEvent::EstablishedSharedSession {

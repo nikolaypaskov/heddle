@@ -393,7 +393,7 @@ impl PackageManager {
                     // Back up the existing pacman.conf file just in case
                     // anything goes wrong, then add the repository config.
                     format!(
-                        "mkdir -p {cache_dir_str}{and}\\\ncp /etc/pacman.conf {cache_dir_str}{and}\\\nsudo sh -c \"echo '\n[{repo_name}]\nServer = https://github.com/nikolaypaskov/warp#readme' >> /etc/pacman.conf\"{and}\\\n"
+                        "mkdir -p {cache_dir_str}{and}\\\ncp /etc/pacman.conf {cache_dir_str}{and}\\\nsudo sh -c \"echo '\n[{repo_name}]\nServer = https://github.com/nikolaypaskov/heddle#readme' >> /etc/pacman.conf\"{and}\\\n"
                     )
                 } else {
                     String::new()

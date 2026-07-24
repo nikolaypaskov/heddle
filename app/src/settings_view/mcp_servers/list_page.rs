@@ -1133,7 +1133,7 @@ impl MCPServersListPageView {
                 ),
                 FormattedTextFragment::hyperlink(
                     "See supported providers.",
-                    "https://github.com/nikolaypaskov/warp#readme",
+                    "https://github.com/nikolaypaskov/heddle#readme",
                 ),
             ]
         });
@@ -1171,7 +1171,7 @@ impl MCPServersListPageView {
             FormattedTextFragment::plain_text(DESCRIPTION_TEXT),
             FormattedTextFragment::hyperlink(
                 "Learn more.",
-                "https://github.com/nikolaypaskov/warp#readme",
+                "https://github.com/nikolaypaskov/heddle#readme",
             ),
         ];
 

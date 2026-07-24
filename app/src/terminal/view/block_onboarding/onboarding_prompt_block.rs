@@ -67,7 +67,7 @@ impl OnboardingPromptBlock {
             "Warp works with many custom prompts like oh-my-zsh, Starship, Powerlevel10K. ";
         const LINK_TEXT: &str = "Learn more";
         const LINK_DESTINATION: &str =
-            "https://github.com/nikolaypaskov/warp#readme";
+            "https://github.com/nikolaypaskov/heddle#readme";
 
         Flex::column()
             .with_children([

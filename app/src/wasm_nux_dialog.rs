@@ -283,7 +283,7 @@ impl TypedActionView for WasmNUXDialog {
                 ctx.notify();
             }
             WasmNUXDialogAction::LearnMore => {
-                ctx.open_url("https://github.com/nikolaypaskov/warp#readme");
+                ctx.open_url("https://github.com/nikolaypaskov/heddle#readme");
             }
         }
     }

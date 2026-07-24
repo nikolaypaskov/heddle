@@ -1548,7 +1548,7 @@ impl TypedActionView for CLISubagentView {
                     .write(ClipboardContent::plain_text(debug_id.clone()));
             }
             CLISubagentAction::OpenFeedbackDocs => {
-                ctx.open_url("https://github.com/nikolaypaskov/warp#readme");
+                ctx.open_url("https://github.com/nikolaypaskov/heddle#readme");
             }
         }
     }

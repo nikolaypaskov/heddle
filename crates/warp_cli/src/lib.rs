@@ -420,7 +420,7 @@ impl Args {
 
 <bold><underline>Learn more:</underline></bold>
 * Use <bold>{bin_name} help</bold> to learn more about each command
-* Read the documentation at https://github.com/nikolaypaskov/warp#readme
+* Read the documentation at https://github.com/nikolaypaskov/heddle#readme
 "#
         ));
 

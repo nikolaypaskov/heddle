@@ -8,7 +8,7 @@ use warpui::{Action, AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
 
-const LOGIN_TROUBLESHOOTING_DOCS_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
+const LOGIN_TROUBLESHOOTING_DOCS_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 /// Represents reasons why login failed.
 pub enum LoginFailureReason {

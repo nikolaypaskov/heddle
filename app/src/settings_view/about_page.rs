@@ -122,7 +122,7 @@ impl SettingsWidget for AboutPageWidget {
                     // AGPL section 13 requires offering interacting users the
                     // Corresponding Source. State where it is, prominently.
                     ui_builder
-                        .span("Source: https://github.com/nikolaypaskov/warp")
+                        .span("Source: https://github.com/nikolaypaskov/heddle")
                         .build()
                         .with_margin_top(4.)
                         .finish(),

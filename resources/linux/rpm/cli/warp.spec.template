@@ -7,9 +7,9 @@ Name:        oz@@CHANNEL_SUFFIX@@
 Version:     @@VERSION@@
 Release:     @@RELEASE@@
 Vendor:      Denver Technologies, Inc.
-Url:         https://github.com/nikolaypaskov/warp#readme
+Url:         https://github.com/nikolaypaskov/heddle#readme
 Packager:    Heddle contributors
-License:     https://github.com/nikolaypaskov/warp#readme
+License:     https://github.com/nikolaypaskov/heddle#readme
 Obsoletes:   warp-cli@@CHANNEL_SUFFIX@@ < %{version}
 Obsoletes:   oz = v0.2026.02.09.06.06.stable_00
 Obsoletes:   oz = v0.2026.02.09.06.06.stable_02
@@ -166,7 +166,7 @@ install_yum() {
 		cat >"$REPO_FILE" <<EOF
 [@@REPO_NAME@@]
 name=@@REPO_NAME@@
-baseurl=https://github.com/nikolaypaskov/warp#readme
+baseurl=https://github.com/nikolaypaskov/heddle#readme
 enabled=1
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-@@REPO_NAME@@
@@ -189,7 +189,7 @@ install_zypp() {
 [@@REPO_NAME@@]
 name=@@REPO_NAME@@
 type=rpm-md
-baseurl=https://github.com/nikolaypaskov/warp#readme
+baseurl=https://github.com/nikolaypaskov/heddle#readme
 enabled=1
 autorefresh=1
 gpgcheck=1

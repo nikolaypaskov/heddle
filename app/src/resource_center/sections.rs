@@ -63,19 +63,19 @@ pub fn sections(ctx: &mut ViewContext<ResourceCenterMainView>) -> Vec<Section> {
             ContentItem {
                 title: "Use your custom prompt",
                 description: "Set up Warp to honor your PS1 setting",
-                url: "https://github.com/nikolaypaskov/warp#readme",
+                url: "https://github.com/nikolaypaskov/heddle#readme",
                 button_label: "View documentation",
             },
             ContentItem {
                 title: "Integrate Warp with your IDE",
                 description: "Configure Warp to launch from your most used development tools",
-                url: "https://github.com/nikolaypaskov/warp#readme",
+                url: "https://github.com/nikolaypaskov/heddle#readme",
                 button_label: "View documentation",
             },
             ContentItem {
                 title: "How Warp uses Warp",
                 description: "Learn how Warp's engineering team uses their favorite features",
-                url: "https://github.com/nikolaypaskov/warp#readme",
+                url: "https://github.com/nikolaypaskov/heddle#readme",
                 button_label: "Read article",
             },
         ],

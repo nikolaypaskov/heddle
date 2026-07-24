@@ -78,7 +78,7 @@ const TELEMETRY_DESCRIPTION_OLD: &str = "App analytics help us make the product 
 const TELEMETRY_TITLE: &str = "Help improve Warp";
 const TELEMETRY_DESCRIPTION: &str = "App analytics help us make the product better for you. We may collect \
     certain console interactions to improve Warp's AI capabilities.";
-const TELEMETRY_DOCS_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
+const TELEMETRY_DOCS_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 const DATA_MANAGEMENT_TITLE: &str = "Manage your data";
 const DATA_MANAGEMENT_DESCRIPTION: &str = "At any time, you may choose to delete your Warp account permanently. \

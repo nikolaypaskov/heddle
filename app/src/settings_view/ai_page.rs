@@ -182,8 +182,8 @@ const GIT_OPERATIONS_AUTOGEN_DESCRIPTION: &str =
     "Let AI generate commit messages and pull request titles and descriptions.";
 const WISPR_FLOW_URL: &str = "https://wisprflow.ai/";
 const CUSTOM_INFERENCE_LEARN_MORE_URL: &str =
-    "https://github.com/nikolaypaskov/warp#readme";
-const CUSTOM_INFERENCE_TERMS_URL: &str = "https://github.com/nikolaypaskov/warp/blob/master/LICENSE-AGPL";
+    "https://github.com/nikolaypaskov/heddle#readme";
+const CUSTOM_INFERENCE_TERMS_URL: &str = "https://github.com/nikolaypaskov/heddle/blob/master/LICENSE-AGPL";
 const CUSTOM_INFERENCE_INFO_TOOLTIP_MAX_WIDTH: f32 = 320.;
 const CUSTOM_ENDPOINT_MODAL_MAX_HEIGHT_PERCENTAGE: f32 = 0.8;
 
@@ -5187,7 +5187,7 @@ impl SettingsWidget for UsageWidget {
                 }
             } else {
                 vec![
-                    FormattedTextFragment::hyperlink("Contact support", "https://github.com/nikolaypaskov/warp/issues"),
+                    FormattedTextFragment::hyperlink("Contact support", "https://github.com/nikolaypaskov/heddle/issues"),
                     FormattedTextFragment::plain_text(" for more AI usage."),
                 ]
             }
@@ -6231,7 +6231,7 @@ impl AgentsWidget {
             ),
             FormattedTextFragment::hyperlink(
                 "Learn more",
-                "https://github.com/nikolaypaskov/warp#readme",
+                "https://github.com/nikolaypaskov/heddle#readme",
             ),
         ];
         let description = Container::new(
@@ -6309,7 +6309,7 @@ impl AgentsWidget {
                 FormattedTextFragment::plain_text(" or "),
                 FormattedTextFragment::hyperlink(
                     "learn more about MCPs.",
-                    "https://github.com/nikolaypaskov/warp#readme",
+                    "https://github.com/nikolaypaskov/heddle#readme",
                 ),
             ];
 
@@ -6823,7 +6823,7 @@ impl SettingsWidget for MCPServersWidget {
             ),
             FormattedTextFragment::hyperlink(
                 "Learn more",
-                "https://github.com/nikolaypaskov/warp#readme",
+                "https://github.com/nikolaypaskov/heddle#readme",
             ),
         ];
 
@@ -6869,7 +6869,7 @@ impl SettingsWidget for MCPServersWidget {
                                 ),
                                 FormattedTextFragment::hyperlink(
                                     "See supported providers.",
-                                    "https://github.com/nikolaypaskov/warp#readme",
+                                    "https://github.com/nikolaypaskov/heddle#readme",
                                 ),
                             ]
                         });
@@ -6954,7 +6954,7 @@ impl AIFactWidget {
             ),
             FormattedTextFragment::hyperlink(
                 "Learn more",
-                "https://github.com/nikolaypaskov/warp#readme",
+                "https://github.com/nikolaypaskov/heddle#readme",
             ),
         ];
         let description = Container::new(
@@ -9204,7 +9204,7 @@ impl SettingsWidget for ApiKeysWidget {
             {
                 if team.billing_metadata.customer_type == CustomerType::Enterprise {
                     vec![
-                        FormattedTextFragment::hyperlink("Contact sales", "https://github.com/nikolaypaskov/warp/issues"),
+                        FormattedTextFragment::hyperlink("Contact sales", "https://github.com/nikolaypaskov/heddle/issues"),
                         FormattedTextFragment::plain_text(
                             " to enable bringing your own API keys on your Enterprise plan.",
                         ),

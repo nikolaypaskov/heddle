@@ -492,7 +492,7 @@ impl TitleWidget {
             ),
             FormattedTextFragment::hyperlink(
                 "Learn more",
-                "https://github.com/nikolaypaskov/warp#readme",
+                "https://github.com/nikolaypaskov/heddle#readme",
             ),
         ];
 

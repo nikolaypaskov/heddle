@@ -829,7 +829,7 @@ lazy_static! {
 const NOTIFICATION_CHECKBOX_MARGIN_RIGHT: f32 = 5.;
 const NOTIFICATION_EDITOR_MARGIN: f32 = 5.;
 
-const NOTIFICATIONS_DOCS_URL: &str = "https://github.com/nikolaypaskov/warp#readme";
+const NOTIFICATIONS_DOCS_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 /// WARNING: this constant was computed manually by determining the pixel width
 /// of the quake mode dropdowns based on the number of expanded items in the flex row.
@@ -4643,7 +4643,7 @@ impl SettingsWidget for SessionRestorationWidget {
             Some(AdditionalInfo {
                 mouse_state: self.additional_info_link.clone(),
                 on_click_action: Some(FeaturesPageAction::OpenUrl(
-                    "https://github.com/nikolaypaskov/warp#readme".into(),
+                    "https://github.com/nikolaypaskov/heddle#readme".into(),
                 )),
                 secondary_text: None,
                 tooltip_override_text: None,
@@ -4675,7 +4675,7 @@ impl SettingsWidget for SessionRestorationWidget {
             let link = ui_builder
                 .link(
                     "See docs.".to_owned(),
-                    Some("https://github.com/nikolaypaskov/warp#readme".to_owned()),
+                    Some("https://github.com/nikolaypaskov/heddle#readme".to_owned()),
                     None,
                     self.docs_link.clone(),
                 )
@@ -4728,7 +4728,7 @@ impl SettingsWidget for SnackbarHeaderWidget {
             Some(AdditionalInfo {
                 mouse_state: self.additional_info_link.clone(),
                 on_click_action: Some(FeaturesPageAction::OpenUrl(
-                    "https://github.com/nikolaypaskov/warp#readme".into(),
+                    "https://github.com/nikolaypaskov/heddle#readme".into(),
                 )),
                 secondary_text: None,
                 tooltip_override_text: None,
@@ -5701,7 +5701,7 @@ impl SettingsWidget for GlobalHotkeyWidget {
                             .link(
                                 "See docs.".to_owned(),
                                 Some(
-                                    "https://github.com/nikolaypaskov/warp#readme"
+                                    "https://github.com/nikolaypaskov/heddle#readme"
                                         .to_owned(),
                                 ),
                                 None,
@@ -6861,7 +6861,7 @@ impl SettingsWidget for MouseReportingWidget {
             Some(AdditionalInfo {
                 mouse_state: self.additional_info_link.clone(),
                 on_click_action: Some(FeaturesPageAction::OpenUrl(
-                    "https://github.com/nikolaypaskov/warp#readme"
+                    "https://github.com/nikolaypaskov/heddle#readme"
                         .into(),
                 )),
                 secondary_text: None,
@@ -7126,7 +7126,7 @@ impl SettingsWidget for SmartSelectWidget {
             Some(AdditionalInfo {
                 mouse_state: self.additional_info_link.clone(),
                 on_click_action: Some(FeaturesPageAction::OpenUrl(
-                    "https://github.com/nikolaypaskov/warp#readme".into(),
+                    "https://github.com/nikolaypaskov/heddle#readme".into(),
                 )),
                 secondary_text: None,
                 tooltip_override_text: None,
@@ -7415,7 +7415,7 @@ impl SettingsWidget for WorkflowsInCommandSearch {
             Some(AdditionalInfo {
                 mouse_state: self.additional_info_link.clone(),
                 on_click_action: Some(FeaturesPageAction::OpenUrl(
-                    "https://github.com/nikolaypaskov/warp#readme".into(),
+                    "https://github.com/nikolaypaskov/heddle#readme".into(),
                 )),
                 secondary_text: None,
                 tooltip_override_text: None,

@@ -469,7 +469,7 @@ impl HoaOnboardingFlow {
             styles: FormattedTextStyles {
                 underline: true,
                 hyperlink: Some(Hyperlink::Url(
-                    "https://github.com/nikolaypaskov/warp#readme".into(),
+                    "https://github.com/nikolaypaskov/heddle#readme".into(),
                 )),
                 ..Default::default()
             },

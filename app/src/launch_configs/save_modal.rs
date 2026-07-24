@@ -527,7 +527,7 @@ impl LaunchConfigSaveModal {
                     .link(
                         "Link to Documentation".to_string(),
                         Some(
-                            "https://github.com/nikolaypaskov/warp#readme"
+                            "https://github.com/nikolaypaskov/heddle#readme"
                                 .to_string(),
                         ),
                         None,
