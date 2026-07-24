@@ -1,13 +1,41 @@
 # Heddle
 
+```text
+     │  │  │  │  │  │  │  │
+   ╔═╪══╪══╪══╪══╪══╪══╪══╪═╗
+   ║ ●  │  ●  │  ●  │  ●  │ ║       h e d d l e  /ˈhɛd(ə)l/  n.
+   ╚═╪══╪══╪══╪══╪══╪══╪══╪═╝       the loom component that lifts and separates
+     │  │  │  │  │  │  │  │         the warp threads — the part that controls
+     ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄       the warp
+```
+
 A de-commercialized fork of the [Warp](https://github.com/warpdotdev/Warp) terminal.
 
 **No account. No telemetry. No `warp.dev` anywhere in the binary.**
 
-A heddle is the loom component that lifts and separates the warp threads — the part that
-controls the warp.
+[![privacy gate](https://github.com/nikolaypaskov/heddle/actions/workflows/heddle-privacy-gate.yml/badge.svg)](https://github.com/nikolaypaskov/heddle/actions/workflows/heddle-privacy-gate.yml)
+[![license: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-8250df)](LICENSE)
+[![phone home](https://img.shields.io/badge/phones_home-never-success)](#verification)
 
----
+The claim above is not a promise in a README — it is a CI gate that reads the raw
+bytes of every built artefact and blocks the publish if it fails:
+
+```console
+$ ./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
+PASS: no Warp endpoints, credentials, or telemetry destinations found.
+
+$ ./script/heddle/verify-bundled-assets
+PASS: all 34 bundled binary assets match the reviewed manifest.
+```
+
+## At a glance
+
+| Heddle **is** | Heddle **is not** |
+|---|---|
+| The open AGPL Warp client, with its dependence on Warp's closed server removed | A "cracked" Warp — entitlements live server-side; there is nothing to crack |
+| Offline by construction: endpoints deleted at the type level, not flag-gated | A Warp Drive reimplementation — cloud sync is removed, not replaced |
+| Verified: byte-level endpoint scan on every change, in CI and locally | Agentic (yet) — see [Status](#status); today it is a terminal |
+| Independent: no affiliation with, endorsement by, or support from Warp | A place to report Warp bugs — please don't |
 
 ## What this is
 
@@ -15,32 +43,10 @@ Warp open-sourced its client under AGPL-3.0. The client is genuinely open; the *
 Drive backend, hosted authentication, and Oz** (the agent orchestration layer) are not, and remain
 proprietary.
 
-Heddle takes the open client and removes its dependence on the closed parts. It is not a
-"cracked" Warp — see [Non-goals](#non-goals).
+Heddle takes the open client and removes its dependence on the closed parts — the way a heddle
+takes hold of the warp threads and decides which ones lift.
 
-## What was removed
-
-Most items below are removed from the source outright. A subset — every
-`warp.dev` string, the Firebase key, and telemetry destinations — is additionally
-checked against the built binary on every change; see
-[Verification](#verification) for exactly what that check does and does not prove.
-
-| Removed | Detail |
-|---|---|
-| **Warp's endpoints** | `app.warp.dev`, `rtc.app.warp.dev`, `sessions.app.warp.dev`, `staging.warp.dev`, `oz.warp.dev` are absent from the binary |
-| **Firebase credentials** | The hardcoded Firebase auth API key is gone |
-| **Telemetry** | RudderStack destinations absent; the collector never starts |
-| **Server-supplied privacy settings** | See below — the most important finding |
-| **Remote configuration** | Server-driven experiments are never applied |
-| **Crash reporting** | No Sentry |
-| **Warp Drive sync** | The cloud-object listener does not start |
-| **Hosted auth** | Sign-in, sign-up, SSO and device-authorization flows have no endpoint |
-| **Billing surfaces** | Upgrade links, Stripe pages, plan-comparison and pricing links removed |
-| **Warp's legal pages** | Terms of Service and privacy policy no longer linked as if they govern Heddle |
-| **Warp support contacts** | `support@`, `sales@`, `feedback@` and `referrals@warp.dev` replaced with Heddle's issue tracker |
-| **All `warp.dev` links** | Every URL, mailto and documentation link — the scanner forbids the apex domain |
-
-### The finding that shaped the design
+## The finding that shaped the design
 
 Upstream treats `WarpDrivePrivacySettings` — a **cloud object** — as, in its own words, "the
 source of truth for these booleans" (`app/src/settings/privacy.rs`). On a logged-out cold start,
@@ -62,16 +68,39 @@ The mechanism is a type change, not a feature flag:
 
 ```rust
 pub struct ChannelConfig {
-    pub server_config: Option<WarpServerConfig>,
-    pub oz_config: Option<OzConfig>,
+    pub server_config: Option<WarpServerConfig>,   // Heddle: None
+    pub oz_config: Option<OzConfig>,               // Heddle: None
     // ...
 }
 ```
 
-Heddle passes `None`. The endpoints are not in the binary, so there is nothing to re-enable — no
-flag to flip, no server-pushed configuration that can restore them. Every one of the ~101 call
-sites that wanted a Warp URL became a compile error and was resolved individually, so absence is
-enforced by the type system rather than by a runtime check that could be bypassed.
+The endpoints are not in the binary, so there is nothing to re-enable — no flag to flip, no
+server-pushed configuration that can restore them. Every one of the ~101 call sites that wanted a
+Warp URL became a compile error and was resolved individually, so absence is enforced by the type
+system rather than by a runtime check that could be bypassed.
+
+## What was removed
+
+Most items below are removed from the source outright. A subset — every
+`warp.dev` string, the Firebase key, and telemetry destinations — is additionally
+checked against the built binary on every change; see
+[Verification](#verification) for exactly what that check does and does not prove.
+
+| Removed | Detail |
+|---|---|
+| **Warp's endpoints** | `app.warp.dev`, `rtc.app.warp.dev`, `sessions.app.warp.dev`, `staging.warp.dev`, `oz.warp.dev` are absent from the binary |
+| **Firebase credentials** | The hardcoded Firebase auth API key is gone |
+| **Telemetry** | RudderStack destinations absent; the collector never starts |
+| **Server-supplied privacy settings** | See [the finding](#the-finding-that-shaped-the-design) above |
+| **Remote configuration** | Server-driven experiments are never applied |
+| **Crash reporting** | No Sentry |
+| **Warp Drive sync** | The cloud-object listener does not start |
+| **Hosted auth** | Sign-in, sign-up, SSO and device-authorization flows have no endpoint |
+| **Billing surfaces** | Upgrade links, Stripe pages, plan-comparison and pricing links removed |
+| **The ambient cloud-agent runtime** | Cloud pane creation, composer, restoration and the view-model are being excised slice by slice — see the [removal plan](docs/superpowers/plans/2026-07-24-ambient-runtime-removal.md) |
+| **Warp's legal pages** | Terms of Service and privacy policy no longer linked as if they govern Heddle |
+| **Warp support contacts** | `support@`, `sales@`, `feedback@` and `referrals@warp.dev` replaced with Heddle's issue tracker |
+| **All `warp.dev` links** | Every URL, mailto and documentation link — the scanner forbids the apex domain |
 
 ## Building
 
@@ -79,6 +108,9 @@ enforced by the type system rather than by a runtime check that could be bypasse
 cargo build --release -p warp_tui --bin heddle-tui
 ./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
 ```
+
+<details>
+<summary><strong>macOS notes</strong> — Metal Toolchain, and why there are no macOS binaries</summary>
 
 On macOS the Metal Toolchain is a separate Xcode component and the build fails without it.
 Note that `xcrun -f metal` resolves even when the component is absent, so its presence proves
@@ -93,6 +125,8 @@ notarization needs a paid Apple Developer ID this project does not have, and shi
 binaries would mean publishing `xattr -d com.apple.quarantine` as the official install path. That
 normalizes bypassing a security control and leaves users unable to distinguish a genuine download
 from a tampered one.
+
+</details>
 
 ## Verification
 
@@ -110,7 +144,7 @@ binary can stop a user typing `curl app.warp.dev` into their own terminal. Fully
 claim additionally requires syscall-level tracing across startup, onboarding, agents, updates and
 shutdown. **That work is not done.**
 
-One honest caveat:
+Honest caveats:
 
 - **The string rebrand is incomplete.** Menu items, dialogs, notifications and icons say Heddle, but
   roughly 600 further strings — mostly log messages and internal diagnostics — still say "Warp".
@@ -139,6 +173,7 @@ One honest caveat:
 |---|---|
 | Endpoint removal | Verified — scanner passes, enforced in CI |
 | Telemetry / experiments / Drive | Removed |
+| Ambient cloud-agent runtime | Being excised slice by slice, each independently reviewed — [plan](docs/superpowers/plans/2026-07-24-ambient-runtime-removal.md) |
 | Rebrand | Own name, icon, logo, bundle ID, paths; upstream doc links remain |
 | Release builds | Linux x86_64; macOS builds from source |
 | Agent support (ACP) | Designed + `AgentBackend` seam planned; **not implemented** (next milestone) |
@@ -168,3 +203,9 @@ Copyright © 2026 Denver Technologies, Inc. Modified work © 2026 Heddle contrib
 Upstream's copyright notices are preserved throughout, as the AGPL requires. "Warp" is a trademark
 of Denver Technologies, Inc.; Heddle is an independent fork and is **not** affiliated with,
 endorsed by, or supported by them. Please do not report Heddle issues to Warp.
+
+---
+
+```text
+┄┄┄┄┄┄┄ the warp is only half the cloth ┄┄┄┄┄┄┄
+```
