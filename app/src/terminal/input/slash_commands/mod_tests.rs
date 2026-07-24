@@ -93,10 +93,9 @@ fn tui_supports_the_selected_low_effort_commands_but_not_cost_or_orchestrate() {
         );
     }
 
-    for command in [&*commands::ORCHESTRATE] {
-        assert_eq!(TuiSlashCommand::from_static_command(command), None);
-        assert!(!slash_command_is_supported_in_tui(command));
-    }
+    let command = &*commands::ORCHESTRATE;
+    assert_eq!(TuiSlashCommand::from_static_command(command), None);
+    assert!(!slash_command_is_supported_in_tui(command));
 }
 
 #[test]

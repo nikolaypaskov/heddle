@@ -20103,7 +20103,7 @@ impl TerminalView {
                     ctx.emit(Event::OpenWarpDriveObjectInPane(uid.clone()));
                 }
                 AIAgentCitation::WarpDocumentation { path: _ } => {
-                    ctx.open_url(&format!("https://github.com/nikolaypaskov/heddle#readme"));
+                    ctx.open_url("https://github.com/nikolaypaskov/heddle#readme");
                 }
                 AIAgentCitation::WebPage { url } => {
                     ctx.open_url(url);
