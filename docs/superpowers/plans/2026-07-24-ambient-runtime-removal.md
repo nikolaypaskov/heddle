@@ -65,6 +65,20 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   the dead delete-confirmation event chain). LESSON: the auth-secret FTUX is NOT cloud-only.
   Remaining orphans (delete_auth_secret, remove_deleted_auth_secret_entry,
   is_harness_auth_ftux_completed) left for a later slice.
+- **Slice 0 (neutralize construction + creators)** — DONE (`68c723d4`), Codex-approved
+  (3 rounds). Forced `TerminalView::new`'s upfront chokepoint to always yield a `None`
+  `ambient_agent_view_model` (provably always None in OSS; no consumer panics). Removed
+  46 now-unreachable cloud-mode tests + orphaned helpers/`_for_test` accessors (5731/13).
+  KEY LESSON (Codex): construction-neutralization ALONE is insufficient — a would-be
+  "cloud" pane whose VM is None renders an indefinite shell-less loading viewer, NOT a
+  local pane. Must ALSO neutralize every OSS-reachable creator to degrade to a real
+  local terminal: `type="cloud"` tab config → `PaneMode::Terminal`; the pane-restore
+  dispatch folds `PaneMode::Cloud` into local `create_session`; persisted
+  `LeafContents::AmbientAgent` snapshots restore as local terminals (retires
+  `AmbientRestoreKind`, severs the restoration-queue feeder); the `NewCloudAgentConversation`
+  deeplink is a logged no-op (its no-window branch was NOT CloudMode-gated — the real
+  reachable gap Codex caught). All other viewer creators are CloudMode/`ViewingSharedSessions`-
+  gated or need server-derived session/task events (unreachable: `oss.rs` server_config None).
 - **Slice 3a (cloud-mode-V2 model selector)** — DONE (`7f4d130b`), Codex-approved.
   Deleted `model_selector.rs` (717 lines) + the footer's `v2_model_selector`
   field/construction/methods/render + the `/model` cloud-V2 branch + the input
@@ -84,7 +98,7 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
 
 ## Ordered slices (each must compile + pass suite + Codex)
 
-- **Slice 0 — neutralize ambient construction / entry paths (do FIRST).** Make
+- **Slice 0 — DONE (`68c723d4`, Codex-approved).** neutralize ambient construction / entry paths (do FIRST). Make
   `ambient_agent_view_model` provably always `None` in OSS: force the upfront
   construction chokepoint (`terminal/view.rs:3089`
   `is_ambient_agent.then(|| AmbientAgentViewModel::new(...))`) to never create the
