@@ -145,7 +145,22 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   model view — so it is NOT cleanly isolatable. Do Slice 0 first (make the
   view-model provably always `None`), then collapse 3b together with the Slice 4
   consumer excisions as one dead-branch sweep.
-- **Slice 4 — excise per-consumer Option fields** (LOW each): `block.rs`,
+- **Slice 4a — DONE (`849d2a48`), Codex-approved (2 rounds).** Excised ambient from
+  the two inline selector subsystems: `models/{data_source,view}.rs` (dropped field/
+  setter/param + the `include_model_in_picker` custom-endpoint suppression, which was
+  a no-op locally) and `skills/{data_source,view}.rs` (dropped field/setter/param +
+  the `is_cloud_pane` "hide skills" guard). Removed their `set_*` calls from
+  `attach_ambient_agent_view_model` + the `new()` ambient args in `input.rs`. LESSON:
+  removing a field's only reader (its setter) makes the field never-read `dead_code`
+  and any `let mut` it mutated `unused_mut` — grep ALL warning kinds, not just imports.
+- **Slice 4b/4c — REMAINING (heavier/entangled).** The rest of Slice 4: slash-command
+  data source (`gui.rs` — ripples through `GuiDataSourceArgs`; `is_cloud_mode` collapses
+  to `self.is_cloud_mode_v2`, keeping the separate `is_cloud_mode_v2`/CloudModeInputV2
+  flag for a later cleanup), agent_input_footer (env-selector + display-chip rendering),
+  block/status_bar (cloud setup-status rendering), maa, display_chip, then the fan-out
+  root (`input.rs` `attach_ambient_agent_view_model` + `Input::new` ambient param +
+  `AmbientAgentViewState`) and `universal_developer_input`'s underscored param.
+- **Slice 4 (original) — excise per-consumer Option fields** (LOW each): `block.rs`,
   `zero_state_block.rs`, `maa.rs`, `display_chip.rs`, `models/*`, `skills/*`,
   `slash_commands/data_source/gui.rs`, `universal_developer_input.rs`,
   `environment_selector.rs`, handoff button `agent_input_footer/mod.rs:2234-2239`.
