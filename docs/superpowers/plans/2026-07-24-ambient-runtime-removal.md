@@ -43,6 +43,28 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
 5. `ai/harness_availability.rs`, `ai/agent_sdk/` local driver paths,
    non-ambient render arms in `rich_content.rs` / `block_list_element.rs`.
 
+## Progress
+
+- **Slice 1** (`742309e1`) — first-time-setup FTUX view. DONE, Codex-approved.
+- **Slice 1b** (`d2200919`) — cloud-pane render leaves (loading_screen.rs, footer.rs,
+  `render_ambient_agent_progress`, orphaned helper, stale comments). DONE, Codex-approved.
+- **Slice 1c (block/ subtree)** — DEFERRED to Slice 6: the `AmbientAgentBlock` /
+  `HarnessSessionHeader` `RichContentMetadata` rendering and `maybe_insert_setup_command_blocks`
+  are embedded inside `view_impl.rs` event handlers that Slice 6 deletes wholesale, so peeling
+  them separately is churn. Sites: `rich_content.rs:259-269` (2 variants),
+  `block_list_element.rs:4335` (a `matches!` → make `true`), `view_impl.rs:397,~500,~828`
+  (constructions + `maybe_insert_setup_command_blocks`), `view.rs:12000` (caller).
+- **Slice 2 (composer selectors)** — MAPPED, ready. All cloud-only: `harness_selector`,
+  `host_selector`, `auth_secret_selector`, `auth_secret_ftux_view`, `auth_secret_ftux_dropdown`,
+  `delete_auth_secret_confirmation_dialog` are fields of the `Option<AmbientAgentViewState>` on
+  `Input` (built only in `attach_ambient_agent_view_model`). Deleting the 6 files gives a
+  ~23-error cascade to fix: input.rs imports (317-318), the `AmbientAgentViewState` fields
+  (1754-1756), `build_harness/host/auth_secret_selector` (2180/2211/2292), their construction
+  (2389, 2452-2466, gated by `is_cloud_mode_composer`), field reads (4130,4173,16158), the
+  ambient event-handler arms that drive them; workspace/view.rs `AuthSecretFtuxView` modal
+  (403,1153-1156,14803-14824); mod.rs re-exports; two comment refs in model.rs (257,1823).
+  `host_picker_tests.rs` is a DIFFERENT (orchestration) host-picker — do not touch.
+
 ## Ordered slices (each must compile + pass suite + Codex)
 
 - **Slice 0 — neutralize ambient construction / entry paths (do FIRST).** Make
