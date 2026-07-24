@@ -32,8 +32,13 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
 
 ## Do NOT touch (cloud-named but local/shared)
 
-1. `model_selector.rs` `ModelSelector` **None path** — local Agent-Mode model
-   picker (`build_oz_menu_items` → `LLMPreferences`). SPLIT, keep local branch.
+1. ~~`model_selector.rs` `ModelSelector`~~ — CORRECTED (Codex, slice 3a): this view
+   was NOT a shared local picker. Its only constructor was the footer's
+   `v2_model_selector`, gated on `FeatureFlag::CloudModeInputV2` (absent from every
+   OSS flag set), so it was dead in OSS and deleted outright in Slice 3a
+   (`7f4d130b`), not split. The real local Agent-Mode picker is the separate
+   `ProfileModelSelector` (build_oz_menu_items → LLMPreferences); the inline picker
+   is `InlineModelSelectorView`. Both untouched.
 2. `terminal/profile_model_selector.rs` — local; only its ambient field is cloud.
 3. `cloud_conversation_continuation.rs` `AIQueryRouting::Local` +
    `resolve_ai_query_routing` — single source of truth for local follow-up
@@ -60,6 +65,12 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   the dead delete-confirmation event chain). LESSON: the auth-secret FTUX is NOT cloud-only.
   Remaining orphans (delete_auth_secret, remove_deleted_auth_secret_entry,
   is_harness_auth_ftux_completed) left for a later slice.
+- **Slice 3a (cloud-mode-V2 model selector)** — DONE (`7f4d130b`), Codex-approved.
+  Deleted `model_selector.rs` (717 lines) + the footer's `v2_model_selector`
+  field/construction/methods/render + the `/model` cloud-V2 branch + the input
+  keymap term. Codex confirmed the view was cloud-only (never a shared local
+  picker), `/model` still reaches the local `InlineModelSelectorView`, and the
+  local `ProfileModelSelector` is untouched. Suite 5777/13 (unchanged baseline).
 - **(historical mapping) Slice 2** — All cloud-only: `harness_selector`,
   `host_selector`, `auth_secret_selector`, `auth_secret_ftux_view`, `auth_secret_ftux_dropdown`,
   `delete_auth_secret_confirmation_dialog` are fields of the `Option<AmbientAgentViewState>` on
@@ -100,10 +111,19 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   `auth_secret_ftux_view.rs`, `delete_auth_secret_confirmation_dialog.rs`; remove
   `build_harness/host/auth_secret_selector` in `input.rs:2180-2479` + workspace
   modal (`workspace/view.rs:403,1153-1156,14803-14824`). ~3000 lines. MEDIUM.
-- **Slice 3 — split shared model pickers.** `model_selector.rs`: drop harness
-  branch (532-602), keep `build_oz_menu_items`; relocate out of `ambient_agent/`.
-  `profile_model_selector.rs`: drop ambient field + `is_third_party_harness`.
-  Risk MEDIUM (local model picker).
+- **Slice 3a — DONE (`7f4d130b`, Codex-approved).** Removed the ambient
+  `model_selector.rs` (`ModelSelector`) outright: it was cloud-only (only ever
+  built as the footer's `v2_model_selector`, gated on `CloudModeInputV2`, absent
+  from OSS), NOT a shared local picker as originally believed. No split/relocate
+  needed. The `/model` command still reaches the local `InlineModelSelectorView`.
+- **Slice 3b — DEFERRED behind Slice 0.** `profile_model_selector.rs`: drop the
+  `ambient_agent_view_model` field, `set_ambient_agent_view_model`,
+  `is_third_party_harness`, and the harness-model menu paths. This field is fed by
+  the shared `attach_ambient_agent_view_model` fan-out (`input.rs`) — the SAME
+  setter that wires the footer, status bar, slash/skills data sources, and inline
+  model view — so it is NOT cleanly isolatable. Do Slice 0 first (make the
+  view-model provably always `None`), then collapse 3b together with the Slice 4
+  consumer excisions as one dead-branch sweep.
 - **Slice 4 — excise per-consumer Option fields** (LOW each): `block.rs`,
   `zero_state_block.rs`, `maa.rs`, `display_chip.rs`, `models/*`, `skills/*`,
   `slash_commands/data_source/gui.rs`, `universal_developer_input.rs`,
