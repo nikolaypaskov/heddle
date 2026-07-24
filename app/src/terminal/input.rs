@@ -2172,44 +2172,13 @@ impl Input {
             return;
         }
         Self::subscribe_to_ambient_agent_view_model(&view_model, ctx);
-        // Push the model down to the footer (parent -> child) so its environment selector
-        // reflects the cloud run. On this link-join path the footer captured `None` at
-        // construction, so it must be given the model now to render the environment chip.
-        let footer_model = view_model.clone();
-        let footer_menu_positioning = self.menu_positioning_provider.clone();
-        self.agent_input_footer.update(ctx, |footer, ctx| {
-            footer.set_ambient_agent_view_model(footer_model, footer_menu_positioning, ctx);
-        });
-        // Same parent -> child push for the agent status bar. It captured `None` at construction
-        // on this link-join path, so without this it can't render the cloud-mode setup /
-        // follow-up progress (`render_cloud_mode_setup_status`) while a follow-up VM spins up.
-        let status_bar_model = view_model.clone();
-        self.agent_status_view.update(ctx, |status_bar, ctx| {
-            status_bar.set_ambient_agent_view_model(status_bar_model, ctx);
-        });
-        // Composer slash-command data sources gate cloud-follow-up commands on the ambient run
-        // (e.g. `is_disconnected_cloud_followup`), so keep them in sync for the link-join viewer.
-        let slash_model = view_model.clone();
-        self.slash_command_data_source
-            .update(ctx, |data_source, ctx| {
-                data_source.set_ambient_agent_view_model(slash_model, ctx);
-            });
-        if let Some(cloud_mode_composer_slash_command_data_source) =
-            self.cloud_mode_composer_slash_command_data_source.clone()
-        {
-            let composer_slash_model = view_model.clone();
-            cloud_mode_composer_slash_command_data_source.update(ctx, |data_source, ctx| {
-                data_source.set_ambient_agent_view_model(composer_slash_model, ctx);
-            });
-        }
         // NOTE: This method is the SINGLE point that wires a (lazily- or eagerly-created) ambient
         // view model into the input tree. Both `Input::new` (eager/composer) and the shared-session
         // viewer's `SessionJoined` path (lazy) funnel through here, so any component that captures
         // `Option<ModelHandle<AmbientAgentViewModel>>` must be wired here (via its
         // `set_ambient_agent_view_model` setter) rather than at construction, otherwise the two
-        // paths drift. Currently propagated: input subscription, agent input footer (which forwards
-        // to its environment selector and display-chip config), agent status bar, and the
-        // slash-command data sources.
+        // paths drift. Currently propagated: input subscription and the agent input footer
+        // (which forwards to its environment selector).
         // Intentionally NOT wired here (verified safe): the UDI button bar's selectors (not rendered
         // in agent view, so unreachable for a cloud viewer) and per-exchange AI blocks / ambient
         // setup-command blocks (created after the model exists).
@@ -2268,8 +2237,6 @@ impl Input {
             model_events: model_events.clone(),
             is_shared_session_viewer,
             agent_view_controller: agent_view_controller.clone(),
-            // Wired post-construction via `attach_ambient_agent_view_model` (single wiring point).
-            ambient_agent_view_model: None,
         };
 
         let prompt_view = ctx.add_typed_action_view(|ctx| {
@@ -2360,8 +2327,6 @@ impl Input {
                 terminal_view_id,
                 ai_input_model.clone(),
                 model.clone(),
-                // Wired post-construction via `attach_ambient_agent_view_model`.
-                None,
                 handoff_compose_state.clone(),
                 current_prompt.clone(),
                 footer_display_chip_config.clone(),
@@ -3193,8 +3158,6 @@ impl Input {
                 agent_view_controller: agent_view_controller.clone(),
                 cli_subagent_controller: cli_subagent_controller.clone(),
                 terminal_view_id,
-                // Wired post-construction via `attach_ambient_agent_view_model`.
-                ambient_agent_view_model: None,
             };
             GuiSlashCommandDataSource::new(args, ctx)
         });
@@ -3213,8 +3176,6 @@ impl Input {
                     agent_view_controller: agent_view_controller.clone(),
                     cli_subagent_controller: cli_subagent_controller.clone(),
                     terminal_view_id,
-                    // Wired post-construction via `attach_ambient_agent_view_model`.
-                    ambient_agent_view_model: None,
                 };
                 Some(ctx.add_model(|ctx| GuiSlashCommandDataSource::for_cloud_mode_v2(args, ctx)))
             } else {
@@ -3438,8 +3399,6 @@ impl Input {
                 &model_events,
                 model.clone(),
                 agent_shortcut_view_model.clone(),
-                // Wired post-construction via `attach_ambient_agent_view_model`.
-                None,
                 suggestions_mode_model.clone(),
                 slash_command_model.clone(),
                 ephemeral_message_model.clone(),
@@ -3854,12 +3813,6 @@ impl Input {
         if !self.maybe_route_ai_query_to_remote_target(ctx) {
             self.submit_ai_query_local(zero_state_prompt_suggestion_type, ctx);
         }
-    }
-
-    pub(super) fn open_v2_environment_selector(&mut self, ctx: &mut ViewContext<Self>) {
-        self.agent_input_footer
-            .clone()
-            .update(ctx, |footer, ctx| footer.open_v2_environment_selector(ctx));
     }
 
     /// Restores the `&` handoff compose draft after a workspace failure.
@@ -15800,14 +15753,7 @@ impl View for Input {
             .agent_input_footer
             .as_ref(app)
             .is_model_selector_open(app);
-        let is_v2_environment_selector_open = self
-            .agent_input_footer
-            .as_ref(app)
-            .is_v2_environment_selector_open(app);
-        if is_profile_model_selector_open
-            || is_agent_footer_model_selector_open
-            || is_v2_environment_selector_open
-        {
+        if is_profile_model_selector_open || is_agent_footer_model_selector_open {
             ctx.set.insert("ProfileModelSelectorOpen");
         }
 

@@ -635,16 +635,13 @@ const BOOTSTRAP_FAILED_DURATION: Duration = Duration::from_secs(7);
 /// a user needing to type in one or many secret manager passwords
 /// during the bootstrap period.
 const ENV_VAR_BOOTSTRAP_FAILED_DURATION: Duration = Duration::from_secs(60);
-const KNOWN_ISSUES_URL: &str =
-    "https://github.com/nikolaypaskov/heddle#readme";
+const KNOWN_ISSUES_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 /// Link to supported custom prompts.
-const PROMPT_COMPATIBILITY_URL: &str =
-    "https://github.com/nikolaypaskov/heddle#readme";
+const PROMPT_COMPATIBILITY_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 /// Link to troubleshooting steps for ControlMaster errors.
-const CONTROLMASTER_ISSUES_URL: &str =
-    "https://github.com/nikolaypaskov/heddle#readme";
+const CONTROLMASTER_ISSUES_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 /// Link to instructions on how to update p10k.
 const P10K_UPDATE_INSTRUCTIONS_URL: &str =
@@ -659,10 +656,8 @@ const MIN_DELTA_FOR_TEXT_SELECTION: f32 = 0.5;
 
 /// Notifications-specific info
 /// TODO (suraj): add documentation for notifications in gitbook
-const NOTIFICATIONS_LEARN_MORE_URL: &str =
-    "https://github.com/nikolaypaskov/heddle#readme";
-pub const NOTIFICATIONS_TROUBLESHOOT_URL: &str =
-    "https://github.com/nikolaypaskov/heddle#readme";
+const NOTIFICATIONS_LEARN_MORE_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
+pub const NOTIFICATIONS_TROUBLESHOOT_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 const DEBOUNCE_PERIOD: Duration = Duration::from_millis(40);
 
@@ -3488,7 +3483,6 @@ impl TerminalView {
                 model.clone(),
                 ai_controller.clone(),
                 &model_events_handle,
-                ambient_agent_view_model.clone(),
                 terminal_view_id,
                 ctx,
             )
@@ -6157,7 +6151,6 @@ impl TerminalView {
                         &self.cli_subagent_controller,
                         &self.model_events_handle,
                         self.agent_view_controller.clone(),
-                        self.ambient_agent_view_model.clone(),
                         self.view_handle.clone(),
                         self.view_id,
                         ctx,
@@ -22610,7 +22603,6 @@ impl TerminalView {
                 &self.cli_subagent_controller,
                 &self.model_events_handle,
                 self.agent_view_controller.clone(),
-                self.ambient_agent_view_model.clone(),
                 self.view_handle.clone(),
                 ctx.view_id(),
                 ctx,
@@ -27427,7 +27419,6 @@ impl View for TerminalView {
         if self.is_any_tooltip_open() {
             self.render_grid_tooltip(&mut stack, &model, appearance, app);
         }
-
 
         // For shared session viewers, we want to show a "Request edit access"
         // button near the input if the input (or the button) are being hovered.

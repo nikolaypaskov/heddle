@@ -29,20 +29,17 @@ use crate::settings::{
 };
 use crate::terminal::input::slash_commands::AcceptSlashCommandOrSavedPrompt;
 use crate::terminal::model::session::active_session::ActiveSession;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 
 pub struct GuiDataSourceArgs {
     pub active_session: ModelHandle<ActiveSession>,
     pub agent_view_controller: ModelHandle<AgentViewController>,
     pub cli_subagent_controller: ModelHandle<CLISubagentController>,
     pub terminal_view_id: EntityId,
-    pub ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
 }
 
 pub struct GuiSlashCommandDataSource {
     state: SlashCommandDataSourceState,
     agent_view_controller: ModelHandle<AgentViewController>,
-    ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
     is_cloud_mode_v2: bool,
 }
 
@@ -65,7 +62,6 @@ impl GuiSlashCommandDataSource {
             agent_view_controller,
             cli_subagent_controller,
             terminal_view_id,
-            ambient_agent_view_model,
         } = args;
 
         subscribe_to_shared_dependencies(
@@ -107,33 +103,10 @@ impl GuiSlashCommandDataSource {
                 terminal_view_id,
             ),
             agent_view_controller,
-            ambient_agent_view_model: None,
             is_cloud_mode_v2,
         };
-        // Route ambient wiring through the setter so construction and the lazy shared-session
-        // viewer path share one implementation.
-        if let Some(ambient_agent_view_model) = ambient_agent_view_model {
-            me.set_ambient_agent_view_model(ambient_agent_view_model, ctx);
-        } else {
-            me.recompute_active_commands(ctx);
-        }
+        me.recompute_active_commands(ctx);
         me
-    }
-
-    /// Attaches an ambient agent view model after construction. Used on the shared-session viewer
-    /// path where the model is created lazily at `SessionJoined`, after the data source was built
-    /// with `None`. Keeps cloud-mode command and skill gating correct for a link-join viewer.
-    /// Idempotent: a no-op when a model is already set.
-    pub fn set_ambient_agent_view_model(
-        &mut self,
-        ambient_agent_view_model: ModelHandle<AmbientAgentViewModel>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if self.ambient_agent_view_model.is_some() {
-            return;
-        }
-        self.ambient_agent_view_model = Some(ambient_agent_view_model);
-        self.recompute_active_commands(ctx);
     }
 
     pub(super) fn is_cloud_mode_v2(&self) -> bool {
@@ -201,7 +174,7 @@ impl GuiSlashCommandDataSource {
             availability |= Availability::CLOUD_MODE_V2_COMPOSER;
         }
 
-        if self.is_cloud_mode(ctx) {
+        if self.is_cloud_mode() {
             availability |= Availability::CLOUD_AGENT;
         } else {
             availability |= Availability::NOT_CLOUD_AGENT;
@@ -245,13 +218,10 @@ impl GuiSlashCommandDataSource {
         true
     }
 
-    fn is_cloud_mode(&self, ctx: &AppContext) -> bool {
+    /// Heddle (FOSS): the ambient cloud-agent runtime is removed, so the pane never
+    /// carries an `AmbientAgentViewModel`; only the cloud-mode-v2 composer flag remains.
+    fn is_cloud_mode(&self) -> bool {
         self.is_cloud_mode_v2
-            || (FeatureFlag::CloudMode.is_enabled()
-                && self
-                    .ambient_agent_view_model
-                    .as_ref()
-                    .is_some_and(|model| model.as_ref(ctx).is_ambient_agent()))
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -321,7 +291,7 @@ impl SyncDataSource for GuiSlashCommandDataSource {
         let mut results = self.match_active_commands(&query_text, app);
         // Skills invoke locally, so they're hidden on any cloud pane (live viewer,
         // disconnected follow-up, or read-only tombstone).
-        if !self.is_cloud_mode(app) {
+        if !self.is_cloud_mode() {
             results.extend(self.match_skills(&query_text, app));
         }
 

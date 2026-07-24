@@ -47,9 +47,7 @@ use warpui::{
 
 #[cfg(feature = "local_fs")]
 pub(crate) use self::environment_selector::sort_environments_by_recency;
-pub(crate) use self::environment_selector::{
-    EnvironmentSelector, EnvironmentSelectorEvent, EnvironmentSelectorTarget,
-};
+pub(crate) use self::environment_selector::{EnvironmentSelector, EnvironmentSelectorEvent};
 use crate::ai::AIRequestUsageModel;
 use crate::ai::blocklist::BlocklistAIInputModel;
 use crate::ai::blocklist::agent_view::is_in_cloud_context;
@@ -94,7 +92,6 @@ use crate::terminal::session_settings::{
     SessionSettings, SessionSettingsChangedEvent, ToolbarChipSelection,
 };
 use crate::terminal::shared_session::SharedSessionStatus;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::terminal::view::init::OPEN_CLI_AGENT_RICH_INPUT_KEYBINDING;
 use crate::terminal::view::{AIQueryRouting, TerminalAction, resolve_ai_query_routing};
 use crate::terminal::{CLIAgent, TerminalModel};
@@ -124,8 +121,6 @@ const START_REMOTE_CONTROL_LOGIN_REQUIRED_TOOLTIP: &str = "Log in to use /remote
 
 const LIVE_REMOTE_VM_INDICATOR_TOOLTIP: &str = "Connected to a live cloud agent session. Your next prompt continues on the running remote machine.";
 const NEW_CLOUD_VM_INDICATOR_TOOLTIP: &str = "Not connected to cloud agent. Your next prompt starts a new cloud machine to continue this conversation.";
-
-const CLOUD_MODE_V2_FOOTER_GAP: f32 = 4.;
 
 /// Voice input state for the CLI agent footer. Unlike the editor-based voice
 /// flow (which goes through Input → EditorView), this state is self-contained
@@ -206,10 +201,8 @@ pub struct AgentInputFooter {
     live_session_indicator: ViewHandle<ActionButton>,
     new_cloud_vm_indicator: ViewHandle<ActionButton>,
     model_selector: ViewHandle<ProfileModelSelector>,
-    environment_selector: Option<ViewHandle<EnvironmentSelector>>,
     handoff_environment_selector: ViewHandle<EnvironmentSelector>,
     prompt_alert: ViewHandle<PromptAlertView>,
-    ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
     handoff_compose_state: ModelHandle<HandoffComposeState>,
     left_display_chips: Vec<ViewHandle<DisplayChip>>,
     right_display_chips: Vec<ViewHandle<DisplayChip>>,
@@ -261,61 +254,12 @@ pub struct AgentInputFooter {
 }
 
 impl AgentInputFooter {
-    /// Attaches an ambient agent view model to an already-constructed footer. Used when a
-    /// shared-session viewer only learns at `SessionJoined` that the session is an ambient
-    /// run (e.g. a raw `shared_session` link): the footer was built with `None` at
-    /// construction, so it must be given the model now to render the cloud environment
-    /// selector and re-render on model events. Mirrors the ambient wiring in [`Self::new`].
-    /// `menu_positioning_provider` is passed in because the footer does not retain it.
-    /// Idempotent: a no-op when a model is already present.
-    pub fn set_ambient_agent_view_model(
-        &mut self,
-        ambient_agent_view_model: ModelHandle<AmbientAgentViewModel>,
-        menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if self.ambient_agent_view_model.is_some() {
-            return;
-        }
-        self.ambient_agent_view_model = Some(ambient_agent_view_model.clone());
-        self.display_chip_config.ambient_agent_view_model = Some(ambient_agent_view_model.clone());
-
-        // Build the environment selector now that the model exists (mirrors `new`).
-        let environment_selector = ctx.add_typed_action_view(|ctx| {
-            EnvironmentSelector::new(
-                menu_positioning_provider.clone(),
-                EnvironmentSelectorTarget::CloudPane(ambient_agent_view_model.clone()),
-                ctx,
-            )
-        });
-        ctx.subscribe_to_view(&environment_selector, |_, _, event, ctx| match event {
-            EnvironmentSelectorEvent::MenuVisibilityChanged { open } => {
-                ctx.emit(AgentInputFooterEvent::ToggledChipMenu { open: *open });
-                if !*open {
-                    ctx.emit(AgentInputFooterEvent::EnvironmentSelectorClosed);
-                }
-            }
-            EnvironmentSelectorEvent::OpenEnvironmentManagementPane => {
-                ctx.emit(AgentInputFooterEvent::OpenEnvironmentManagementPane);
-            }
-        });
-        self.environment_selector = Some(environment_selector);
-
-        // Re-render on ambient model events (mirrors `new`).
-        ctx.subscribe_to_model(&ambient_agent_view_model, |_, _, _, ctx| {
-            ctx.notify();
-        });
-
-        ctx.notify();
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
         terminal_view_id: EntityId,
         ai_input_model: ModelHandle<BlocklistAIInputModel>,
         terminal_model: Arc<FairMutex<TerminalModel>>,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         handoff_compose_state: ModelHandle<HandoffComposeState>,
         prompt: ModelHandle<PromptType>,
         display_chip_config: DisplayChipConfig,
@@ -700,13 +644,10 @@ impl AgentInputFooter {
             me.handle_profile_model_selector_event(event, ctx);
         });
 
-        // Built by the ambient setter (construction + lazy viewer path share that single point).
-        let environment_selector: Option<ViewHandle<EnvironmentSelector>> = None;
-
         let handoff_environment_selector = ctx.add_typed_action_view(|ctx| {
             EnvironmentSelector::new(
                 menu_positioning_provider.clone(),
-                EnvironmentSelectorTarget::Handoff(handoff_compose_state.clone()),
+                handoff_compose_state.clone(),
                 ctx,
             )
         });
@@ -846,7 +787,6 @@ impl AgentInputFooter {
 
         let mut me = Self {
             terminal_view_id,
-            ambient_agent_view_model: None,
             nld_button,
             mic_button,
             file_button,
@@ -866,7 +806,6 @@ impl AgentInputFooter {
             live_session_indicator,
             new_cloud_vm_indicator,
             model_selector: profile_model_selector_full,
-            environment_selector,
             handoff_environment_selector,
             prompt_alert,
             terminal_model,
@@ -888,15 +827,6 @@ impl AgentInputFooter {
         me.sync_remote_control_button(ctx);
         me.update_context_window_button(ctx);
         me.update_display_chips(&prompt, ctx);
-        // Route ambient wiring through the setter so construction and the lazy shared-session
-        // viewer path share one implementation.
-        if let Some(ambient_agent_view_model) = ambient_agent_view_model {
-            me.set_ambient_agent_view_model(
-                ambient_agent_view_model,
-                menu_positioning_provider,
-                ctx,
-            );
-        }
         me
     }
 
@@ -909,71 +839,6 @@ impl AgentInputFooter {
         // Chips will be rebuilt on the next GitRepoStatusEvent::MetadataChanged.
         // Notify to ensure any existing chips reflect the change.
         ctx.notify();
-    }
-
-    pub fn is_v2_environment_selector_open(&self, app: &AppContext) -> bool {
-        self.environment_selector
-            .as_ref()
-            .is_some_and(|s| s.as_ref(app).is_menu_open())
-    }
-
-    pub fn open_v2_environment_selector(&mut self, ctx: &mut ViewContext<Self>) {
-        if let Some(selector) = self.environment_selector.clone() {
-            selector.update(ctx, |s, ctx| s.open_menu(ctx));
-        }
-    }
-
-    fn should_render_cloud_mode_v2(&self, app: &AppContext) -> bool {
-        FeatureFlag::CloudModeInputV2.is_enabled()
-            && FeatureFlag::CloudMode.is_enabled()
-            && self
-                .ambient_agent_view_model
-                .as_ref()
-                .is_some_and(|ambient_agent_model| {
-                    ambient_agent_model
-                        .as_ref(app)
-                        .is_configuring_ambient_agent()
-                })
-    }
-
-    fn render_cloud_mode_v2_footer(&self, app: &AppContext) -> Box<dyn Element> {
-        // `app` is only consumed under the `voice_input` cfg below; reference it here so the
-        // parameter doesn't trip the unused-variable lint when the feature is disabled.
-        #[cfg(not(feature = "voice_input"))]
-        let _ = app;
-
-        let mut left = Flex::row()
-            .with_main_axis_size(MainAxisSize::Min)
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_spacing(CLOUD_MODE_V2_FOOTER_GAP);
-        if let Some(environment_selector) = self.environment_selector.as_ref() {
-            left = left.with_child(ChildView::new(environment_selector).finish());
-        }
-
-        let mut right = Flex::row()
-            .with_main_axis_size(MainAxisSize::Min)
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_spacing(CLOUD_MODE_V2_FOOTER_GAP);
-
-        // Only show the mic button when voice input is compiled in *and* the
-        // user has voice input enabled in settings, matching V1's behavior.
-        #[cfg(feature = "voice_input")]
-        if AISettings::as_ref(app).is_voice_input_enabled(app) {
-            right = right.with_child(ChildView::new(&self.mic_button).finish());
-        }
-
-        right = right.with_child(ChildView::new(&self.file_button).finish());
-
-        let content = Flex::row()
-            .with_main_axis_size(MainAxisSize::Max)
-            .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_spacing(CLOUD_MODE_V2_FOOTER_GAP)
-            .with_child(left.finish())
-            .with_child(right.finish())
-            .finish();
-
-        Clipped::new(content).finish()
     }
 
     fn all_display_chips(&self) -> impl Iterator<Item = &ViewHandle<DisplayChip>> {
@@ -1611,14 +1476,10 @@ impl AgentInputFooter {
             .all_display_chips()
             .any(|chip| chip.as_ref(app).display_chip_kind().has_open_menu());
 
-        let has_open_env_selector = self
-            .environment_selector
-            .as_ref()
-            .is_some_and(|selector| selector.as_ref(app).is_menu_open());
         let has_open_handoff_env_selector =
             self.handoff_environment_selector.as_ref(app).is_menu_open();
 
-        has_open_display_chip || has_open_env_selector || has_open_handoff_env_selector
+        has_open_display_chip || has_open_handoff_env_selector
     }
 
     pub fn is_model_selector_open(&self, app: &AppContext) -> bool {
@@ -2037,13 +1898,7 @@ impl AgentInputFooter {
         is_conversation_transcript_context: bool,
         app: &AppContext,
     ) -> Option<Box<dyn Element>> {
-        let is_cloud_mode = FeatureFlag::CloudModeImageContext.is_enabled()
-            && self
-                .ambient_agent_view_model
-                .as_ref()
-                .is_some_and(|ambient_agent_model| {
-                    ambient_agent_model.as_ref(app).is_ambient_agent()
-                });
+        let is_cloud_mode = false;
         if !item.available_in().is_available_for_agent_view()
             || !item.available_to_session_viewer(shared_status, is_cloud_mode)
         {
@@ -2202,9 +2057,6 @@ impl View for AgentInputFooter {
     }
 
     fn render(&self, app: &warpui::AppContext) -> Box<dyn warpui::Element> {
-        if self.should_render_cloud_mode_v2(app) {
-            return self.render_cloud_mode_v2_footer(app);
-        }
         // When a CLI agent session is active, render the CLI agent toolbar instead.
         if self.is_cli_agent_session_active(app) {
             return self.render_cli_mode_footer(app);
@@ -2221,19 +2073,7 @@ impl View for AgentInputFooter {
             .with_run_spacing(4.)
             .with_spacing(4.);
 
-        let is_ambient_agent = FeatureFlag::CloudMode.is_enabled()
-            && self
-                .ambient_agent_view_model
-                .as_ref()
-                .is_some_and(|ambient_agent_model| {
-                    ambient_agent_model.as_ref(app).is_ambient_agent()
-                });
-        if is_ambient_agent {
-            if let Some(environment_selector) = self.environment_selector.as_ref() {
-                left_buttons =
-                    left_buttons.with_child(ChildView::new(environment_selector).finish());
-            }
-        } else if self.handoff_compose_state.as_ref(app).is_active() {
+        if self.handoff_compose_state.as_ref(app).is_active() {
             left_buttons = left_buttons
                 .with_child(ChildView::new(&self.handoff_environment_selector).finish());
         }
@@ -2246,12 +2086,7 @@ impl View for AgentInputFooter {
 
         // Indicate whether the next follow-up continues on the live remote VM or starts a new one.
         // The new-cloud-VM chip uses a yellow icon; the live-session chip uses the default color.
-        match resolve_ai_query_routing(
-            self.terminal_view_id,
-            self.ambient_agent_view_model.as_ref(),
-            &terminal_model,
-            app,
-        ) {
+        match resolve_ai_query_routing(self.terminal_view_id, None, &terminal_model, app) {
             AIQueryRouting::LiveRemoteVm {
                 ambient_agent_task_id: Some(_),
                 ..

@@ -29,7 +29,6 @@ use crate::terminal::event::{BlockType, UserBlockCompleted};
 use crate::terminal::model::session::active_session::ActiveSession;
 use crate::terminal::model::terminal_model::TerminalModel;
 use crate::terminal::model_events::{ModelEvent, ModelEventDispatcher};
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 cfg_if::cfg_if! {
@@ -95,7 +94,6 @@ pub struct PassiveSuggestionsModel {
     latest_request: Option<Request>,
     pending_file_read_handle: Option<SpawnedFutureHandle>,
     terminal_model: Arc<FairMutex<TerminalModel>>,
-    ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
 
     #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
     terminal_view_id: EntityId,
@@ -109,7 +107,6 @@ impl PassiveSuggestionsModel {
         terminal_model: Arc<FairMutex<TerminalModel>>,
         ai_controller: ModelHandle<BlocklistAIController>,
         model_event_dispatcher: &ModelHandle<ModelEventDispatcher>,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         terminal_view_id: EntityId,
         ctx: &mut ModelContext<Self>,
     ) -> Self {
@@ -126,7 +123,6 @@ impl PassiveSuggestionsModel {
             latest_request: None,
             pending_file_read_handle: None,
             terminal_model,
-            ambient_agent_view_model,
             terminal_view_id,
         }
     }
@@ -139,18 +135,11 @@ impl PassiveSuggestionsModel {
         self.latest_request.take();
     }
 
-    fn is_ambient_agent_session(&self, ctx: &ModelContext<Self>) -> bool {
-        if self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(ctx).is_ambient_agent())
-        {
-            return true;
-        }
-
-        // `ambient_agent_view_model` is captured at construction and may be `None`
-        // if we joined a session and lazily set the ambient agent config.
-        // Consult live terminal state as well.
+    /// Heddle (FOSS): the ambient cloud-agent runtime is removed, so the pane never
+    /// carries an `AmbientAgentViewModel`. Suppression is now driven purely by live
+    /// terminal state — a shared session whose source is an ambient run, or a
+    /// conversation transcript viewer.
+    fn is_ambient_agent_session(&self) -> bool {
         let terminal_model = self.terminal_model.lock();
         terminal_model.is_shared_ambient_agent_session()
             || terminal_model.is_conversation_transcript_viewer()
@@ -159,8 +148,8 @@ impl PassiveSuggestionsModel {
     /// Test-only accessor for the private ambient-session guard so shared-session
     /// view tests can assert passive suggestions are suppressed for viewers.
     #[cfg(test)]
-    pub(crate) fn is_ambient_agent_session_for_test(&self, ctx: &ModelContext<Self>) -> bool {
-        self.is_ambient_agent_session(ctx)
+    pub(crate) fn is_ambient_agent_session_for_test(&self, _ctx: &ModelContext<Self>) -> bool {
+        self.is_ambient_agent_session()
     }
 
     /// Sends a MAA request to generate passive suggestions.
@@ -419,7 +408,7 @@ impl PassiveSuggestionsModel {
         }
 
         // Suppress passive suggestions in cloud mode sessions.
-        if self.is_ambient_agent_session(ctx) {
+        if self.is_ambient_agent_session() {
             return;
         }
 
@@ -468,7 +457,7 @@ impl PassiveSuggestionsModel {
     ) {
         self.abort_pending_requests(ctx);
         // Suppress passive suggestions in cloud mode sessions.
-        if self.is_ambient_agent_session(ctx) {
+        if self.is_ambient_agent_session() {
             return;
         }
 
