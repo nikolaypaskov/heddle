@@ -153,7 +153,33 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   `attach_ambient_agent_view_model` + the `new()` ambient args in `input.rs`. LESSON:
   removing a field's only reader (its setter) makes the field never-read `dead_code`
   and any `let mut` it mutated `unused_mut` — grep ALL warning kinds, not just imports.
-- **Slice 4b/4c — REMAINING (heavier/entangled).** The rest of Slice 4: slash-command
+- **Slice 4b — DONE (`f2c7887d`), Codex-approved (4 rounds).** Excised ambient from all
+  remaining consumers: maa (PRESERVED its VM-independent suppression fallback from live
+  terminal state), display_chip/display, block + block/view_impl (impl split across two
+  files — grep both!), status_bar (deleted both always-None cloud-setup renderers,
+  promoted local branches), agent_input_footer (deleted cloud env-selector; DISSOLVED
+  the then-single-variant `EnvironmentSelectorTarget` enum into a direct
+  `HandoffComposeState` handle after `match_single_binding` fired), slash gui.rs
+  (`is_cloud_mode` → `is_cloud_mode_v2` only), `/environment` → false. Rounds 2-4 were
+  all clippy-only lints: LESSON — run the REAL gate
+  (`cargo clippy -p warp --lib --tests -- -D warnings`) before every submission;
+  `cargo check` misses `let_and_return`/`match_single_binding`/dead-code cascades.
+  Crate-wide clippy baseline is ~82 pre-existing errors (dead cloud code for slices
+  6-8); per-slice standard = no NEW violation in touched files. 5731/13.
+- **Slice 4c — REMAINING (do WITH slice 5; owner approved combining).** Retire the
+  fan-out root: `attach_ambient_agent_view_model` + `subscribe_to_ambient_agent_view_model`
+  + `AmbientAgentViewState` + `Input::new`'s ambient param + UDI's underscored param +
+  the `Input::ambient_agent_view_model()` getter and its ~12 reader sites (several feed
+  `resolve_ai_query_routing` — the slice-5 overlap).
+- **Slice 5 — REVISED SCOPE (with 4c).** The plan's "collapse `AIQueryRouting` to Local"
+  is WRONG: `LiveRemoteVm` also serves shared-LOCAL-session viewers (forwarding
+  follow-ups to the sharer), and the resolver's inputs (`is_shared_ambient_agent_session`,
+  `is_conversation_transcript_viewer`, `ambient_agent_task_id`) all have VM-independent
+  sources on `terminal_model`. Correct scope: remove only the always-None
+  `ambient_agent_view_model` PARAMETER from `resolve_ai_query_routing` (+ callers),
+  keeping all four variants and the session-sharing logic intact. Session-sharing
+  removal is its own later project.
+- **(historical) Slice 4b/4c scoping note.** The rest of Slice 4: slash-command
   data source (`gui.rs` — ripples through `GuiDataSourceArgs`; `is_cloud_mode` collapses
   to `self.is_cloud_mode_v2`, keeping the separate `is_cloud_mode_v2`/CloudModeInputV2
   flag for a later cleanup), agent_input_footer (env-selector + display-chip rendering),
