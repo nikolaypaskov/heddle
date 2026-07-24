@@ -166,7 +166,21 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   `cargo check` misses `let_and_return`/`match_single_binding`/dead-code cascades.
   Crate-wide clippy baseline is ~82 pre-existing errors (dead cloud code for slices
   6-8); per-slice standard = no NEW violation in touched files. 5731/13.
-- **Slice 4c — REMAINING (do WITH slice 5; owner approved combining).** Retire the
+- **Slices 4c+5 — DONE (`619c2c84`), Codex-approved (2 rounds).** Retired the fan-out
+  root (`attach_ambient_agent_view_model`, `subscribe_to_ambient_agent_view_model`,
+  `AmbientAgentViewState`, `Input::new`'s param, the getter + its ~20 readers) and
+  de-parameterized `resolve_ai_query_routing`. **ZERO ambient view-model plumbing
+  remains in the input tree.** Codex VALIDATED the scope correction below (collapsing
+  `AIQueryRouting` would have broken shared-LOCAL-session viewers) and traced
+  `LiveRemoteVm` end-to-end to prove it. Orphans deleted:
+  `render_ambient_agent_status_footer`, `maybe_queue_input_during_cloud_setup`,
+  `upload_files_then_send_prompt`. `is_cloud_mode_input_v2_composing` now returns
+  `false` and takes only `&self` (30 call sites updated); inlining it belongs to a
+  separate CloudModeInputV2 cleanup. LESSON (rejected round 1): `AGENTS.md:118` bans
+  underscore-prefixed unused params — DELETE them and fix all call sites; clippy
+  cannot catch this because `_` suppresses the warning. Clippy 84 errors before and
+  after (byte-identical baseline); 5731/13.
+- **(superseded) Slice 4c scoping note.** Retire the
   fan-out root: `attach_ambient_agent_view_model` + `subscribe_to_ambient_agent_view_model`
   + `AmbientAgentViewState` + `Input::new`'s ambient param + UDI's underscored param +
   the `Input::ambient_agent_view_model()` getter and its ~12 reader sites (several feed
