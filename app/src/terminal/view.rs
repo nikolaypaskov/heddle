@@ -2836,9 +2836,6 @@ pub struct TerminalView {
     /// Mouse state handle for the ambient agent cancel button in the pane header.
     ambient_agent_cancel_mouse_state: warpui::elements::MouseStateHandle,
 
-    /// First-time cloud agent setup view (full-screen overlay for creating initial environment).
-    first_time_cloud_agent_setup_view: ViewHandle<ambient_agent::FirstTimeCloudAgentSetupView>,
-
     /// Environment setup mode selector modal for /create-environment command.
     environment_setup_mode_selector: ViewHandle<EnvironmentSetupModeSelector>,
 
@@ -4125,13 +4122,6 @@ impl TerminalView {
             }
         });
 
-        let first_time_cloud_agent_setup_view =
-            ctx.add_typed_action_view(ambient_agent::FirstTimeCloudAgentSetupView::new);
-
-        ctx.subscribe_to_view(&first_time_cloud_agent_setup_view, |me, _, event, ctx| {
-            me.handle_first_time_cloud_agent_setup_event(event, ctx);
-        });
-
         let environment_setup_mode_selector =
             ctx.add_typed_action_view(EnvironmentSetupModeSelector::new);
 
@@ -4381,7 +4371,6 @@ impl TerminalView {
             active_init_project_model: None,
             is_pending_aws_login: false,
             manual_pty_shutdown_requested: false,
-            first_time_cloud_agent_setup_view,
             environment_setup_mode_selector,
             is_environment_setup_mode_selector_open: false,
             pane_stack: None,
@@ -21339,8 +21328,7 @@ impl TerminalView {
                     if is_long_running && self.is_ambient_agent_session(ctx) {
                         self.exit_agent_view(ctx);
                     } else if !is_long_running {
-                        // During first-time setup, always exit directly without confirmation
-                        // since the setup overlay would obscure any confirmation dialog.
+                        // During first-time setup, exit directly without a confirmation dialog.
                         let is_in_setup = self
                             .ambient_agent_view_model
                             .as_ref()
@@ -27803,15 +27791,6 @@ impl View for TerminalView {
             && sharer.is_inactivity_warning_modal_open()
         {
             stack.add_child(ChildView::new(sharer.inactivity_modal()).finish())
-        }
-
-        // Render first-time cloud agent setup view when in Setup status
-        if self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(app).is_in_setup())
-        {
-            stack.add_child(ChildView::new(&self.first_time_cloud_agent_setup_view).finish());
         }
 
         if self.ssh_file_upload.as_ref(app).has_upload() {

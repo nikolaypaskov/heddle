@@ -963,12 +963,6 @@ impl AmbientAgentViewModel {
         ctx.emit(AmbientAgentViewModelEvent::EnteredSetupState);
     }
 
-    /// Transition from Setup to Composing state.
-    pub fn enter_composing_from_setup(&mut self, ctx: &mut ModelContext<Self>) {
-        self.status = Status::Composing;
-        ctx.emit(AmbientAgentViewModelEvent::EnteredComposingState);
-    }
-
     /// This is used when we join an already-running ambient agent shared session (e.g. from the
     /// agent management view). We want the ambient agent UI affordances (like the environment
     /// selector) to be visible even though we did not spawn the agent from this view model.
