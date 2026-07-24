@@ -1831,7 +1831,7 @@ pub fn init(app: &mut AppContext) {
                 & !id!("ProfileModelSelectorOpen")
                 & !id!("PromptChipMenuOpen")
                 & !id!(QUEUED_PROMPT_INLINE_EDITOR_OPEN_CONTEXT)
-                & !id!("AIContextMenuOpen")
+                & !id!("AIContextMenuOpen"),
         ),
     ]);
 
@@ -2202,27 +2202,14 @@ impl Input {
                 data_source.set_ambient_agent_view_model(composer_slash_model, ctx);
             });
         }
-        // The /model picker's data source lists a different model set for cloud panes (it suppresses
-        // custom-endpoint models), so keep it in sync for the link-join viewer.
-        let model_selector_model = view_model.clone();
-        self.inline_model_selector_view.update(ctx, |view, ctx| {
-            view.set_ambient_agent_view_model(model_selector_model, ctx);
-        });
-        // The /skills selector hides skills on a disconnected cloud follow-up composer (skills run
-        // locally and must not be shown when a follow-up should start a new cloud VM instead).
-        let skill_selector_model = view_model.clone();
-        self.inline_skill_selector_view.update(ctx, |view, ctx| {
-            view.set_ambient_agent_view_model(skill_selector_model, ctx);
-        });
         // NOTE: This method is the SINGLE point that wires a (lazily- or eagerly-created) ambient
         // view model into the input tree. Both `Input::new` (eager/composer) and the shared-session
         // viewer's `SessionJoined` path (lazy) funnel through here, so any component that captures
         // `Option<ModelHandle<AmbientAgentViewModel>>` must be wired here (via its
         // `set_ambient_agent_view_model` setter) rather than at construction, otherwise the two
         // paths drift. Currently propagated: input subscription, agent input footer (which forwards
-        // to its environment selector and display-chip config), agent status bar, slash-command
-        // data sources, the inline model-selector data source, and the inline skill-selector data
-        // source.
+        // to its environment selector and display-chip config), agent status bar, and the
+        // slash-command data sources.
         // Intentionally NOT wired here (verified safe): the UDI button bar's selectors (not rendered
         // in agent view, so unreachable for a cloud viewer) and per-exchange AI blocks / ambient
         // setup-command blocks (created after the model exists).
@@ -3281,8 +3268,6 @@ impl Input {
         let inline_model_selector_view = ctx.add_view(|ctx| {
             InlineModelSelectorView::new(
                 terminal_view_id,
-                // Wired post-construction via `attach_ambient_agent_view_model`.
-                None,
                 suggestions_mode_model.clone(),
                 agent_view_controller.clone(),
                 &buffer_model,
@@ -3330,8 +3315,6 @@ impl Input {
                 &inline_terminal_menu_positioner,
                 active_session,
                 terminal_view_id,
-                // Wired post-construction via `attach_ambient_agent_view_model`.
-                None,
                 ctx,
             )
         });
