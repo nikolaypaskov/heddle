@@ -121,26 +121,29 @@ fi
 ## Part 2: the commercial UI surface ##
 #######################################
 
-# The scan EXTRACTS RUST STRING LITERALS FIRST, then looks for vocabulary inside them.
+# The scan EXTRACTS RUST STRING LITERALS FIRST (script/heddle/extract-rust-literals), then
+# looks for vocabulary inside them.
 #
-# Earlier versions matched the source text directly and anchored generic words to a leading
-# double quote, because without that anchor `login` matches `parsed["owner"]["login"]` in
-# app/src/util/git.rs -- a GitHub API field, not a sign-in button. But anchoring only ever sees
-# the FIRST words of a literal, so it missed rendered copy that mentions an account midway
-# through a sentence:
+# Two earlier designs both reported PASS over live commercial UI:
 #
-#   "AI features are unavailable for logged-out users. Create an account to use AI."
-#   "Connect your account to save and share notebooks, workflows, and more across devices."
-#   "Continue without signing in?"
+#   1. Matching source text with generic words anchored to a leading double quote. The anchor
+#      existed because `login` otherwise matches parsed["owner"]["login"] in util/git.rs -- a
+#      GitHub API field, not a sign-in button. But an anchor only ever sees the FIRST words of
+#      a literal, so copy mentioning an account mid-sentence was invisible:
+#        "AI features are unavailable for logged-out users. Create an account to use AI."
+#        "Connect your account to save and share notebooks, workflows, and more across devices."
 #
-# All three were live in the tree and absent from the baseline: the gate reported PASS over
-# commercial UI it was built to find. Extracting literals removes the need for the anchor
-# entirely -- we only ever look inside a literal, so identifiers and paths cannot match, and
-# the vocabulary is then free to match anywhere within the text a user actually reads.
+#   2. Extracting literals with `"[^"]*"`, which recognises exactly one lexical form: a
+#      single-line, non-raw literal containing no quotes. app/src/workspace/home.rs renders
+#      "Warp Drive Objects" from a multiline r#"..."# literal; that row was in the baseline and
+#      silently vanished when this changed. Because a REMOVAL only asks for a re-record rather
+#      than consent, the loss of coverage recorded itself as progress.
 #
-# KNOWN LIMITATION, stated rather than papered over: this recognises single-line literals. Copy
-# split across lines by a `\` continuation, or written as a raw string (r#"..."#), is matched
-# only in the fragment that carries the quote. It is a floor on coverage, not a ceiling.
+# Extracting literals with a real lexer removes the need for the anchor entirely: matching
+# happens strictly inside a literal, so identifiers and paths cannot match, and the vocabulary
+# is free to appear anywhere in the text a user actually reads. Rows are `path<TAB>term`,
+# because `path:term` truncated any path containing `:"` and let two files collide into one
+# identity.
 
 ##########################################################################
 # ONE authoritative file list, used for BOTH the count and the matching. #
@@ -173,34 +176,25 @@ build_file_list() {
 # single row under -u, and a fourth could then be added invisibly -- a false negative in the
 # exact tool built to prevent one.
 collect() {
-  local out="$1" filelist="$2" err gs
+  local out="$1" filelist="$2" err status
   err="$(mktemp)" || die_infra "mktemp failed"
   cd "$REPO_ROOT"
 
+  # A SINGLE process does the extraction, so there is no pipeline whose intermediate status
+  # can be lost. The previous version read only ${PIPESTATUS[0]} -- the first stage -- so a
+  # failure in the second stage (say, a write error part-way through) produced a truncated
+  # result that was then sorted, compared, and accepted by --update as a legitimate shrink.
   set +e
-  # -H forces the filename prefix even when xargs hands grep a single file, which would
-  # otherwise emit bare literals and silently drop every path from the last batch.
-  xargs -0 grep -Ho '"[^"]*"' < "$filelist" 2>"$err" \
-    | awk -F':"' '
-        NR==FNR { term[NR] = tolower($0); n = NR; next }
-        {
-          split_at = index($0, ":\"")
-          if (split_at == 0) next
-          path = substr($0, 1, split_at - 1)
-          lit  = tolower(substr($0, split_at + 2))
-          for (i = 1; i <= n; i++) if (index(lit, term[i])) print path ":" term[i]
-        }
-      ' "$VOCABULARY" - > "$out.raw"
-  gs=${PIPESTATUS[0]}
+  ./script/heddle/extract-rust-literals "$VOCABULARY" < "$filelist" > "$out.raw" 2>"$err"
+  status=$?
   set -e
 
-  # grep: 0 = matched, 1 = no matches (a legitimate end state for this sweep), >=2 = a real
-  # error. An earlier version ended the pipeline with `|| true`, which swallowed all three
-  # alike -- so a grep that could not read the tree produced an empty result that then
-  # overwrote the baseline under --update and passed on every run afterwards.
-  if (( gs >= 2 )); then
-    local detail; detail="$(head -2 "$err")"; rm -f "$err"
-    die_infra "literal extraction failed with status $gs: $detail"
+  # The extractor exits 0 whether or not it found anything -- "no commercial UI left" is the
+  # goal of this sweep, not an error -- and non-zero only when it could not do its job:
+  # an unreadable file, a path the record format cannot encode, a file that does not lex.
+  if (( status != 0 )); then
+    local detail; detail="$(head -3 "$err")"; rm -f "$err"
+    die_infra "literal extraction failed (status $status): $detail"
   fi
   rm -f "$err"
 
@@ -209,6 +203,8 @@ collect() {
 }
 
 [[ -f "$VOCABULARY" ]] || die_infra "no vocabulary at $VOCABULARY"
+[[ -x "$REPO_ROOT/script/heddle/extract-rust-literals" ]] \
+  || die_infra "script/heddle/extract-rust-literals is missing or not executable"
 
 FILELIST="$(mktemp)" || die_infra "mktemp failed"
 CURRENT="$(mktemp)" || die_infra "mktemp failed"

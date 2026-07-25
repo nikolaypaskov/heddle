@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Extract Rust string literals and report which commercial-UI vocabulary they contain.
+
+Why this is not a grep. The gate previously matched `"[^"]*"` against raw source text, which
+recognises exactly one lexical form: a single-line, non-raw literal with no embedded quotes.
+Rust has several more, and the GUI uses them. `app/src/workspace/home.rs` renders
+
+    const WARP_HOME_CONTENT: &str = r#"
+    ...
+    * Create, View, and Edit Warp Drive Objects
+    ...
+    "#;
+
+which the grep could not see. That row was in the baseline, then silently vanished when the
+extractor changed -- and because a REMOVAL only asks for a re-record rather than consent, the
+loss of coverage recorded itself. A gate that quietly stops looking is worse than no gate: it
+reports PASS with the full authority of having checked.
+
+So this walks the source the way a lexer does, tracking which construct it is inside:
+
+  * `"..."` with `\\"` escapes                        * comments, so a `"` in prose starts nothing
+  * `r"..."`, `r#"..."#`, `r##"..."##` (any # count)  * `b"..."` / `c"..."` and their raw forms
+  * literals spanning any number of lines             * char literals vs lifetimes (`'a` is not `'`)
+
+Reads NUL-delimited paths on stdin. Writes one `path\tterm` record per vocabulary hit, tab
+separated so a path containing `:"` cannot corrupt the record -- the previous `path:term`
+encoding truncated such a path at the colon, letting two different files collide into one
+identity and hide a move.
+
+Not a full Rust parser, and does not need to be: it never has to understand the code, only to
+find every span a human-readable string can live in. Where it cannot (an unterminated literal,
+i.e. a file that would not compile), it fails loudly rather than returning a short list.
+"""
+
+import re
+import sys
+
+# A prefix is only a string prefix when it does not continue an identifier: `foo r"x"` starts a
+# raw string, `foobar"` is not valid Rust at all, but `some_var` followed by a quote must not be
+# mistaken for one.
+IDENT = re.compile(r"[A-Za-z0-9_]")
+RAW_START = re.compile(r'(?:b|c)?r(#*)"')
+STR_START = re.compile(r'(?:b|c)?"')
+LIFETIME = re.compile(r"'[A-Za-z_][A-Za-z0-9_]*")
+
+
+class UnterminatedLiteral(Exception):
+    pass
+
+
+def extract_literals(src: str, path: str):
+    """Yield the text of every string literal in `src`."""
+    out = []
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+
+        # Comments first: a quote inside prose must not open a literal, and a `//` inside a
+        # string must not open a comment. Scanning strictly left to right gets both right.
+        if c == "/" and i + 1 < n:
+            if src[i + 1] == "/":
+                j = src.find("\n", i)
+                i = n if j < 0 else j + 1
+                continue
+            if src[i + 1] == "*":
+                depth, i = 1, i + 2
+                while i < n and depth:
+                    if src.startswith("/*", i):
+                        depth, i = depth + 1, i + 2
+                    elif src.startswith("*/", i):
+                        depth, i = depth - 1, i + 2
+                    else:
+                        i += 1
+                continue
+
+        prefix_ok = i == 0 or not IDENT.match(src[i - 1])
+
+        if prefix_ok:
+            m = RAW_START.match(src, i)
+            if m:
+                closing = '"' + m.group(1)
+                start = m.end()
+                j = src.find(closing, start)
+                if j < 0:
+                    raise UnterminatedLiteral(f"{path}: unterminated raw string")
+                out.append(src[start:j])
+                i = j + len(closing)
+                continue
+
+            m = STR_START.match(src, i)
+            if m:
+                start = j = m.end()
+                while j < n:
+                    if src[j] == "\\":
+                        j += 2
+                        continue
+                    if src[j] == '"':
+                        break
+                    j += 1
+                if j >= n:
+                    raise UnterminatedLiteral(f"{path}: unterminated string")
+                out.append(src[start:j])
+                i = j + 1
+                continue
+
+        # `'a` is a lifetime, not the start of a char literal. Getting this wrong would swallow
+        # the rest of the file up to the next quote and drop every literal in between.
+        if c == "'":
+            m = LIFETIME.match(src, i)
+            if m and (m.end() >= n or src[m.end()] != "'"):
+                i = m.end()
+                continue
+            j = i + 1
+            if j < n and src[j] == "\\":
+                j += 2
+            elif j < n:
+                j += 1
+            i = j + 1 if j < n and src[j] == "'" else i + 1
+            continue
+
+        i += 1
+
+    return out
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("usage: extract-rust-literals VOCABULARY_FILE  (NUL-delimited paths on stdin)",
+              file=sys.stderr)
+        return 2
+
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        terms = [line.strip().lower() for line in fh if line.strip()]
+    if not terms:
+        print("error: vocabulary file is empty; every scan would report nothing found.",
+              file=sys.stderr)
+        return 2
+
+    data = sys.stdin.buffer.read()
+    paths = [p.decode("utf-8") for p in data.split(b"\0") if p]
+    if not paths:
+        print("error: no paths on stdin.", file=sys.stderr)
+        return 2
+
+    for path in paths:
+        # The record separator is a tab, so a path containing one would corrupt the encoding
+        # exactly as `:"` corrupted the previous one. Refuse rather than emit an ambiguous row.
+        if "\t" in path or "\n" in path:
+            print(f"error: path contains a tab or newline, which the record format "
+                  f"cannot encode: {path!r}", file=sys.stderr)
+            return 2
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                src = fh.read()
+        except OSError as exc:
+            print(f"error: could not read {path}: {exc}", file=sys.stderr)
+            return 2
+
+        try:
+            literals = extract_literals(src, path)
+        except UnterminatedLiteral as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            print("       The file does not lex as Rust. Refusing to report a partial scan.",
+                  file=sys.stderr)
+            return 2
+
+        for literal in literals:
+            lowered = literal.lower()
+            for term in terms:
+                if term in lowered:
+                    print(f"{path}\t{term}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

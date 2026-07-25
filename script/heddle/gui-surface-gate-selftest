@@ -33,6 +33,7 @@ backup_ready=false
 BACKUP=""
 CANARY_DIR=""
 REMOTE_DIR=""
+ODD_DIR=""
 SCRATCH=()
 
 # Restore state even if an assertion aborts mid-run, and delete ONLY what was allocated here.
@@ -50,6 +51,7 @@ SCRATCH=()
 cleanup() {
   [[ -n "$CANARY_DIR" ]] && rm -rf "$CANARY_DIR"
   [[ -n "$REMOTE_DIR" ]] && rm -rf "$REMOTE_DIR"
+  [[ -n "$ODD_DIR" ]] && rm -rf "$ODD_DIR"
   local p
   for p in "${SCRATCH[@]:-}"; do [[ -n "$p" ]] && rm -f "$p"; done
   if [[ "$backup_ready" == true ]]; then
@@ -113,6 +115,40 @@ echo "1c. MID-LITERAL copy must be caught, not just markers that open a literal.
 printf 'fn canary() -> &%sstatic str { "AI features are unavailable for logged-out users. Create an account to use AI." }\n' "'" > "$CANARY"
 expect "mid-literal" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
 rm -f "$CANARY"
+
+echo "1d. EVERY Rust string form must be scanned, not just the easiest one."
+# One canary per lexical form. A single easy canary is what let the `"[^"]*"` extractor look
+# correct while it was blind to multiline raw strings -- and it silently dropped a real
+# baseline row (app/src/workspace/home.rs renders "Warp Drive Objects" from an r#"..."#
+# literal) at the same time. Each form gets its own rejection case so a regression in any one
+# of them cannot hide behind the others.
+form_canary() {  # <label> <rust source>
+  printf '%s\n' "$2" > "$CANARY"
+  expect "form:$1" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
+  rm -f "$CANARY"
+}
+form_canary "multiline-raw" 'const A: &str = r#"
+a paragraph that mentions Warp Drive Objects
+across several lines
+"#;'
+form_canary "raw-with-embedded-quote" 'const B: &str = r#"he said "Compare plans" out loud"#;'
+form_canary "escaped-quote" 'const C: &str = "an escaped \" quote and then Manage billing";'
+form_canary "line-continuation" 'const D: &str = "first line \
+second line offering a free trial";'
+form_canary "byte-and-raw-prefix" 'const E: &[u8] = br#"Upgrade plan"#;'
+
+echo "1e. A comment must NOT be mistaken for rendered UI."
+# The counterpart control: the extractor must be capable of NOT matching, or "it flags
+# everything" would masquerade as thorough coverage.
+printf '// Warp Drive and Sign in appear only in this comment\nfn canary() {}\n' > "$CANARY"
+expect "comment-not-ui" "./$GATE" 0 "PASS: commercial UI surface" --surfaces-only
+rm -f "$CANARY"
+
+echo "1f. A path the record format cannot encode must fail closed, not be skipped."
+ODD_DIR="$(mktemp -d app/src/__gate_selftest_XXXXXX)"
+printf 'fn x() -> &%sstatic str { "Warp Drive" }\n' "'" > "$ODD_DIR/od:\"quote.rs"
+expect "colon-quote-path" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
+rm -rf "$ODD_DIR"; ODD_DIR=""
 
 echo "2. --update must REFUSE to baseline an addition without --allow-additions."
 printf 'fn canary() -> &%sstatic str { "Manage billing" }\n' "'" > "$CANARY"
