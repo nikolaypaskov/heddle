@@ -90,3 +90,44 @@ jobs:
 
       - name: Verify bundled binary assets match the reviewed manifest
         run: ./script/heddle/verify-bundled-assets
+
+      # Every wasm defect this fork has shipped was invisible to the host build: the code
+      # sat behind `#[cfg(target_family = "wasm")]`, or was an import whose only wasm-side
+      # consumer had been cfg'd out. Four of them landed before anyone built the target
+      # once. A native check structurally cannot catch that class.
+      #
+      # This is a SET comparison, not pass/fail: the wasm target does not currently build
+      # (ten pre-existing errors predating this fork), so "does it compile" is always no
+      # and therefore worthless as a signal. What matters is whether a change makes it
+      # worse.
+      - name: Install the wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      # Same reasoning as the scanner self-test above: prove the gate CAN fail before
+      # trusting it to pass. A check that cannot distinguish "clean" from "did not really
+      # look" converts uncertainty into false confidence.
+      - name: Self-test the wasm gate against a planted regression
+        run: |
+          set -euo pipefail
+          target="app/src/terminal/view/pane_impl.rs"
+          cp "$target" /tmp/pane_impl.bak
+          # Delete the `#[cfg(not(target_family = "wasm"))]` line guarding the
+          # PaneHeaderAction import, which makes that import unused on wasm and must
+          # therefore trip the gate.
+          line="$(grep -n 'use crate::pane_group::pane::view::PaneHeaderAction;' "$target" | cut -d: -f1)"
+          if [ -z "$line" ]; then
+            echo "::error::Self-test anchor not found in $target; update this step."
+            exit 1
+          fi
+          sed -i "$((line - 1))d" "$target"
+          if ./script/heddle/wasm-diagnostic-gate; then
+            cp /tmp/pane_impl.bak "$target"
+            echo "::error::The wasm gate PASSED a tree with a planted wasm-only regression."
+            echo "The gate is broken; a clean result from it would be meaningless."
+            exit 1
+          fi
+          cp /tmp/pane_impl.bak "$target"
+          echo "Gate correctly rejected the planted regression."
+
+      - name: Compare wasm diagnostics against the recorded baseline
+        run: ./script/heddle/wasm-diagnostic-gate

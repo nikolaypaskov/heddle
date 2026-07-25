@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Compare the wasm32 diagnostic SET against a recorded baseline.
+#
+# Why a set comparison and not pass/fail: the wasm target does not currently build. It has
+# ten pre-existing errors that predate this fork's work, so "does it compile" is useless as
+# a gate -- it is always no. What IS meaningful is whether a change makes it WORSE.
+#
+# Why this exists at all: every wasm defect found in this fork so far was invisible to the
+# host build, because the offending code sits behind `#[cfg(target_family = "wasm")]` or was
+# an import whose only wasm-side consumer had been cfg'd out. Four such defects shipped
+# before anyone ran the target once. Native checks structurally cannot catch them.
+#
+#   ./script/heddle/wasm-diagnostic-gate           # compare against the baseline
+#   ./script/heddle/wasm-diagnostic-gate --update   # re-record the baseline
+#
+# The baseline is expected to SHRINK over time. Removing a diagnostic is not a failure; it
+# just means the baseline is stale and should be re-recorded, and the script says so.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+BASELINE="$REPO_ROOT/script/heddle/wasm-diagnostics.baseline"
+TARGET="wasm32-unknown-unknown"
+
+# Apple's bundled clang has no WebAssembly LLVM backend, so the C dependencies fail to
+# build with it. Point at a toolchain that does when one is available; CI's clang already
+# does. Without this the failure looks like a broken build rather than a missing backend,
+# which is what made this check look impossible for far longer than it should have.
+if [[ -z "${CC_wasm32_unknown_unknown:-}" ]] && [[ -x /opt/homebrew/opt/llvm/bin/clang ]]; then
+  export CC_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/clang
+  export AR_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/llvm-ar
+fi
+
+if ! rustup target list --installed 2>/dev/null | grep -qx "$TARGET"; then
+  echo "error: the $TARGET rust target is not installed." >&2
+  echo "       run: rustup target add $TARGET" >&2
+  exit 2
+fi
+
+# Normalize away line:col so that unrelated edits above a diagnostic do not read as a
+# change. What we care about is "which file has which diagnostic", not where it sits today.
+collect() {
+  local raw
+  raw="$(mktemp)"
+  # cargo EXITS NON-ZERO here by design -- the target does not build, that is the whole
+  # premise of this gate. Swallow the status but keep the output, and fail loudly further
+  # down if the output is empty, which is what a genuinely broken invocation looks like.
+  ( cd "$REPO_ROOT" && cargo check -p warp --target "$TARGET" --message-format=short ) \
+    > "$raw" 2>&1 || true
+  if [[ ! -s "$raw" ]]; then
+    echo "error: the wasm check produced no output at all -- the invocation is broken," >&2
+    echo "       not the target. Refusing to record or compare an empty set." >&2
+    rm -f "$raw"
+    exit 2
+  fi
+  grep -E ': (error|warning)' "$raw" \
+    | grep -vE '^(warning|error): ' \
+    | sed -E 's/:[0-9]+:[0-9]+:/:/' \
+    | sort -u || true
+  rm -f "$raw"
+}
+
+CURRENT="$(mktemp)"
+trap 'rm -f "$CURRENT"' EXIT
+collect > "$CURRENT"
+
+if [[ "${1:-}" == "--update" ]]; then
+  cp "$CURRENT" "$BASELINE"
+  echo "Recorded $(wc -l < "$BASELINE" | tr -d ' ') diagnostics to $BASELINE"
+  exit 0
+fi
+
+if [[ ! -f "$BASELINE" ]]; then
+  echo "error: no baseline at $BASELINE. Record one with --update." >&2
+  exit 2
+fi
+
+ADDED="$(comm -13 "$BASELINE" "$CURRENT")"
+REMOVED="$(comm -23 "$BASELINE" "$CURRENT")"
+
+if [[ -n "$REMOVED" ]]; then
+  echo "The following wasm diagnostics are FIXED relative to the baseline:"
+  echo "$REMOVED" | sed 's/^/  - /'
+  echo "Re-record with: ./script/heddle/wasm-diagnostic-gate --update"
+  echo
+fi
+
+if [[ -n "$ADDED" ]]; then
+  echo "FAIL: this change introduces wasm diagnostics that are not in the baseline:" >&2
+  echo "$ADDED" | sed 's/^/  + /' >&2
+  echo >&2
+  echo "An import reported unused on wasm is usually CONDITIONAL, not dead -- its consumer" >&2
+  echo "is cfg'd out on that target. Gate it with #[cfg(...)] rather than deleting it, or" >&2
+  echo "you will break the host build instead." >&2
+  exit 1
+fi
+
+echo "PASS: wasm diagnostic set matches the baseline ($(wc -l < "$BASELINE" | tr -d ' ') known)."
