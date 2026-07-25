@@ -8,38 +8,64 @@
 # to `/`, found no scan roots, and exited 2 -- the expected status, for entirely the wrong
 # reason. An UNMODIFIED copy would have "passed" that test identically. It proved nothing.
 #
-# Two rules follow, and every case here obeys them:
+# Three rules follow, and every case here obeys them:
 #   1. Assert the exact status AND the expected message. Any-nonzero would let an unrelated
 #      failure pose as a working canary on a gate that is broken in some other way.
-#   2. Every negative test needs a CONTROL proving the harness itself is sound -- that the
-#      test fails for the reason claimed and not by construction.
+#   2. Every negative case needs a POSITIVE CONTROL proving the harness is sound -- that the
+#      case fails for the reason claimed rather than by construction.
+#   3. Never destroy state this script did not create.
 #
 # Mutated copies live in script/heddle/ so REPO_ROOT still resolves to the repository.
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$REPO_ROOT"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || {
+  echo "could not resolve REPO_ROOT"; exit 2; }
+cd "$REPO_ROOT" || { echo "could not cd to $REPO_ROOT"; exit 2; }
 
 GATE=script/heddle/gui-surface-gate
 BASELINE=script/heddle/gui-surfaces.baseline
-CANARY=app/src/__gate_canary.rs
-PARTIAL=script/heddle/.selftest-partial-root
-CONTROL=script/heddle/.selftest-control
-BACKUP="$(mktemp)"
+CANARY=app/src/__gate_selftest_canary.rs
+MUTANT=script/heddle/.gate-selftest-mutant
+CONTROL=script/heddle/.gate-selftest-control
 
 failures=0
+backup_ready=false
+BACKUP="$(mktemp)" || { echo "mktemp failed"; exit 2; }
 
-# Restore everything even if an assertion aborts mid-run, so a failed self-test never leaves
-# the checkout mutated.
+# Refuse to clobber. These are fixed paths, so a stray file of the same name -- someone's own
+# scratch canary, an interrupted earlier run -- would be silently overwritten and then deleted
+# by the trap below. Destroying a file this script did not create is not an acceptable cost of
+# testing.
+for path in "$CANARY" "$MUTANT" "$CONTROL"; do
+  if [[ -e "$path" ]]; then
+    echo "refusing to run: $path already exists and would be overwritten and deleted."
+    echo "Move it aside first."
+    exit 2
+  fi
+done
+
+# Restore state even if an assertion aborts mid-run.
+#
+# `[[ -s "$BACKUP" ]]` was wrong here: -s is false for an empty file, and an empty baseline is
+# precisely the expected END STATE of this sweep. The moment the last commercial surface is
+# deleted, this trap would silently decline to restore the baseline it had just overwritten.
+# A flag set only after a verified copy is the correct guard, and a failed restore must be
+# loud rather than followed by deleting the only backup.
 cleanup() {
-  rm -f "$CANARY" "$PARTIAL" "$CONTROL"
-  [[ -s "$BACKUP" ]] && cp "$BACKUP" "$BASELINE"
+  rm -f "$CANARY" "$MUTANT" "$CONTROL"
+  if [[ "$backup_ready" == true ]]; then
+    if ! cp "$BACKUP" "$BASELINE"; then
+      echo "CRITICAL: could not restore $BASELINE from $BACKUP -- it is NOT being deleted." >&2
+      exit 2
+    fi
+  fi
   rm -f "$BACKUP"
 }
 trap cleanup EXIT
 
 cp "$BASELINE" "$BACKUP" || { echo "could not back up the baseline"; exit 2; }
+backup_ready=true
 
 # expect <label> <script> <want_status> <want_text> [args...]
 expect() {
@@ -62,9 +88,19 @@ expect() {
   echo "  ok [$label]: exit $status with the expected message"
 }
 
+echo "0. CONTROL: a clean tree must PASS, or every negative case below is meaningless."
+expect "control-clean" "./$GATE" 0 "PASS: commercial UI surface" --surfaces-only
+
 echo "1. An ADDED commercial surface must be rejected."
 printf 'fn canary() -> &%sstatic str { "Upgrade plan" }\n' "'" > "$CANARY"
 expect "added-surface" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
+rm -f "$CANARY"
+
+echo "1b. Case and phrasing variants must be caught, not just the canonical spelling."
+# "Sign Up" and "Create an account" were live in the tree and absent from the baseline under
+# the original case-sensitive, quote-anchored pattern. This case is the regression test.
+printf 'fn canary() -> &%sstatic str { "Sign Up" }\n' "'" > "$CANARY"
+expect "case-variant" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
 rm -f "$CANARY"
 
 echo "2. --update must REFUSE to baseline an addition without --allow-additions."
@@ -73,40 +109,68 @@ expect "update-refuses-additions" "./$GATE" 1 "refuses to baseline ADDED" --upda
 rm -f "$CANARY"
 cp "$BACKUP" "$BASELINE"
 
+echo "2b. CONTROL: --update on an unchanged tree must SUCCEED."
+# Without this, case 2 would still 'pass' if --update were broken outright and always failed.
+expect "control-update-clean" "./$GATE" 0 "Recorded" --update
+cp "$BACKUP" "$BASELINE"
+
 echo "3. A REMOVED surface must force a re-record rather than passing quietly."
-printf 'app/src/nonexistent_phantom.rs:Warp Drive\n' >> "$BASELINE"
+printf 'app/src/nonexistent_phantom.rs:warp drive\n' >> "$BASELINE"
 LC_ALL=C sort -o "$BASELINE" "$BASELINE"
 expect "stale-baseline" "./$GATE" 3 "baseline is now stale" --surfaces-only
 cp "$BACKUP" "$BASELINE"
 
-echo "4. A single missing scan root must fail closed -- not scan the rest and call it clean."
-# CONTROL FIRST: an unmodified copy at the same path must PASS. Without this, case 4 would
-# still "succeed" if the sed silently stopped matching, which is exactly how the original
-# version of this test fooled itself.
-cp "$GATE" "$CONTROL"; chmod +x "$CONTROL"
+echo "4. A missing baseline must not let --update bless the whole tree silently."
+mv "$BASELINE" "$BACKUP.moved" || { echo "  FAIL: could not move baseline aside"; failures=$((failures+1)); }
+expect "bootstrap-needs-consent" "./$GATE" 1 "would bless every surface" --update
+mv "$BACKUP.moved" "$BASELINE" || { echo "  FAIL: could not restore baseline"; failures=$((failures+1)); }
+
+echo "5. A scan that walked almost nothing must fail closed."
+# CONTROL FIRST: an unmodified copy at this same path must PASS. Without it, this case would
+# still 'succeed' if the sed silently stopped matching -- which is exactly how the original
+# version of this suite fooled itself.
+cp "$GATE" "$CONTROL" && chmod +x "$CONTROL"
 expect "control-unmodified-copy" "./$CONTROL" 0 "PASS: commercial UI surface" --surfaces-only
 rm -f "$CONTROL"
 
-sed 's#^ROOTS=(app/src crates/warpui/src crates/onboarding/src)#ROOTS=(app/src crates/renamed_away crates/onboarding/src)#' \
-  "$GATE" > "$PARTIAL"
-if ! grep -q 'crates/renamed_away' "$PARTIAL"; then
-  echo "  FAIL [partial-root]: the ROOTS substitution did not apply; this test would be vacuous."
+sed 's/^MIN_RS_TOTAL=2000$/MIN_RS_TOTAL=999999/' "$GATE" > "$MUTANT"
+if ! grep -q 'MIN_RS_TOTAL=999999' "$MUTANT"; then
+  echo "  FAIL [truncated-scan]: the substitution did not apply; this case would be vacuous."
   failures=$((failures + 1))
 else
-  chmod +x "$PARTIAL"
-  expect "partial-root" "./$PARTIAL" 2 "does not exist" --surfaces-only
+  chmod +x "$MUTANT"
+  expect "truncated-scan" "./$MUTANT" 2 "expected >=" --surfaces-only
 fi
-rm -f "$PARTIAL"
+rm -f "$MUTANT"
 
-echo "5. A missing toolchain must be infrastructure (2), not a compile failure (1)."
+echo "6. A missing toolchain must be infrastructure (2), not a compile failure (1)."
 # Not hypothetical: the gate's first run had no cargo on PATH, exited 127, and announced "the
 # GUI does not compile" while printing no errors, because there were none.
-out="$(env PATH=/usr/bin:/bin "./$GATE" 2>&1)"; status=$?
-if [[ "$status" -ne 2 ]] || ! printf '%s' "$out" | grep -qF "infrastructure failure"; then
-  echo "  FAIL [missing-toolchain]: expected exit 2 with an infrastructure message, got $status"
+#
+# Two controls, because the bare assertion is satisfiable by any infrastructure failure at all:
+# cargo must actually BE on the normal PATH, and must actually be ABSENT from the reduced one.
+# Otherwise this case would keep passing on a machine with no Rust installed, where it proves
+# nothing about the gate's ability to tell the two apart.
+if ! command -v cargo >/dev/null; then
+  echo "  FAIL [missing-toolchain]: cargo is not on PATH, so this case cannot prove anything."
+  failures=$((failures + 1))
+elif env PATH=/usr/bin:/bin command -v cargo >/dev/null; then
+  echo "  FAIL [missing-toolchain]: cargo is reachable from the reduced PATH; case is vacuous."
   failures=$((failures + 1))
 else
-  echo "  ok [missing-toolchain]: exit 2, reported as infrastructure"
+  out="$(env PATH=/usr/bin:/bin "./$GATE" 2>&1)"; status=$?
+  # Demand the specific evidence -- cargo exit 127 -- not merely the word "infrastructure",
+  # which any other infrastructure failure would also produce.
+  if [[ "$status" -ne 2 ]]; then
+    echo "  FAIL [missing-toolchain]: expected exit 2, got $status"
+    failures=$((failures + 1))
+  elif ! printf '%s' "$out" | grep -qF "cargo exit 127"; then
+    echo "  FAIL [missing-toolchain]: exit 2, but not for a missing cargo (want 'cargo exit 127')"
+    printf '%s' "$out" | sed 's/^/    /' | head -6
+    failures=$((failures + 1))
+  else
+    echo "  ok [missing-toolchain]: exit 2, reported as cargo exit 127"
+  fi
 fi
 
 echo

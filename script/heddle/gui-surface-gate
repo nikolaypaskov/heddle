@@ -42,15 +42,19 @@ BASELINE="$REPO_ROOT/script/heddle/gui-surfaces.baseline"
 # one must change with it, or the gate stops checking what actually ships.
 GUI_FEATURES="release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2"
 
-# Roots that contain view code. Deliberately NOT the whole workspace: a match inside a protocol
-# crate is a data field name, not something a user reads on screen.
-ROOTS=(app/src crates/warpui/src crates/onboarding/src)
+# Scan the WHOLE repository, not a curated list of view directories.
+#
+# An earlier version named three roots and required each to exist with a floor of ten .rs
+# files. That still failed open: a root can keep ten unrelated files while its GUI code moves
+# somewhere unlisted, the aggregate floor still clears, the new location is never scanned, and
+# the apparent removals invite a --update that blesses the blindness. Any curated location list
+# has that hole, and the sweep is going to be MOVING code, so the hole would be open exactly
+# when it matters most. Scanning everything removes the class rather than tightening the floor.
+SCAN_EXCLUDES=(--exclude-dir=target --exclude-dir=.git --exclude-dir=node_modules)
 
-# Floors that catch a root being renamed, emptied or gutted. Actual counts are roughly 2131 /
-# 114 / 37, so these are loose enough to survive ordinary deletion and tight enough that a
-# vanished root cannot pass as a clean scan.
-MIN_RS_PER_ROOT=10
-MIN_RS_TOTAL=1000
+# Floor that catches a scan which silently covered almost nothing. The tree holds ~3740 .rs
+# files, so this survives very large deletions while refusing an empty or truncated walk.
+MIN_RS_TOTAL=2000
 
 # Two classes of marker, because one rule cannot serve both.
 #
@@ -64,8 +68,18 @@ MIN_RS_TOTAL=1000
 # "Compare plans", "Manage billing", "Your team has run out of credits. Purchase more credits
 # to continue." and "{credits} free cloud agent credits" -- real rendered text, invisible to a
 # rule that only looked at the first word of a literal.
-ANCHORED='Sign in|Sign out|Sign up|Log in|Log out|Login|Logout|Upgrade|Subscription|Subscribe|Billing|Create account|Manage plan|Your account|Refer a friend'
-UNANCHORED='Warp Drive|Compare plans|Manage billing|Pro plan|Team plan|out of credits|cloud agent credits|Purchase more credits|free credits|upgrade_url'
+# Matching is CASE-INSENSITIVE. Case sensitivity was a silent false-negative source: the tree
+# renders "Sign Up" (app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs) and
+# lowercase "upgrade..." copy, neither of which matched a list written as "Sign up"/"Upgrade".
+# Three real strings -- "Create an account", "Sign Up", "View plans" -- were present in the
+# tree and absent from the baseline, so the gate reported PASS over live commercial UI.
+#
+# The vocabulary is derived from the actual copy in the known commercial modules
+# (app/src/billing, app/src/auth, cloud_agent_capacity_modal, share_modal/denied_body,
+# inline_banner/anonymous_user_ai_sign_up) rather than guessed, which is how the phrasing
+# variants above were found.
+ANCHORED='Sign in|Sign out|Sign up|Log in|Log out|Login|Logout|Upgrade|Subscription|Subscribe|Billing|Create account|Create an account|Manage plan|Your account|Refer a friend|Purchase'
+UNANCHORED='Warp Drive|Compare plans|Manage billing|View plans|Pro plan|Paid plan|Business plan|Team plan|free trial|AI credits|more credits|free credits|out of credits|cloud agent credits|upgrade_url'
 PATTERN="(\"($ANCHORED)|($UNANCHORED))"
 
 RUN_BUILD=true
@@ -142,23 +156,18 @@ fi
 ## Part 2: the commercial UI surface ##
 #######################################
 
-# Fail closed. EVERY root must exist and be populated. Requiring merely that *some* root
-# survives is not enough: if crates/warpui/src were renamed, app/src alone would clear an
-# aggregate threshold, the gate would scan two thirds of the tree, report the missing rows as
-# "removed", and invite a --update that would blind it to that root permanently.
-verify_roots() {
+# Fail closed on a scan that did not really walk the tree. With the whole repository in scope
+# there is no root to rename, so the only remaining way to under-scan is for the walk itself to
+# cover almost nothing -- a wrong working directory, a broken checkout, an exclude that ate too
+# much. A near-empty walk would read every baseline row as "removed" and invite a --update that
+# permanently blinds the gate, so it must be fatal rather than merely quiet.
+verify_tree() {
   cd "$REPO_ROOT"
-  local root n total=0
-  for root in "${ROOTS[@]}"; do
-    [[ -d "$root" ]] || die_infra "scan root '$root' does not exist (renamed or moved?)"
-    n="$(find "$root" -name '*.rs' | wc -l | tr -d ' ')" || die_infra "find failed under '$root'"
-    if (( n < MIN_RS_PER_ROOT )); then
-      die_infra "scan root '$root' holds only $n .rs files (expected >= $MIN_RS_PER_ROOT)"
-    fi
-    total=$((total + n))
-  done
+  local total
+  total="$(find . -name '*.rs' -not -path './target/*' -not -path './.git/*' | wc -l | tr -d ' ')" \
+    || die_infra "find failed while counting .rs files"
   if (( total < MIN_RS_TOTAL )); then
-    die_infra "only $total .rs files across all roots (expected >= $MIN_RS_TOTAL)"
+    die_infra "only $total .rs files found in the tree (expected >= $MIN_RS_TOTAL)"
   fi
 }
 
@@ -175,7 +184,7 @@ collect() {
   cd "$REPO_ROOT"
 
   set +e
-  grep -rEo --include='*.rs' "$PATTERN" "${ROOTS[@]}" > "$out.raw" 2>"$err"
+  grep -rEoi --include='*.rs' "${SCAN_EXCLUDES[@]}" "$PATTERN" . > "$out.raw" 2>"$err"
   gs=$?
   set -e
 
@@ -193,19 +202,29 @@ collect() {
   rm -f "$out.raw"
 }
 
-verify_roots
+verify_tree
 
 CURRENT="$(mktemp)" || die_infra "mktemp failed"
 trap 'rm -f "$CURRENT" "$CURRENT.raw" "${raw:-}"' EXIT
 collect "$CURRENT"
 
 if [[ ! -f "$BASELINE" ]]; then
-  if [[ "$MODE" == update ]]; then
+  # A missing baseline is the --update rubber stamp in another costume: delete the file, run
+  # --update, and every surface currently in the tree is blessed at once with exit 0 -- no
+  # additions reported, because there was nothing to compare against. Bootstrapping is a
+  # legitimate but rare act, so it has to be said out loud, exactly like baselining additions.
+  if [[ "$MODE" == update && "$ALLOW_ADDITIONS" == true ]]; then
     cp "$CURRENT" "$BASELINE" || die_infra "could not write $BASELINE"
     echo "Bootstrapped $(wc -l < "$BASELINE" | tr -d ' ') commercial UI surfaces to $BASELINE"
     exit 0
   fi
-  echo "error: no baseline at $BASELINE. Bootstrap one with --update." >&2
+  if [[ "$MODE" == update ]]; then
+    echo "FAIL: no baseline at $BASELINE, so --update would bless every surface in the tree" >&2
+    echo "      at once without reporting a single addition. If that is really what you want," >&2
+    echo "      say so: --update --allow-additions" >&2
+    exit 1
+  fi
+  echo "error: no baseline at $BASELINE. Bootstrap one with --update --allow-additions." >&2
   exit 2
 fi
 
