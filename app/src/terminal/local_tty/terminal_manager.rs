@@ -55,7 +55,7 @@ use crate::terminal::shared_session::sharer::network::Network;
 use crate::terminal::shared_session::{IsSharedSessionCreator, SharedSessionStatus};
 use crate::terminal::shell::ShellName;
 use crate::terminal::terminal_manager::BlockSpacing;
-use crate::terminal::warpify::settings::WarpifySettings;
+use crate::terminal::heddlify::settings::HeddlifySettings;
 use crate::terminal::writeable_pty::pty_controller::{EventLoopSendError, EventLoopSender};
 use crate::terminal::writeable_pty::terminal_manager_util::{
     init_pty_controller_model, init_remote_server_controller, wire_up_pty_controller_with_surface,
@@ -782,12 +782,12 @@ impl<S> TerminalManager<S> {
                     .contains(&ContextChipKind::NodeVersion)
         };
 
-        // `enable_ssh_warpification` is the single source of truth for whether the SSH
+        // `enable_ssh_heddlification` is the single source of truth for whether the SSH
         // wrapper is active. The bootstrap scripts check `WARP_USE_SSH_WRAPPER` (derived
         // from this value) before invoking `warp_ssh_helper`, which spawns the ControlMaster
         // and opens agent-protocol channels.
-        let enable_ssh_wrapper = *WarpifySettings::as_ref(ctx)
-            .enable_ssh_warpification
+        let enable_ssh_wrapper = *HeddlifySettings::as_ref(ctx)
+            .enable_ssh_heddlification
             .value();
 
         // Only meaningful when the legacy ControlMaster wrapper is active.

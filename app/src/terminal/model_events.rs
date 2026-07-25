@@ -386,7 +386,7 @@ pub enum ModelEvent {
     ExecutedInBandCommand(ExecutedExecutorCommandEvent),
     /// Sent when a line of output from an interactive ssh session indicates login is complete.
     /// A line such as "Last login: Wed Oct 30" for example indicates login is complete. This is
-    /// useful for detecting when an ssh session becomes ready for warpification.
+    /// useful for detecting when an ssh session becomes ready for heddlification.
     DetectedEndOfSshLogin(SshLoginStatus),
     InitSubshell(InitSubshellEvent),
     /// Emitted when the user's RC file has been executed in a subshell.

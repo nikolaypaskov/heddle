@@ -1,7 +1,7 @@
 //! Inline block view that asks the user whether they want to install
 //! Warp's SSH extension on the remote host the shell just connected to,
 //! or continue without installing (falling back to the existing
-//! ControlMaster warpification path).
+//! ControlMaster heddlification path).
 //!
 //! Designed from frame 6050:2448 of the Figma file
 //! [Remote session initialization](https://www.figma.com/design/r0BO9cTZCK6pDE6qerg2K0/Remote-session-initialization).
@@ -38,7 +38,7 @@ use crate::ai::blocklist::inline_action::inline_action_header::{
 };
 use crate::server::telemetry::TelemetryEvent;
 use crate::terminal::model::session::SessionId;
-use crate::terminal::warpify::settings::{SshExtensionInstallMode, WarpifySettings};
+use crate::terminal::heddlify::settings::{SshExtensionInstallMode, HeddlifySettings};
 use crate::ui_components::blended_colors;
 use crate::{Appearance, send_telemetry_from_ctx};
 
@@ -49,14 +49,14 @@ pub enum SshRemoteServerChoiceViewAction {
     Install,
     Skip,
     ToggleDoNotAskAgain,
-    OpenWarpifySettings,
+    OpenHeddlifySettings,
 }
 
 #[derive(Clone, Debug)]
 pub enum SshRemoteServerChoiceViewEvent {
     Install,
     Skip,
-    OpenWarpifySettings,
+    OpenHeddlifySettings,
 }
 
 /// Choice block prompting the user to install the remote-server binary on the remote host or skip.
@@ -88,7 +88,7 @@ impl SshRemoteServerChoiceView {
                 rich_navigation_button(
                     "Continue without installing".to_string(),
                     Some(
-                        "You'll still get a Warpified experience just without the coding \
+                        "You'll still get a Heddlified experience just without the coding \
                          features."
                             .to_string(),
                     ),
@@ -172,14 +172,14 @@ impl SshRemoteServerChoiceView {
             .with_child(Container::new(checkbox_label).with_margin_left(4.).finish())
             .finish();
 
-        // Right: "Manage Warpify settings" link.
+        // Right: "Manage Heddlify settings" link.
         let manage_settings_link = appearance
             .ui_builder()
             .link(
-                "Manage Warpify settings".into(),
+                "Manage Heddlify settings".into(),
                 None,
                 Some(Box::new(|ctx| {
-                    ctx.dispatch_typed_action(SshRemoteServerChoiceViewAction::OpenWarpifySettings);
+                    ctx.dispatch_typed_action(SshRemoteServerChoiceViewAction::OpenHeddlifySettings);
                 })),
                 self.manage_settings_mouse_state.clone(),
             )
@@ -265,7 +265,7 @@ impl TypedActionView for SshRemoteServerChoiceView {
             SshRemoteServerChoiceViewAction::Install => {
                 if self.do_not_ask_again {
                     let mode = SshExtensionInstallMode::AlwaysInstall;
-                    WarpifySettings::handle(ctx).update(ctx, |settings, ctx| {
+                    HeddlifySettings::handle(ctx).update(ctx, |settings, ctx| {
                         if let Err(e) = settings.ssh_extension_install_mode.set_value(mode, ctx) {
                             report_error!(
                                 e.context("Failed to persist ssh_extension_install_mode")
@@ -284,7 +284,7 @@ impl TypedActionView for SshRemoteServerChoiceView {
             SshRemoteServerChoiceViewAction::Skip => {
                 if self.do_not_ask_again {
                     let mode = SshExtensionInstallMode::NeverInstall;
-                    WarpifySettings::handle(ctx).update(ctx, |settings, ctx| {
+                    HeddlifySettings::handle(ctx).update(ctx, |settings, ctx| {
                         if let Err(e) = settings.ssh_extension_install_mode.set_value(mode, ctx) {
                             report_error!(
                                 e.context("Failed to persist ssh_extension_install_mode")
@@ -310,8 +310,8 @@ impl TypedActionView for SshRemoteServerChoiceView {
                 );
                 ctx.notify();
             }
-            SshRemoteServerChoiceViewAction::OpenWarpifySettings => {
-                ctx.emit(SshRemoteServerChoiceViewEvent::OpenWarpifySettings);
+            SshRemoteServerChoiceViewAction::OpenHeddlifySettings => {
+                ctx.emit(SshRemoteServerChoiceViewEvent::OpenHeddlifySettings);
             }
         }
     }

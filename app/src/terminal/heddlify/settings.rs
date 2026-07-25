@@ -10,70 +10,70 @@ use warp_errors::report_error;
 use warp_util::path::ShellFamily;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
-use crate::terminal::ssh::util::{SshWarpifyCommand, parse_interactive_ssh_command};
+use crate::terminal::ssh::util::{SshHeddlifyCommand, parse_interactive_ssh_command};
 
 // Cannot directly use Vec<Regex> here b/c Regex doesn't impl Eq, Serialize, and Deserialize.
-maybe_define_setting!(AddedSubshellCommands, group: WarpifySettings, {
+maybe_define_setting!(AddedSubshellCommands, group: HeddlifySettings, {
     type: Vec<String>,
     default: Vec::new(),
     supported_platforms: SupportedPlatforms::ALL,
     sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
     surface: settings::SettingSurfaces::GUI,
     private: false,
-    toml_path: "warpify.subshells.added_subshell_commands",
+    toml_path: "heddlify.subshells.added_subshell_commands",
     description: "Additional regex patterns for commands that should be recognized as subshells.",
 });
 
-maybe_define_setting!(SubshellCommandsDenylist, group: WarpifySettings, {
+maybe_define_setting!(SubshellCommandsDenylist, group: HeddlifySettings, {
     type: Vec<String>,
     default: Vec::new(),
     supported_platforms: SupportedPlatforms::ALL,
     sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
     surface: settings::SettingSurfaces::GUI,
     private: false,
-    toml_path: "warpify.subshells.subshell_commands_denylist",
-    description: "Commands that should not trigger the subshell warpification prompt.",
+    toml_path: "heddlify.subshells.subshell_commands_denylist",
+    description: "Commands that should not trigger the subshell heddlification prompt.",
 });
 
-maybe_define_setting!(SshHostsDenylist, group: WarpifySettings, {
+maybe_define_setting!(SshHostsDenylist, group: HeddlifySettings, {
     type: Vec<String>,
     default: Vec::new(),
     supported_platforms: SupportedPlatforms::ALL,
     sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
     surface: settings::SettingSurfaces::GUI,
     private: false,
-    toml_path: "warpify.ssh.ssh_hosts_denylist",
-    description: "SSH hosts that should not trigger the warpification prompt.",
+    toml_path: "heddlify.ssh.ssh_hosts_denylist",
+    description: "SSH hosts that should not trigger the heddlification prompt.",
 });
 
-maybe_define_setting!(EnableSshWarpification, group: WarpifySettings, {
+maybe_define_setting!(EnableSshHeddlification, group: HeddlifySettings, {
     type: bool,
     default: true,
     supported_platforms: SupportedPlatforms::ALL,
     sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
     surface: settings::SettingSurfaces::GUI,
     private: false,
-    toml_path: "warpify.ssh.enable_ssh_warpification",
+    toml_path: "heddlify.ssh.enable_ssh_heddlification",
     description: "Whether to enable Warp features in SSH sessions.",
 });
 
-// NOTE: This setting has been unified into `enable_ssh_warpification` and is no
+// NOTE: This setting has been unified into `enable_ssh_heddlification` and is no
 // longer surfaced in the UI or used to gate any behavior. It is retained only
 // so the one-time migration (see `register`) can read a user's previous value
-// and forward it to `enable_ssh_warpification`. It can be deleted in a future
+// and forward it to `enable_ssh_heddlification`. It can be deleted in a future
 // release once the migration has shipped to all users.
 // The storage key and TOML path are intentionally kept identical to the old
 // `SshSettings::enable_ssh_wrapper` field for backward compatibility.
 //
 // It is deliberately NOT cloud-synced (`SyncToCloud::Never`) — this is the fix for
 // https://github.com/warpdotdev/Warp/issues/13228. The migration below reads this
-// value and forwards an opt-out to `enable_ssh_warpification`. When it was synced,
+// value and forwards an opt-out to `enable_ssh_heddlification`. When it was synced,
 // a stale cloud value (from a user's pre-extension flow) was restored on every
 // launch, re-arming the "one-time" migration and repeatedly disabling
-// `enable_ssh_warpification` even after the user turned it back on. Keeping it
+// `enable_ssh_heddlification` even after the user turned it back on. Keeping it
 // local means the migration's reset to the default (`true`) persists and serves as
 // the one-time, per-device marker so the migration cannot re-fire.
-maybe_define_setting!(EnableSshWrapper, group: WarpifySettings, {
+maybe_define_setting!(EnableSshWrapper, group: HeddlifySettings, {
     type: bool,
     default: true,
     supported_platforms: SupportedPlatforms::ALL,
@@ -81,8 +81,8 @@ maybe_define_setting!(EnableSshWrapper, group: WarpifySettings, {
     surface: settings::SettingSurfaces::GUI,
     private: false,
     storage_key: "EnableSSHWrapper",
-    toml_path: "warpify.ssh.enable_legacy_ssh_wrapper",
-    description: "Deprecated: unified into enable_ssh_warpification. Retained only for one-time migration.",
+    toml_path: "heddlify.ssh.enable_legacy_ssh_wrapper",
+    description: "Deprecated: unified into enable_ssh_heddlification. Retained only for one-time migration.",
 });
 
 // NOTE: The tmux-based SSH wrapper is deprecated in favor of the remote-server SSH
@@ -96,29 +96,29 @@ maybe_define_setting!(EnableSshWrapper, group: WarpifySettings, {
 // restored on every launch and re-arm the migration (the same class of bug as #13228,
 // here re-showing the tmux deprecation notice). Keeping it local means the migration's
 // reset persists as the one-time, per-device marker.
-maybe_define_setting!(UseSshTmuxWrapper, group: WarpifySettings, {
+maybe_define_setting!(UseSshTmuxWrapper, group: HeddlifySettings, {
     type: bool,
     default: false,
     supported_platforms: SupportedPlatforms::OR(SupportedPlatforms::MAC.into(), SupportedPlatforms::LINUX.into()),
     sync_to_cloud: SyncToCloud::Never,
     surface: settings::SettingSurfaces::GUI,
     private: false,
-    toml_path: "warpify.ssh.use_ssh_tmux_wrapper",
-    description: "Deprecated: whether to use a tmux-based wrapper for SSH warpification.",
+    toml_path: "heddlify.ssh.use_ssh_tmux_wrapper",
+    description: "Deprecated: whether to use a tmux-based wrapper for SSH heddlification.",
 });
 
 // When set, the user previously opted into the now-deprecated tmux SSH wrapper and should
 // be shown a one-time inline banner pointing them to the remote-server SSH extension on
 // their next interactive SSH session. Set by the migration in `register`; cleared once the
 // banner has been shown.
-maybe_define_setting!(SshTmuxDeprecationNoticePending, group: WarpifySettings, {
+maybe_define_setting!(SshTmuxDeprecationNoticePending, group: HeddlifySettings, {
     type: bool,
     default: false,
     supported_platforms: SupportedPlatforms::OR(SupportedPlatforms::MAC.into(), SupportedPlatforms::LINUX.into()),
     sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
     surface: settings::SettingSurfaces::GUI,
     private: false,
-    toml_path: "warpify.ssh.ssh_tmux_deprecation_notice_pending",
+    toml_path: "heddlify.ssh.ssh_tmux_deprecation_notice_pending",
     description: "Internal: whether to show the one-time tmux SSH deprecation notice.",
 });
 
@@ -147,18 +147,18 @@ pub enum SshExtensionInstallMode {
     AlwaysAsk,
     /// Automatically install and connect without prompting.
     AlwaysInstall,
-    /// Never install; fall back to wrapper-only SSH warpification.
+    /// Never install; fall back to wrapper-only SSH heddlification.
     NeverInstall,
 }
 
-maybe_define_setting!(SshExtensionInstallModeSetting, group: WarpifySettings, {
+maybe_define_setting!(SshExtensionInstallModeSetting, group: HeddlifySettings, {
     type: SshExtensionInstallMode,
     default: SshExtensionInstallMode::default(),
     supported_platforms: SupportedPlatforms::ALL,
     sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
     surface: settings::SettingSurfaces::GUI,
     private: false,
-    toml_path: "warpify.ssh.ssh_extension_install_mode",
+    toml_path: "heddlify.ssh.ssh_extension_install_mode",
     description: "Controls SSH extension installation behavior.",
 });
 
@@ -175,7 +175,7 @@ impl SshExtensionInstallMode {
 /// Normally we use the define_settings_group! macro for singleton models of settings like this.
 /// However, this model needs to do some extra processing on the added_subshell_commands and store
 /// an enriched representation in parsed_added_subshell_commands.
-pub struct WarpifySettings {
+pub struct HeddlifySettings {
     /// A list of regexes that users can add to define new subshell-compatible commands. This
     /// represents the raw, serialized value. Therefore, it is Vec<String>.
     pub added_subshell_commands: AddedSubshellCommands,
@@ -185,9 +185,9 @@ pub struct WarpifySettings {
     /// needs to be kept up-to-date as added_subshell_commands changes. See the Self::register
     /// method for how this is done.
     pub parsed_added_subshell_commands: Vec<Result<Regex, regex::Error>>,
-    /// A list of commands that we shouldn't attempt to warpify. These can be added either b/c the
+    /// A list of commands that we shouldn't attempt to heddlify. These can be added either b/c the
     /// "don't ask again" button was clicked in the trigger banner, or it was added explicitly on
-    /// the Warpify settings page. This represents the raw, serialized value.
+    /// the Heddlify settings page. This represents the raw, serialized value.
     pub subshell_command_denylist: SubshellCommandsDenylist,
     /// This is subshell_command_denylist compiled to actual executable Regex. This is a Result as we
     /// cannot guarantee the values are valid regex. Even if we prevent them in the UI from entering
@@ -196,11 +196,11 @@ pub struct WarpifySettings {
     /// method for how this is done.
     pub parsed_subshell_command_denylist: Vec<Result<Regex, regex::Error>>,
 
-    /// A list of hosts that we shouldn't attempt to warpify. This supports regex.
+    /// A list of hosts that we shouldn't attempt to heddlify. This supports regex.
     /// These can be added either b/c the "don't ask again" button was clicked in the trigger banner,
-    /// or it was added explicitly on the Warpify settings page.
+    /// or it was added explicitly on the Heddlify settings page.
     /// While this could live in the `SshSettings` group, the custom processing shared with the other
-    /// subshell logic better justifies it living in the `WarpifySettings` group.
+    /// subshell logic better justifies it living in the `HeddlifySettings` group.
     pub ssh_hosts_denylist: SshHostsDenylist,
     /// This is ssh_hosts_denylist compiled to actual executable Regex. This is a Result as we
     /// cannot guarantee the values are valid regex. Even if we prevent them in the UI from entering
@@ -209,10 +209,10 @@ pub struct WarpifySettings {
     /// method for how this is done.
     pub parsed_ssh_hosts_denylist: Vec<Result<Regex, regex::Error>>,
 
-    /// This setting controls whether we should ever warpify ssh sessions.
-    pub enable_ssh_warpification: EnableSshWarpification,
+    /// This setting controls whether we should ever heddlify ssh sessions.
+    pub enable_ssh_heddlification: EnableSshHeddlification,
 
-    /// Deprecated: unified into `enable_ssh_warpification`. Retained only so the one-time
+    /// Deprecated: unified into `enable_ssh_heddlification`. Retained only so the one-time
     /// migration in `register` can read and forward a user's previous opt-out. Not used to
     /// gate any behavior.
     pub enable_ssh_wrapper: EnableSshWrapper,
@@ -275,7 +275,7 @@ lazy_static! {
 /// define_settings_group! macro, which is the basic template for user-defaults-backed settings.
 /// I have separated this stuff from the other impl block, which contains the subshell-specific
 /// logic, because this is basically boilerplate.
-impl WarpifySettings {
+impl HeddlifySettings {
     fn new_from_storage(ctx: &mut ModelContext<Self>) -> Self {
         let added_subshell_commands = AddedSubshellCommands::new_from_storage(ctx);
         let subshell_command_denylist = SubshellCommandsDenylist::new_from_storage(ctx);
@@ -291,7 +291,7 @@ impl WarpifySettings {
             subshell_command_denylist,
             parsed_ssh_hosts_denylist: Self::parse_ssh_hosts_denylist(&ssh_hosts_denylist),
             ssh_hosts_denylist,
-            enable_ssh_warpification: EnableSshWarpification::new_from_storage(ctx),
+            enable_ssh_heddlification: EnableSshHeddlification::new_from_storage(ctx),
             enable_ssh_wrapper: EnableSshWrapper::new_from_storage(ctx),
             use_ssh_tmux_wrapper: UseSshTmuxWrapper::new_from_storage(ctx),
             ssh_tmux_deprecation_notice_pending: SshTmuxDeprecationNoticePending::new_from_storage(
@@ -318,7 +318,7 @@ impl WarpifySettings {
             subshell_command_denylist,
             parsed_ssh_hosts_denylist: Self::parse_ssh_hosts_denylist(&ssh_hosts_denylist),
             ssh_hosts_denylist,
-            enable_ssh_warpification: EnableSshWarpification::new(None),
+            enable_ssh_heddlification: EnableSshHeddlification::new(None),
             enable_ssh_wrapper: EnableSshWrapper::new(None),
             use_ssh_tmux_wrapper: UseSshTmuxWrapper::new(None),
             ssh_tmux_deprecation_notice_pending: SshTmuxDeprecationNoticePending::new(None),
@@ -333,42 +333,42 @@ impl WarpifySettings {
         let handle = ctx.add_singleton_model(Self::new_from_storage);
         ctx.subscribe_to_model(&handle, |settings, event, ctx| {
             settings.update(ctx, |me, _| match event {
-                WarpifySettingsChangedEvent::AddedSubshellCommands { .. } => {
+                HeddlifySettingsChangedEvent::AddedSubshellCommands { .. } => {
                     me.parsed_added_subshell_commands =
                         Self::parse_added_subshell_commands(&me.added_subshell_commands)
                 }
-                WarpifySettingsChangedEvent::SubshellCommandsDenylist { .. } => {
+                HeddlifySettingsChangedEvent::SubshellCommandsDenylist { .. } => {
                     me.parsed_subshell_command_denylist =
                         Self::parse_subshell_command_denylist(&me.subshell_command_denylist)
                 }
-                WarpifySettingsChangedEvent::SshHostsDenylist { .. } => {
+                HeddlifySettingsChangedEvent::SshHostsDenylist { .. } => {
                     me.parsed_ssh_hosts_denylist =
                         Self::parse_ssh_hosts_denylist(&me.ssh_hosts_denylist)
                 }
-                WarpifySettingsChangedEvent::EnableSshWarpification { .. } => {}
-                WarpifySettingsChangedEvent::EnableSshWrapper { .. } => {}
-                WarpifySettingsChangedEvent::UseSshTmuxWrapper { .. } => {}
-                WarpifySettingsChangedEvent::SshTmuxDeprecationNoticePending { .. } => {}
-                WarpifySettingsChangedEvent::SshExtensionInstallModeSetting { .. } => {}
+                HeddlifySettingsChangedEvent::EnableSshHeddlification { .. } => {}
+                HeddlifySettingsChangedEvent::EnableSshWrapper { .. } => {}
+                HeddlifySettingsChangedEvent::UseSshTmuxWrapper { .. } => {}
+                HeddlifySettingsChangedEvent::SshTmuxDeprecationNoticePending { .. } => {}
+                HeddlifySettingsChangedEvent::SshExtensionInstallModeSetting { .. } => {}
             });
         });
 
         // One-time migration: if the user had explicitly set the legacy `enable_ssh_wrapper`
-        // setting to `false` (via `warpify.ssh.enable_legacy_ssh_wrapper = false` in their
+        // setting to `false` (via `heddlify.ssh.enable_legacy_ssh_wrapper = false` in their
         // TOML config or the old `EnableSSHWrapper` storage key), honour that intent by
-        // disabling `enable_ssh_warpification` — the canonical setting that now controls the
+        // disabling `enable_ssh_heddlification` — the canonical setting that now controls the
         // same behaviour. Resetting `enable_ssh_wrapper` back to its default (`true`) ensures
         // the migration does not run again on subsequent launches.
         //
         // `enable_ssh_wrapper` is not cloud-synced (see its definition), so this reset
         // persists locally and cannot be re-armed by a stale synced value — the fix for
         // https://github.com/warpdotdev/Warp/issues/13228, where syncing the trigger caused
-        // the migration to re-fire every launch and repeatedly disable warpification.
+        // the migration to re-fire every launch and repeatedly disable heddlification.
         handle.update(ctx, |me, ctx| {
             if me.enable_ssh_wrapper.is_value_explicitly_set() && !*me.enable_ssh_wrapper.value() {
-                if let Err(e) = me.enable_ssh_warpification.set_value(false, ctx) {
+                if let Err(e) = me.enable_ssh_heddlification.set_value(false, ctx) {
                     report_error!(e.context(
-                        "Failed to migrate enable_ssh_wrapper → enable_ssh_warpification"
+                        "Failed to migrate enable_ssh_wrapper → enable_ssh_heddlification"
                     ));
                 }
                 if let Err(e) = me.enable_ssh_wrapper.set_value(true, ctx) {
@@ -395,7 +395,7 @@ impl WarpifySettings {
         });
 
         register_settings_events!(
-            WarpifySettings,
+            HeddlifySettings,
             added_subshell_commands,
             AddedSubshellCommands,
             handle.clone(),
@@ -403,7 +403,7 @@ impl WarpifySettings {
         );
 
         register_settings_events!(
-            WarpifySettings,
+            HeddlifySettings,
             subshell_command_denylist,
             SubshellCommandsDenylist,
             handle.clone(),
@@ -411,15 +411,15 @@ impl WarpifySettings {
         );
 
         register_settings_events!(
-            WarpifySettings,
-            enable_ssh_warpification,
-            EnableSshWarpification,
+            HeddlifySettings,
+            enable_ssh_heddlification,
+            EnableSshHeddlification,
             handle.clone(),
             ctx
         );
 
         register_settings_events!(
-            WarpifySettings,
+            HeddlifySettings,
             enable_ssh_wrapper,
             EnableSshWrapper,
             handle.clone(),
@@ -427,7 +427,7 @@ impl WarpifySettings {
         );
 
         register_settings_events!(
-            WarpifySettings,
+            HeddlifySettings,
             use_ssh_tmux_wrapper,
             UseSshTmuxWrapper,
             handle.clone(),
@@ -435,7 +435,7 @@ impl WarpifySettings {
         );
 
         register_settings_events!(
-            WarpifySettings,
+            HeddlifySettings,
             ssh_tmux_deprecation_notice_pending,
             SshTmuxDeprecationNoticePending,
             handle.clone(),
@@ -443,7 +443,7 @@ impl WarpifySettings {
         );
 
         register_settings_events!(
-            WarpifySettings,
+            HeddlifySettings,
             ssh_extension_install_mode,
             SshExtensionInstallModeSetting,
             handle.clone(),
@@ -451,7 +451,7 @@ impl WarpifySettings {
         );
 
         register_settings_events!(
-            WarpifySettings,
+            HeddlifySettings,
             ssh_hosts_denylist,
             SshHostsDenylist,
             handle,
@@ -461,9 +461,9 @@ impl WarpifySettings {
 }
 
 /// This is also something that would normally be generated by
-/// define_settings_group!(WarpifySettings). Since we didn't use that macro we define it manually
+/// define_settings_group!(HeddlifySettings). Since we didn't use that macro we define it manually
 /// here. It's the event emitted by the setter methods when a setting value changes.
-pub enum WarpifySettingsChangedEvent {
+pub enum HeddlifySettingsChangedEvent {
     AddedSubshellCommands {
         change_event_reason: ChangeEventReason,
     },
@@ -473,7 +473,7 @@ pub enum WarpifySettingsChangedEvent {
     SshHostsDenylist {
         change_event_reason: ChangeEventReason,
     },
-    EnableSshWarpification {
+    EnableSshHeddlification {
         change_event_reason: ChangeEventReason,
     },
     EnableSshWrapper {
@@ -490,15 +490,15 @@ pub enum WarpifySettingsChangedEvent {
     },
 }
 
-impl Entity for WarpifySettings {
-    type Event = WarpifySettingsChangedEvent;
+impl Entity for HeddlifySettings {
+    type Event = HeddlifySettingsChangedEvent;
 }
 
-impl SingletonEntity for WarpifySettings {}
+impl SingletonEntity for HeddlifySettings {}
 
 /// This is the other impl block for this model. This one contains the actual subshell-specific
 /// logic.
-impl WarpifySettings {
+impl HeddlifySettings {
     fn is_built_in_subshell_match(command: &str) -> bool {
         for command_regex in SUBSHELL_COMMAND_REGEXES.iter() {
             if command_regex.is_match(command) {
@@ -523,7 +523,7 @@ impl WarpifySettings {
             return true;
         }
 
-        if SshWarpifyCommand::matches(command).is_some_and(|command| command.is_ssh_like_command())
+        if SshHeddlifyCommand::matches(command).is_some_and(|command| command.is_ssh_like_command())
         {
             return true;
         }
@@ -534,8 +534,8 @@ impl WarpifySettings {
             }
         }
 
-        // While in-band generators are our best option for warpifying ssh sessions from powershell, hard-code
-        // the warpify subshell banner to show up.
+        // While in-band generators are our best option for heddlifying ssh sessions from powershell, hard-code
+        // the heddlify subshell banner to show up.
         if matches!(shell_family, ShellFamily::PowerShell)
             && parse_interactive_ssh_command(command).is_some()
         {
@@ -631,7 +631,7 @@ impl WarpifySettings {
         new_added_commands_list.push(command_to_add.trim().to_owned());
 
         // The set_value method generated by the maybe_define_setting! macro will take
-        // care of emitting the WarpifySettingsChangedEvent::AddedSubshellCommands event to keep
+        // care of emitting the HeddlifySettingsChangedEvent::AddedSubshellCommands event to keep
         // parsed_added_subshell_commands in sync.
         self.added_subshell_commands
             .set_value(new_added_commands_list, ctx)
@@ -640,7 +640,7 @@ impl WarpifySettings {
         ctx.notify();
     }
 
-    /// Check if the user has asked us to remember a command and avoid asking to warpify a subshell.
+    /// Check if the user has asked us to remember a command and avoid asking to heddlify a subshell.
     pub fn is_denylisted_subshell_command(&self, command: &str) -> bool {
         let command = command.trim();
         self.parsed_subshell_command_denylist

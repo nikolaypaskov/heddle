@@ -14,7 +14,7 @@ use warpui::ui_components::components::{UiComponent as _, UiComponentStyles};
 use warpui::{AppContext, Element, EventContext, PaintContext, SingletonEntity as _};
 
 use super::SubshellSource;
-use super::settings::WarpifySettings;
+use super::settings::HeddlifySettings;
 use crate::ai::blocklist::inline_action::inline_action_icons;
 use crate::ui_components::blended_colors;
 
@@ -92,7 +92,7 @@ fn green_check_icon(appearance: &Appearance, size: f32) -> Box<dyn Element> {
         .finish()
 }
 
-/// UI helper to render the ssh command that caused the warpification prompt.
+/// UI helper to render the ssh command that caused the heddlification prompt.
 pub fn build_command_row(
     command: String,
     theme: &WarpTheme,
@@ -160,32 +160,32 @@ pub fn description_row(text: &str, theme: &WarpTheme, appearance: &Appearance) -
     .finish()
 }
 
-/// Renders a "Never Warpify this host" link or nothing.
-pub fn render_never_warpify_ssh_link(
+/// Renders a "Never Heddlify this host" link or nothing.
+pub fn render_never_heddlify_ssh_link(
     ssh_host: &Option<String>,
     app: &AppContext,
     appearance: &Appearance,
     mouse_state_handle: MouseStateHandle,
-    on_never_warpify: fn(&mut EventContext<'_>, ssh_host: String),
+    on_never_heddlify: fn(&mut EventContext<'_>, ssh_host: String),
 ) -> Option<Box<dyn Element>> {
     let Some(ssh_host) = ssh_host else {
         return None;
     };
 
-    let settings = WarpifySettings::handle(app);
+    let settings = HeddlifySettings::handle(app);
     if settings.as_ref(app).is_ssh_host_denylisted(ssh_host) {
-        // Should only happen if user manually attempts to Warpify a denylisted host.
+        // Should only happen if user manually attempts to Heddlify a denylisted host.
         return None;
     }
 
     let link = appearance
         .ui_builder()
         .link(
-            "Never Warpify this host".into(),
+            "Never Heddlify this host".into(),
             None,
             Some(Box::new({
                 let ssh_host = ssh_host.clone();
-                move |ctx| on_never_warpify(ctx, ssh_host.to_owned())
+                move |ctx| on_never_heddlify(ctx, ssh_host.to_owned())
             })),
             mouse_state_handle,
         )

@@ -155,7 +155,7 @@ fn disconnected_remote_session_does_not_fall_back_to_client_global_bundled_skill
             sessions.register_session_for_test(
                 SessionInfo::new_for_test()
                     .with_id(session_id)
-                    .with_session_type(BootstrapSessionType::WarpifiedRemote),
+                    .with_session_type(BootstrapSessionType::HeddlifiedRemote),
             );
         });
         let (_model_events_tx, model_events_rx) = unbounded();
@@ -235,7 +235,7 @@ fn remote_session_reads_remote_bundled_skill_catalog() {
             sessions.register_session_for_test(
                 SessionInfo::new_for_test()
                     .with_id(session_id)
-                    .with_session_type(BootstrapSessionType::WarpifiedRemote),
+                    .with_session_type(BootstrapSessionType::HeddlifiedRemote),
             );
         });
         let session = sessions

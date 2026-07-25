@@ -6,7 +6,7 @@ use warp_core::ui::appearance::Appearance;
 use warpui::r#async::SpawnedFutureHandle;
 use warpui::{EntityId, SingletonEntity as _, ViewContext, ViewHandle};
 
-use super::success_block::WarpifySuccessBlock;
+use super::success_block::HeddlifySuccessBlock;
 use crate::terminal::model::block::BlockId;
 use crate::terminal::model::session::SessionId;
 use crate::terminal::model::terminal_model::SubshellInitializationInfo;
@@ -40,8 +40,8 @@ impl SubshellSeparatorState {
 
 #[derive(Debug)]
 pub enum SshBlockState {
-    WarpifySuccess {
-        handle: ViewHandle<WarpifySuccessBlock>,
+    HeddlifySuccess {
+        handle: ViewHandle<HeddlifySuccessBlock>,
     },
 }
 
@@ -52,18 +52,18 @@ impl SshBlockState {
 
     pub fn get_block_view_id(&self) -> EntityId {
         match self {
-            SshBlockState::WarpifySuccess { handle, .. } => handle.id(),
+            SshBlockState::HeddlifySuccess { handle, .. } => handle.id(),
         }
     }
 
-    pub fn on_warpified_session_complete(
+    pub fn on_heddlified_session_complete(
         &self,
         ctx: &mut ViewContext<TerminalView>,
     ) -> Option<EntityId> {
         match self {
-            SshBlockState::WarpifySuccess { handle } => {
+            SshBlockState::HeddlifySuccess { handle } => {
                 handle.update(ctx, |block, ctx| {
-                    block.on_warpified_session_complete(ctx);
+                    block.on_heddlified_session_complete(ctx);
                 });
             }
         }
@@ -71,29 +71,29 @@ impl SshBlockState {
     }
 }
 
-/// Temporary state used to trigger Warpification.
+/// Temporary state used to trigger Heddlification.
 #[derive(Default)]
-struct WarpifyTriggerState {
+struct HeddlifyTriggerState {
     block_id: Option<BlockId>,
 
-    /// Lets us abort an attempt to auto warpify if the subshell command
+    /// Lets us abort an attempt to auto heddlify if the subshell command
     /// hasn't completed.
-    auto_warpify_abort_handle: Option<SpawnedFutureHandle>,
+    auto_heddlify_abort_handle: Option<SpawnedFutureHandle>,
 
     /// The subshell banner waits 1s before showing. This is to see that the command stays running
     /// for a while without exiting. We store the abort handle here so that the
     /// TerminalEvent::BlockCompleted event can abort the banner.
     subshell_banner_abort_handle: Option<SpawnedFutureHandle>,
 
-    /// The command which may trigger ssh Warpification
+    /// The command which may trigger ssh Heddlification
     pending_command: Option<String>,
-    /// The Host which may trigger ssh Warpification
-    pending_warpify_ssh_host: Option<String>,
+    /// The Host which may trigger ssh Heddlification
+    pending_heddlify_ssh_host: Option<String>,
 
     /// Which, if any, SSH block is currently added to the blocklist.
     ssh_block_state: Option<SshBlockState>,
 
-    ssh_warpify_timeout_handle: Option<SpawnedFutureHandle>,
+    ssh_heddlify_timeout_handle: Option<SpawnedFutureHandle>,
 
     shell_type: Option<ShellType>,
 
@@ -101,17 +101,17 @@ struct WarpifyTriggerState {
 }
 
 #[derive(Default)]
-pub struct WarpifyState {
+pub struct HeddlifyState {
     session_id: Option<SessionId>,
 
-    pending_state: Option<WarpifyTriggerState>,
+    pending_state: Option<HeddlifyTriggerState>,
     /// Stores the metadata needed to render any separators above the first block of a subshell.
     subshell_separator_state: SubshellSeparatorState,
     /// A unique-enough ID that is used to validate that a timeout is still valid.
     timeout_id: u8,
 }
 
-impl WarpifyState {
+impl HeddlifyState {
     pub fn delete_state(&mut self) {
         self.pending_state.take();
     }
@@ -180,32 +180,32 @@ impl WarpifyState {
             .and_then(|state| state.subshell_banner_abort_handle.take())
     }
 
-    pub fn add_auto_warpify_abort_handle(&mut self, spawned_future_handle: SpawnedFutureHandle) {
+    pub fn add_auto_heddlify_abort_handle(&mut self, spawned_future_handle: SpawnedFutureHandle) {
         let pending_state = self.pending_state.get_or_insert_with(Default::default);
-        pending_state.auto_warpify_abort_handle = Some(spawned_future_handle);
+        pending_state.auto_heddlify_abort_handle = Some(spawned_future_handle);
     }
 
-    pub fn abort_auto_warpify(&mut self) {
+    pub fn abort_auto_heddlify(&mut self) {
         if let Some(abort_handle) = self
             .pending_state
             .as_mut()
-            .and_then(|state| state.auto_warpify_abort_handle.take())
+            .and_then(|state| state.auto_heddlify_abort_handle.take())
         {
             abort_handle.abort();
         };
     }
 
-    pub fn add_ssh_warpify_timeout_handle(&mut self, spawned_future_handle: SpawnedFutureHandle) {
+    pub fn add_ssh_heddlify_timeout_handle(&mut self, spawned_future_handle: SpawnedFutureHandle) {
         let pending_state = self.pending_state.get_or_insert_with(Default::default);
-        pending_state.ssh_warpify_timeout_handle = Some(spawned_future_handle);
+        pending_state.ssh_heddlify_timeout_handle = Some(spawned_future_handle);
     }
 
-    pub fn abort_ssh_warpify_timeout(&mut self) {
+    pub fn abort_ssh_heddlify_timeout(&mut self) {
         self.replace_timeout_id();
         if let Some(handle) = self
             .pending_state
             .as_mut()
-            .and_then(|state| state.ssh_warpify_timeout_handle.take())
+            .and_then(|state| state.ssh_heddlify_timeout_handle.take())
         {
             handle.abort();
         };
@@ -231,31 +231,31 @@ impl WarpifyState {
     pub fn get_pending_ssh_host(&self) -> Option<String> {
         self.pending_state
             .as_ref()
-            .and_then(|state: &WarpifyTriggerState| state.pending_warpify_ssh_host.clone())
+            .and_then(|state: &HeddlifyTriggerState| state.pending_heddlify_ssh_host.clone())
     }
 
     pub fn get_pending_ssh_command(&self) -> Option<String> {
         self.pending_state
             .as_ref()
-            .and_then(|state: &WarpifyTriggerState| state.pending_command.clone())
+            .and_then(|state: &HeddlifyTriggerState| state.pending_command.clone())
     }
 
     pub fn take_pending_ssh_host(&mut self) -> Option<String> {
         self.pending_state
             .as_mut()
-            .and_then(|state: &mut WarpifyTriggerState| state.pending_warpify_ssh_host.take())
+            .and_then(|state: &mut HeddlifyTriggerState| state.pending_heddlify_ssh_host.take())
     }
 
     pub fn clear_pending_ssh_host(&mut self) {
         if let Some(ref mut pending_state) = self.pending_state.as_mut() {
-            pending_state.pending_warpify_ssh_host = None;
+            pending_state.pending_heddlify_ssh_host = None;
         }
     }
 
     pub fn set_pending_ssh_host(&mut self, command: String, ssh_host: Option<String>) {
         let pending_state = self.pending_state.get_or_insert_with(Default::default);
         pending_state.pending_command = Some(command);
-        pending_state.pending_warpify_ssh_host = ssh_host;
+        pending_state.pending_heddlify_ssh_host = ssh_host;
     }
 
     pub fn set_block_id(&mut self, block_id: BlockId) {
@@ -290,10 +290,10 @@ impl WarpifyState {
     }
 
     /// Called once whenever we get a local block completed, as opposed to a remote ssh block
-    /// and we have a Warpify Success block.
-    fn on_warpified_session_complete(
+    /// and we have a Heddlify Success block.
+    fn on_heddlified_session_complete(
         &mut self,
-        state: WarpifyTriggerState,
+        state: HeddlifyTriggerState,
         ctx: &mut ViewContext<TerminalView>,
     ) -> Option<EntityId> {
         self.clear_ssh_block_state();
@@ -301,16 +301,16 @@ impl WarpifyState {
         let Some(block) = &state.ssh_block_state else {
             return None;
         };
-        block.on_warpified_session_complete(ctx)
+        block.on_heddlified_session_complete(ctx)
     }
 
-    pub fn on_warpify_start(&mut self, active_session_id: Option<SessionId>) {
+    pub fn on_heddlify_start(&mut self, active_session_id: Option<SessionId>) {
         self.session_id = active_session_id;
     }
 
-    /// Called whenever a block is completed, to determine whether a Warpified session
+    /// Called whenever a block is completed, to determine whether a Heddlified session
     /// has been completed.
-    pub fn get_completed_warpify_session_id(
+    pub fn get_completed_heddlify_session_id(
         &mut self,
         active_session_id: Option<SessionId>,
         ctx: &mut ViewContext<TerminalView>,
@@ -319,7 +319,7 @@ impl WarpifyState {
             return None;
         }
         if let Some(state) = self.pending_state.take() {
-            return self.on_warpified_session_complete(state, ctx);
+            return self.on_heddlified_session_complete(state, ctx);
         };
         None
     }

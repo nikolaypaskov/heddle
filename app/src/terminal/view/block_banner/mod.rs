@@ -6,9 +6,9 @@
 //! without a LayoutContext. Use the exported BLOCK_BANNER_HEIGHT const when the banner height
 //! needs to be taken into account.
 
-mod warpify;
+mod heddlify;
 
-pub use warpify::*;
+pub use heddlify::*;
 use warpui::Element;
 use warpui::elements::{
     ConstrainedBox, Container, CornerRadius, Hoverable, MouseState, MouseStateHandle,
@@ -25,13 +25,13 @@ const BANNER_H_PADDING: f32 = 8.;
 pub const BLOCK_BANNER_HEIGHT: f32 = CONSTRAINED_BANNER_HEIGHT + BANNER_TOP_MARGIN;
 
 pub enum WithinBlockBanner {
-    WarpifyBanner(WarpifyBannerState),
+    HeddlifyBanner(HeddlifyBannerState),
 }
 
 impl WithinBlockBanner {
     pub fn banner_height(&self) -> f32 {
         match self {
-            WithinBlockBanner::WarpifyBanner(_) => BLOCK_BANNER_HEIGHT,
+            WithinBlockBanner::HeddlifyBanner(_) => BLOCK_BANNER_HEIGHT,
         }
     }
 }

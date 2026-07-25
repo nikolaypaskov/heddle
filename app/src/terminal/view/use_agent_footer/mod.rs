@@ -16,7 +16,7 @@ use crate::terminal::shared_session::{
     SharedSessionActionSource, SharedSessionScrollbackType, SharedSessionSource,
 };
 use crate::util::image::{MAX_IMAGE_SIZE_BYTES_FOR_CLI_AGENT, MIME_SNIFF_BYTES, infer_mime_type};
-mod warpify_footer;
+mod heddlify_footer;
 
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
@@ -35,7 +35,7 @@ use warp_core::ui::theme::Fill as ThemeFill;
 use warp_core::ui::theme::color::internal_colors;
 use warp_errors::report_error;
 use warp_terminal::model::escape_sequences::{BRACKETED_PASTE_END, BRACKETED_PASTE_START};
-use warpify_footer::{WarpifyFooterView, WarpifyFooterViewEvent};
+use heddlify_footer::{HeddlifyFooterView, HeddlifyFooterViewEvent};
 use warpui::r#async::Timer;
 use warpui::elements::{
     ChildView, Container, CrossAxisAlignment, Empty, Expanded, Flex, MainAxisSize, ParentElement,
@@ -267,11 +267,11 @@ impl TerminalView {
             UseAgentToolbarEvent::HideRichInput => {
                 self.close_cli_agent_rich_input_and_disable_auto_toggle(ctx);
             }
-            UseAgentToolbarEvent::Warpify => {
+            UseAgentToolbarEvent::Heddlify => {
                 self.hide_use_agent_footer_in_blocklist(ctx);
                 self.handle_action(&TerminalAction::TriggerSubshellBootstrap, ctx);
                 send_telemetry_from_ctx!(
-                    TelemetryEvent::WarpifyFooterAcceptedWarpify { is_ssh: false },
+                    TelemetryEvent::HeddlifyFooterAcceptedHeddlify { is_ssh: false },
                     ctx
                 );
             }
@@ -295,8 +295,8 @@ impl TerminalView {
     ) -> bool {
         let ai_settings = AISettings::as_ref(app);
 
-        // If the warpify footer is active, a subshell was detected and we should show the footer.
-        if self.use_agent_footer.as_ref(app).is_warpify_active(app) {
+        // If the heddlify footer is active, a subshell was detected and we should show the footer.
+        if self.use_agent_footer.as_ref(app).is_heddlify_active(app) {
             return true;
         }
 
@@ -445,7 +445,7 @@ impl TerminalView {
 
         if !self.model.lock().is_alt_screen_active() {
             self.use_agent_footer.update(ctx, |footer, ctx| {
-                footer.clear_warpify(ctx);
+                footer.clear_heddlify(ctx);
             });
             self.hide_use_agent_footer_in_blocklist(ctx);
         }
@@ -1076,8 +1076,8 @@ pub struct UseAgentToolbar {
     // Shared agent input footer (renders CLI agent mode when a CLI session is active).
     agent_input_footer: ViewHandle<AgentInputFooter>,
 
-    // Warpify footer UI (shown when a subshell/SSH command is detected).
-    warpify_footer_view: ViewHandle<WarpifyFooterView>,
+    // Heddlify footer UI (shown when a subshell/SSH command is detected).
+    heddlify_footer_view: ViewHandle<HeddlifyFooterView>,
 
     // `true` if the user has dismissed the footer.
     //
@@ -1150,11 +1150,11 @@ impl UseAgentToolbar {
             me.handle_agent_input_footer_event(event, ctx);
         });
 
-        let warpify_footer_view =
-            ctx.add_typed_action_view(|ctx| WarpifyFooterView::new(terminal_model.clone(), ctx));
+        let heddlify_footer_view =
+            ctx.add_typed_action_view(|ctx| HeddlifyFooterView::new(terminal_model.clone(), ctx));
 
-        ctx.subscribe_to_view(&warpify_footer_view, |me, _, event, ctx| {
-            me.handle_warpify_footer_event(event, ctx);
+        ctx.subscribe_to_view(&heddlify_footer_view, |me, _, event, ctx| {
+            me.handle_heddlify_footer_event(event, ctx);
         });
 
         ctx.subscribe_to_model(model_event_dispatcher, |me, _, event, ctx| {
@@ -1180,7 +1180,7 @@ impl UseAgentToolbar {
             dismiss_button,
             dont_show_again_button,
             agent_input_footer,
-            warpify_footer_view,
+            heddlify_footer_view,
             terminal_model,
             did_user_dismiss: false,
         }
@@ -1227,19 +1227,19 @@ impl UseAgentToolbar {
         }
     }
 
-    fn handle_warpify_footer_event(
+    fn handle_heddlify_footer_event(
         &mut self,
-        event: &WarpifyFooterViewEvent,
+        event: &HeddlifyFooterViewEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
-            WarpifyFooterViewEvent::Warpify => {
-                ctx.emit(UseAgentToolbarEvent::Warpify);
+            HeddlifyFooterViewEvent::Heddlify => {
+                ctx.emit(UseAgentToolbarEvent::Heddlify);
             }
-            WarpifyFooterViewEvent::UseAgent => {
+            HeddlifyFooterViewEvent::UseAgent => {
                 ctx.emit(UseAgentToolbarEvent::UseAgent);
             }
-            WarpifyFooterViewEvent::Dismiss => {
+            HeddlifyFooterViewEvent::Dismiss => {
                 ctx.emit(UseAgentToolbarEvent::Dismiss);
             }
         }
@@ -1248,7 +1248,7 @@ impl UseAgentToolbar {
     pub(in crate::terminal) fn notify_and_notify_children(&mut self, ctx: &mut ViewContext<Self>) {
         ctx.notify();
         self.agent_input_footer.update(ctx, |_, ctx| ctx.notify());
-        self.warpify_footer_view.update(ctx, |_, ctx| ctx.notify());
+        self.heddlify_footer_view.update(ctx, |_, ctx| ctx.notify());
         self.button.update(ctx, |_, ctx| ctx.notify());
         self.give_control_back_button
             .update(ctx, |_, ctx| ctx.notify());
@@ -1268,26 +1268,26 @@ impl UseAgentToolbar {
             .map(|session| session.agent)
     }
 
-    /// Activates the warpify footer. When active, the footer shows the
-    /// warpify view instead of the CLI agent or regular "Use agent" views.
-    pub(in crate::terminal) fn show_warpify(&mut self, ctx: &mut ViewContext<Self>) {
-        self.warpify_footer_view.update(ctx, |view, ctx| {
+    /// Activates the heddlify footer. When active, the footer shows the
+    /// heddlify view instead of the CLI agent or regular "Use agent" views.
+    pub(in crate::terminal) fn show_heddlify(&mut self, ctx: &mut ViewContext<Self>) {
+        self.heddlify_footer_view.update(ctx, |view, ctx| {
             view.show(ctx);
         });
         ctx.notify();
     }
 
-    /// Deactivates the warpify footer so it reverts to its default behavior.
-    pub(in crate::terminal) fn clear_warpify(&mut self, ctx: &mut ViewContext<Self>) {
-        self.warpify_footer_view.update(ctx, |view, ctx| {
+    /// Deactivates the heddlify footer so it reverts to its default behavior.
+    pub(in crate::terminal) fn clear_heddlify(&mut self, ctx: &mut ViewContext<Self>) {
+        self.heddlify_footer_view.update(ctx, |view, ctx| {
             view.clear(ctx);
         });
         ctx.notify();
     }
 
-    /// Returns whether the warpify footer is currently active.
-    pub(in crate::terminal) fn is_warpify_active(&self, app: &AppContext) -> bool {
-        self.warpify_footer_view.as_ref(app).is_active()
+    /// Returns whether the heddlify footer is currently active.
+    pub(in crate::terminal) fn is_heddlify_active(&self, app: &AppContext) -> bool {
+        self.heddlify_footer_view.as_ref(app).is_active()
     }
 
     /// Returns whether there's a current CLI agent (like Claude Code).
@@ -1319,8 +1319,8 @@ pub enum UseAgentToolbarEvent {
     OpenRichInput,
     /// Hide the rich input editor (same as Escape).
     HideRichInput,
-    /// User chose to warpify the subshell.
-    Warpify,
+    /// User chose to heddlify the subshell.
+    Heddlify,
     /// User chose to use the agent.
     UseAgent,
 }
@@ -1335,9 +1335,9 @@ impl View for UseAgentToolbar {
     }
 
     fn render(&self, app: &AppContext) -> Box<dyn Element> {
-        // If the warpify footer is active, delegate rendering to the warpify footer view.
-        if self.warpify_footer_view.as_ref(app).is_active() {
-            return ChildView::new(&self.warpify_footer_view).finish();
+        // If the heddlify footer is active, delegate rendering to the heddlify footer view.
+        if self.heddlify_footer_view.as_ref(app).is_active() {
+            return ChildView::new(&self.heddlify_footer_view).finish();
         }
 
         // Hide the toolbar entirely when CLI rich input is open,

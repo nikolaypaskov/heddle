@@ -1677,10 +1677,10 @@ impl DisplayChip {
             .as_ref()
             .map(|ctx| match ctx.session.session_type() {
                 SessionType::Local => true,
-                SessionType::WarpifiedRemote { host_id: Some(_) } => {
+                SessionType::HeddlifiedRemote { host_id: Some(_) } => {
                     FeatureFlag::RemoteCodeReview.is_enabled()
                 }
-                SessionType::WarpifiedRemote { host_id: None } => false,
+                SessionType::HeddlifiedRemote { host_id: None } => false,
             })
             .unwrap_or(false);
 

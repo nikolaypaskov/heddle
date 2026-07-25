@@ -291,7 +291,7 @@ fn new_command_executor_for_local_tty_session(
                 }
             }
         }
-        BootstrapSessionType::WarpifiedRemote
+        BootstrapSessionType::HeddlifiedRemote
             if is_ssh_wrapper_session
                 && !FeatureFlag::InBandGeneratorsForSSH.is_enabled()
                 && !force_use_in_band_generators =>

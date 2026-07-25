@@ -319,7 +319,7 @@ impl RequestFileEditsExecutor {
         // Set the session type so save/delete/create routes through the
         // correct FileModel backend.
         let diff_session_type = match self.active_session.as_ref(ctx).session_type(ctx) {
-            Some(SessionType::WarpifiedRemote {
+            Some(SessionType::HeddlifiedRemote {
                 host_id: Some(host_id),
             }) => DiffSessionType::Remote(host_id.clone()),
             _ => DiffSessionType::Local,

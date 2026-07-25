@@ -497,6 +497,8 @@
 ./app/src/terminal/event.rs	login
 ./app/src/terminal/general_settings.rs	log in
 ./app/src/terminal/general_settings.rs	login
+./app/src/terminal/heddlify/settings_tests.rs	login
+./app/src/terminal/heddlify/settings_tests.rs	subscription
 ./app/src/terminal/input.rs	cloud agent
 ./app/src/terminal/input/inline_menu/view.rs	upgrade
 ./app/src/terminal/input/models/data_source.rs	upgrade
@@ -541,8 +543,6 @@
 ./app/src/terminal/view/shared_session/conversation_ended_tombstone_view.rs	credits
 ./app/src/terminal/view/use_agent_footer/mod_tests.rs	cloud agent
 ./app/src/terminal/view/use_agent_footer/mod_tests.rs	cloud agent
-./app/src/terminal/warpify/settings_tests.rs	login
-./app/src/terminal/warpify/settings_tests.rs	subscription
 ./app/src/tui/mod.rs	log out
 ./app/src/tui/mod.rs	logout
 ./app/src/uri/mod.rs	cloud agent

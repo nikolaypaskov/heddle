@@ -1429,10 +1429,10 @@ fn add_open_setting_pages_as_editable_binding(app: &mut AppContext) {
         .with_group(bindings::BindingGroup::Settings.as_str())
         .with_context_predicate(id!("Workspace")),
         EditableBinding::new(
-            "workspace:show_settings_warpify_page",
-            BindingDescription::new("Open Settings: Warpify")
-                .with_custom_description(bindings::MAC_MENUS_CONTEXT, "Configure Warpify..."),
-            WorkspaceAction::ShowSettingsPage(SettingsSection::Warpify),
+            "workspace:show_settings_heddlify_page",
+            BindingDescription::new("Open Settings: Heddlify")
+                .with_custom_description(bindings::MAC_MENUS_CONTEXT, "Configure Heddlify..."),
+            WorkspaceAction::ShowSettingsPage(SettingsSection::Heddlify),
         )
         .with_group(bindings::BindingGroup::Settings.as_str())
         .with_context_predicate(id!("Workspace")),

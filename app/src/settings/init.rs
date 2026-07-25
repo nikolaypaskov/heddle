@@ -36,7 +36,7 @@ use crate::terminal::safe_mode_settings::SafeModeSettings;
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::settings::TerminalSettings;
 use crate::terminal::shared_session::settings::SharedSessionSettings;
-use crate::terminal::warpify::settings::WarpifySettings;
+use crate::terminal::heddlify::settings::HeddlifySettings;
 use crate::undo_close::UndoCloseSettings;
 use crate::window_settings::WindowSettings;
 use crate::workflows::aliases::WorkflowAliases;
@@ -88,7 +88,7 @@ pub fn register_all_settings(ctx: &mut AppContext) {
     AppIconSettings::register(ctx);
     AppEditorSettings::register(ctx);
     InputSettings::register(ctx);
-    WarpifySettings::register(ctx);
+    HeddlifySettings::register(ctx);
     AltScreenReporting::register(ctx);
     UndoCloseSettings::register(ctx);
     SshSettings::register(ctx);
@@ -332,10 +332,24 @@ pub fn init_public_user_preferences() -> (user_preferences::Model, Option<user_p
             (Box::<user_preferences::local_storage::LocalStoragePreferences>::default(), None)
         } else {
             if warp_core::features::FeatureFlag::SettingsFile.is_enabled() {
+                let toml_path = super::user_preferences_toml_file_path();
+
+                // Must happen BEFORE the backend reads the file: afterwards the settings have
+                // already been looked up under their new `heddlify.*` paths, the old
+                // `warpify.*` keys are invisible, and every affected preference has silently
+                // reverted to its default with the user's values still sitting in the file.
+                //
+                // A failure here is logged, not fatal. A settings file that cannot be migrated
+                // is still one the user can edit by hand; refusing to launch over it would be
+                // a far worse outcome than one stale table.
+                if let Err(err) =
+                    super::heddlify_key_migration::migrate_warpify_table(&toml_path)
+                {
+                    log::warn!("Could not migrate [warpify] settings to [heddlify]: {err:#}");
+                }
+
                 let (prefs, parse_error) =
-                    user_preferences::toml_backed::TomlBackedUserPreferences::new(
-                        super::user_preferences_toml_file_path(),
-                    );
+                    user_preferences::toml_backed::TomlBackedUserPreferences::new(toml_path);
                 if let Some(err) = &parse_error {
                     log::warn!("Settings file has syntax errors and could not be parsed: {err}");
                 }

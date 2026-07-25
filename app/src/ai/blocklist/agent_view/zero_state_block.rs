@@ -316,7 +316,7 @@ fn format_session_location(session: &Session, working_directory: Option<&str>) -
     let hostname = session.hostname();
     match session_type {
         SessionType::Local => Some(display_path),
-        SessionType::WarpifiedRemote { .. } => Some(format!("{user}@{hostname}:{display_path}")),
+        SessionType::HeddlifiedRemote { .. } => Some(format!("{user}@{hostname}:{display_path}")),
     }
 }
 
@@ -492,7 +492,7 @@ fn current_working_directory_for_zero_state(terminal_model: &TerminalModel) -> O
                     .is_some_and(|pending_session_info| {
                         matches!(
                             pending_session_info.session_type,
-                            BootstrapSessionType::WarpifiedRemote
+                            BootstrapSessionType::HeddlifiedRemote
                         )
                     });
             (!terminal_model.block_list().is_bootstrapped() && !is_bootstrapping_remote_shell)

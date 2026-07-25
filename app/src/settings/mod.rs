@@ -14,6 +14,7 @@ mod emacs_bindings;
 pub mod font;
 mod gpu;
 pub mod import;
+mod heddlify_key_migration;
 mod init;
 pub mod initializer;
 mod input;

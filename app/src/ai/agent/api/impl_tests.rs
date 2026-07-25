@@ -53,7 +53,7 @@ fn request_params_with_ask_user_question_enabled(ask_user_question_enabled: bool
 fn request_params_for_remote(host_id: Option<HostId>) -> RequestParams {
     let mut params = request_params_with_ask_user_question_enabled(false);
     params.session_context =
-        SessionContext::new_with_session_type_for_test(Some(SessionType::WarpifiedRemote {
+        SessionContext::new_with_session_type_for_test(Some(SessionType::HeddlifiedRemote {
             host_id,
         }));
     params

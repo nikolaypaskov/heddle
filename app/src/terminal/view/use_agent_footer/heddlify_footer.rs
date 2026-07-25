@@ -15,28 +15,28 @@ use crate::view_components::action_button::{
 };
 
 /// Footer view rendered for detected subshell commands, offering both
-/// "Warpify" and "Use agent" buttons in a horizontal row.
-pub(super) struct WarpifyFooterView {
+/// "Heddlify" and "Use agent" buttons in a horizontal row.
+pub(super) struct HeddlifyFooterView {
     terminal_model: Arc<FairMutex<TerminalModel>>,
-    warpify_button: ViewHandle<ActionButton>,
+    heddlify_button: ViewHandle<ActionButton>,
     use_agent_button: ViewHandle<ActionButton>,
     dismiss_button: ViewHandle<ActionButton>,
-    /// Whether the footer is currently offering subshell warpification.
+    /// Whether the footer is currently offering subshell heddlification.
     is_active: bool,
 }
 
-impl WarpifyFooterView {
+impl HeddlifyFooterView {
     pub fn new(terminal_model: Arc<FairMutex<TerminalModel>>, ctx: &mut ViewContext<Self>) -> Self {
         let button_size = ButtonSize::XSmall;
 
-        let warpify_button = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new("Warpify subshell", AgentFooterButtonTheme::new(None))
+        let heddlify_button = ctx.add_typed_action_view(|_ctx| {
+            ActionButton::new("Heddlify subshell", AgentFooterButtonTheme::new(None))
                 .with_icon(Icon::Warp)
                 .with_size(button_size)
                 .with_tooltip("Enable Warp shell integration in this session")
                 .with_tooltip_alignment(TooltipAlignment::Left)
                 .on_click(|ctx| {
-                    ctx.dispatch_typed_action(WarpifyFooterViewAction::Warpify);
+                    ctx.dispatch_typed_action(HeddlifyFooterViewAction::Heddlify);
                 })
         });
 
@@ -48,7 +48,7 @@ impl WarpifyFooterView {
                 .with_tooltip("Ask the Warp agent to assist")
                 .with_tooltip_alignment(TooltipAlignment::Left)
                 .on_click(|ctx| {
-                    ctx.dispatch_typed_action(WarpifyFooterViewAction::UseAgent);
+                    ctx.dispatch_typed_action(HeddlifyFooterViewAction::UseAgent);
                 })
         });
 
@@ -56,24 +56,24 @@ impl WarpifyFooterView {
             ActionButton::new("Dismiss", AgentFooterButtonTheme::new(None))
                 .with_size(button_size)
                 .on_click(|ctx| {
-                    ctx.dispatch_typed_action(WarpifyFooterViewAction::Dismiss);
+                    ctx.dispatch_typed_action(HeddlifyFooterViewAction::Dismiss);
                 })
         });
 
         Self {
             terminal_model,
-            warpify_button,
+            heddlify_button,
             use_agent_button,
             dismiss_button,
             is_active: false,
         }
     }
 
-    /// Activates the footer so it offers subshell warpification.
+    /// Activates the footer so it offers subshell heddlification.
     pub fn show(&mut self, ctx: &mut ViewContext<Self>) {
-        self.warpify_button.update(ctx, |button, ctx| {
+        self.heddlify_button.update(ctx, |button, ctx| {
             button.set_keybinding(
-                Some(KeystrokeSource::Binding("terminal:warpify_subshell")),
+                Some(KeystrokeSource::Binding("terminal:heddlify_subshell")),
                 ctx,
             );
         });
@@ -81,7 +81,7 @@ impl WarpifyFooterView {
         ctx.notify();
     }
 
-    /// Returns whether the footer is currently offering subshell warpification.
+    /// Returns whether the footer is currently offering subshell heddlification.
     pub fn is_active(&self) -> bool {
         self.is_active
     }
@@ -89,7 +89,7 @@ impl WarpifyFooterView {
     /// Deactivates the footer.
     pub fn clear(&mut self, ctx: &mut ViewContext<Self>) {
         self.is_active = false;
-        self.warpify_button.update(ctx, |button, ctx| {
+        self.heddlify_button.update(ctx, |button, ctx| {
             button.set_keybinding(None, ctx);
         });
         ctx.notify();
@@ -97,25 +97,25 @@ impl WarpifyFooterView {
 }
 
 #[derive(Debug, Clone)]
-pub enum WarpifyFooterViewAction {
-    Warpify,
+pub enum HeddlifyFooterViewAction {
+    Heddlify,
     UseAgent,
     Dismiss,
 }
 
-pub enum WarpifyFooterViewEvent {
-    Warpify,
+pub enum HeddlifyFooterViewEvent {
+    Heddlify,
     UseAgent,
     Dismiss,
 }
 
-impl Entity for WarpifyFooterView {
-    type Event = WarpifyFooterViewEvent;
+impl Entity for HeddlifyFooterView {
+    type Event = HeddlifyFooterViewEvent;
 }
 
-impl View for WarpifyFooterView {
+impl View for HeddlifyFooterView {
     fn ui_name() -> &'static str {
-        "WarpifyFooterView"
+        "HeddlifyFooterView"
     }
 
     fn render(&self, _app: &AppContext) -> Box<dyn Element> {
@@ -125,7 +125,7 @@ impl View for WarpifyFooterView {
             .with_spacing(4.)
             .with_main_axis_size(MainAxisSize::Max)
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_child(ChildView::new(&self.warpify_button).finish())
+            .with_child(ChildView::new(&self.heddlify_button).finish())
             .with_child(ChildView::new(&self.use_agent_button).finish())
             .with_child(Expanded::new(1., Empty::new().finish()).finish())
             .with_child(ChildView::new(&self.dismiss_button).finish());
@@ -144,24 +144,24 @@ impl View for WarpifyFooterView {
     }
 }
 
-impl TypedActionView for WarpifyFooterView {
-    type Action = WarpifyFooterViewAction;
+impl TypedActionView for HeddlifyFooterView {
+    type Action = HeddlifyFooterViewAction;
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
-            WarpifyFooterViewAction::Warpify => {
+            HeddlifyFooterViewAction::Heddlify => {
                 if self.is_active {
                     self.clear(ctx);
-                    ctx.emit(WarpifyFooterViewEvent::Warpify);
+                    ctx.emit(HeddlifyFooterViewEvent::Heddlify);
                 }
             }
-            WarpifyFooterViewAction::UseAgent => {
+            HeddlifyFooterViewAction::UseAgent => {
                 self.clear(ctx);
-                ctx.emit(WarpifyFooterViewEvent::UseAgent);
+                ctx.emit(HeddlifyFooterViewEvent::UseAgent);
             }
-            WarpifyFooterViewAction::Dismiss => {
+            HeddlifyFooterViewAction::Dismiss => {
                 self.clear(ctx);
-                ctx.emit(WarpifyFooterViewEvent::Dismiss);
+                ctx.emit(HeddlifyFooterViewEvent::Dismiss);
             }
         }
     }

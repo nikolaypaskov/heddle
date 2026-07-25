@@ -114,11 +114,11 @@ fn test_malicious_histfile_path_does_not_execute_injected_commands() {
         let malicious_histfile = format!("/tmp/x'; touch {marker}; echo '");
 
         let session_info = SessionInfo::new_for_test()
-            .with_session_type(BootstrapSessionType::WarpifiedRemote)
+            .with_session_type(BootstrapSessionType::HeddlifiedRemote)
             .with_histfile(Some(malicious_histfile));
         let session = Session::new(session_info, Arc::new(TestCommandExecutor::default()));
 
-        // read_history for a WarpifiedRemote session calls read_history_from_file,
+        // read_history for a HeddlifiedRemote session calls read_history_from_file,
         // which builds `cat '{escaped_path}'` and executes it via TestCommandExecutor
         let _ = session.read_history(false).await;
 

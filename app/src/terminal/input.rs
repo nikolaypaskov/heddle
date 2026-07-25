@@ -138,7 +138,7 @@ use super::view::queued_prompts_panel::{QueuedPromptsPanelEvent, QueuedPromptsPa
 use super::view::{
     ExecuteCommandEvent, PADDING_LEFT as TERMINAL_VIEW_PADDING_LEFT, SyncInputType, TerminalAction,
 };
-use super::warpify::SubshellSource;
+use super::heddlify::SubshellSource;
 use super::{History, HistoryEntry, SizeInfo, TerminalModel, UpArrowHistoryConfig, prompt};
 #[allow(unused_imports)]
 use crate::ASSETS;
@@ -11424,13 +11424,13 @@ impl Input {
 
         // CLI agent rich input in shell mode (! prefix) should allow completions
         // even though the active block is a long-running command.
-        // However, completions are disabled on warpified remote hosts because
+        // However, completions are disabled on heddlified remote hosts because
         // in-band generators don't work in this context (with CLI agent).
         let is_cli_agent_shell_mode = self.is_locked_in_shell_mode(ctx)
             && CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.terminal_view_id)
             && !self
                 .active_session(ctx)
-                .is_some_and(|s| matches!(s.session_type(), SessionType::WarpifiedRemote { .. }));
+                .is_some_and(|s| matches!(s.session_type(), SessionType::HeddlifiedRemote { .. }));
 
         // If the cursor is in a valid completion position, go into CompletionSuggestions mode
         if (is_command_grid_active || is_cli_agent_shell_mode) && self.can_query_history(ctx) {

@@ -1,5 +1,5 @@
 //! Banner shown when the remote-server binary check, installation, or connection fails on the remote host.
-//! We fall back to the existing Warpification behavior and display this banner so the user knows why advanced features are unavailable.
+//! We fall back to the existing Heddlification behavior and display this banner so the user knows why advanced features are unavailable.
 
 use remote_server::transport::UserFacingError;
 use warp_core::ui::theme::AnsiColorIdentifier;
@@ -18,7 +18,7 @@ use crate::ui_components::icons::Icon;
 const BANNER_TITLE: &str = "Couldn't connect to the Warp SSH extension";
 
 const BANNER_BODY: &str = "While advanced features like file browsing and code review are currently \
-    disabled, the rest of your Warpified experience is fully available.";
+    disabled, the rest of your Heddlified experience is fully available.";
 
 #[derive(Clone, Debug)]
 pub enum SshRemoteServerFailedBannerAction {

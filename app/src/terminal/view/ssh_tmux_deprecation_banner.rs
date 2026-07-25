@@ -1,5 +1,5 @@
 //! One-time inline banner shown to users who had previously opted into the now-deprecated
-//! tmux-based SSH warpification flow. It explains that tmux SSH warpification has been turned
+//! tmux-based SSH heddlification flow. It explains that tmux SSH heddlification has been turned
 //! off in favor of Warp's SSH extension (remote server) and links to the docs.
 //!
 //! The banner is shown at most once per affected user: it is gated on the
@@ -17,10 +17,10 @@ use warpui::{AppContext, Element, Entity, SingletonEntity, TypedActionView, View
 
 use crate::Appearance;
 use crate::terminal::model::session::SessionId;
-use crate::terminal::warpify::render::SSH_DOCS_URL;
+use crate::terminal::heddlify::render::SSH_DOCS_URL;
 use crate::ui_components::icons::Icon;
 
-const BANNER_TITLE: &str = "Tmux SSH warpification has been deprecated";
+const BANNER_TITLE: &str = "Tmux SSH heddlification has been deprecated";
 
 const BANNER_BODY: &str = "Warp now connects to remote sessions using the SSH extension, which is \
     more robust than the tmux-based flow. The tmux option has been removed.";
@@ -76,7 +76,7 @@ impl View for SshTmuxDeprecationBanner {
         let font_size = appearance.monospace_font_size();
         let small_font_size = font_size - 2.;
 
-        // Warp icon to match the other warpification blocks.
+        // Warp icon to match the other heddlification blocks.
         let icon = Container::new(
             ConstrainedBox::new(Icon::Warp.to_warpui_icon(fg_color.into()).finish())
                 .with_width(16.)
