@@ -1,10 +1,14 @@
-use std::sync::Arc;
-
 use itertools::Itertools;
 
 use crate::completer::{Priority, Suggestion, SuggestionType};
 
-/// Ordering tests for Suggestions
+/// Ordering tests for Suggestions.
+///
+/// NOTE: this file sat on disk WITHOUT a `mod tests;` declaration in the parent, so it was
+/// never compiled and silently bit-rotted — `Suggestion::display`/`replacement` moved from
+/// `Arc<String>`/`String` to `SmolStr` and nothing complained. Wired in and repaired. The
+/// subjects (`cmp_by_display`, `cmp_by_reversed_priority_and_display`) have ~24 production
+/// callers and drive completion-menu ordering, so this was lost coverage, not dead weight.
 #[test]
 fn test_suggestions_cmp_display() {
     let display_names = [
@@ -18,8 +22,8 @@ fn test_suggestions_cmp_display() {
     let suggestions: Vec<Suggestion> = display_names
         .iter()
         .map(|display| Suggestion {
-            display: Arc::new(display.to_owned()),
-            replacement: "dummy".to_owned(),
+            display: display.as_str().into(),
+            replacement: "dummy".into(),
             description: None,
             suggestion_type: SuggestionType::Argument,
             priority: Priority::default(),
@@ -49,8 +53,8 @@ fn test_suggestions_cmp_by_reversed_priority_and_display() {
         .into_iter()
         .enumerate()
         .map(|(idx, priority)| Suggestion {
-            display: Arc::new(format!("status_{}", priorities.len() - idx)),
-            replacement: "status".to_owned(),
+            display: format!("status_{}", priorities.len() - idx).into(),
+            replacement: "status".into(),
             description: None,
             suggestion_type: SuggestionType::Argument,
             priority,

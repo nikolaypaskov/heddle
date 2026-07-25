@@ -9,6 +9,9 @@ pub use suggest::alias::*;
 #[cfg(feature = "test-util")]
 pub mod testing;
 
+#[cfg(test)]
+mod tests;
+
 pub use context::{
     CommandExitStatus, CommandOutput, CompletionContext, GeneratorContext, PathCompletionContext,
     PathSeparators,

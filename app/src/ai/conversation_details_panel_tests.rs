@@ -6,16 +6,80 @@ use warp_cli::agent::Harness;
 use warp_multi_agent_api as api;
 use warpui::{App, EntityId, SingletonEntity};
 
-use super::{ConversationDetailsData, PanelMode};
+use super::{ConversationDetailsData, PanelMode, continuation_target};
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::{
-    AIAgentHarness, AIConversation, AIConversationId, ServerAIConversationMetadata,
+    AIAgentHarness, AIConversation, AIConversationId, ConversationStatus,
+    ServerAIConversationMetadata,
 };
 use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::auth::UserUid;
 use crate::cloud_object::{Revision, ServerMetadata, ServerPermissions};
 use crate::server::ids::ServerId;
 use crate::workspaces::user_profiles::UserProfileWithUID;
+
+#[test]
+fn continue_locally_is_offered_only_for_terminal_conversations() {
+    // The CTA forks the conversation, so it must only appear once the agent is DONE with it.
+    // A previous version excluded just `is_in_progress()`, which offered the fork for
+    // `TransientError`, `WaitingForEvents` and `Blocked` — all non-terminal and resumable in
+    // place, so forking them would branch a conversation the agent is still going to
+    // continue. Guarding the rule directly here: the exhaustive `ConversationStatus::is_done`
+    // enum test would NOT fail if this gate regressed to excluding only `InProgress`.
+    let conversation_id = AIConversationId::new();
+    let mode_with = |status: ConversationStatus| PanelMode {
+        directory: None,
+        server_conversation_id: None,
+        ai_conversation_id: Some(conversation_id),
+        status: Some(status),
+    };
+
+    for status in [
+        ConversationStatus::InProgress,
+        ConversationStatus::TransientError,
+        ConversationStatus::WaitingForEvents,
+        ConversationStatus::Blocked {
+            blocked_action: "run_shell_command".to_owned(),
+        },
+    ] {
+        assert_eq!(
+            continuation_target(&mode_with(status.clone()), true),
+            None,
+            "{status:?} is resumable in place; forking it would branch a live conversation"
+        );
+    }
+
+    for status in [
+        ConversationStatus::Success,
+        ConversationStatus::Error,
+        ConversationStatus::Cancelled,
+    ] {
+        assert_eq!(
+            continuation_target(&mode_with(status.clone()), true),
+            Some(conversation_id),
+            "{status:?} is terminal, so it is a valid fork source"
+        );
+    }
+
+    // AI disabled hides the CTA regardless of status.
+    assert_eq!(
+        continuation_target(&mode_with(ConversationStatus::Success), false),
+        None
+    );
+    // No status at all (nothing loaded yet) is not a fork source either.
+    assert_eq!(
+        continuation_target(
+            &PanelMode {
+                directory: None,
+                server_conversation_id: None,
+                ai_conversation_id: Some(conversation_id),
+                status: None,
+            },
+            true
+        ),
+        None
+    );
+}
 
 #[test]
 fn test_from_conversation_populates_local_conversation_fields() {

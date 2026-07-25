@@ -4,7 +4,7 @@ use pathfinder_geometry::vector::vec2f;
 use session_sharing_protocol::sharer::SessionSourceType;
 use warp_multi_agent_api::{self as api, client_action as api_client_action};
 use warpui::platform::WindowStyle;
-use warpui::{App, ViewHandle};
+use warpui::{App, TypedActionView, ViewHandle};
 
 use super::*;
 use crate::ai::agent::AIAgentInput;
@@ -54,6 +54,29 @@ fn suppressed_auto_open_survives_the_first_maybe_auto_open() {
             assert!(
                 view.has_auto_opened_conversation_details_panel,
                 "the one-shot must still be consumed, so a later call cannot open it either"
+            );
+        });
+
+        // Suppression must not STRAND the pane: the user can still open the panel by hand.
+        // Without this the test would pass for a regression that disabled the toggle
+        // outright, which is the opposite failure from the one being guarded.
+        terminal.update(&mut app, |view, ctx| {
+            view.handle_action(&TerminalAction::ToggleConversationDetailsPanel, ctx);
+        });
+        terminal.read(&app, |view, _| {
+            assert!(
+                view.is_conversation_details_panel_open,
+                "a manual toggle must still open the panel on a suppressed pane"
+            );
+        });
+
+        terminal.update(&mut app, |view, ctx| {
+            view.handle_action(&TerminalAction::ToggleConversationDetailsPanel, ctx);
+        });
+        terminal.read(&app, |view, _| {
+            assert!(
+                !view.is_conversation_details_panel_open,
+                "and toggle again closes it"
             );
         });
     });

@@ -380,6 +380,25 @@ pub struct ConversationDetailsPanel {
     selected_text: Arc<RwLock<Option<String>>>,
 }
 
+/// The conversation a "Continue locally" click would fork.
+///
+/// Only a TERMINAL conversation is a valid fork source. Excluding just `is_in_progress()`
+/// would offer the CTA for `TransientError`, `WaitingForEvents` and `Blocked`, which are
+/// non-terminal and resumable in place — forking those would branch a conversation the agent
+/// is still going to continue.
+///
+/// Split out from the panel so the rule is testable without standing up a full view.
+#[cfg(not(target_family = "wasm"))]
+fn continuation_target(mode: &PanelMode, ai_enabled: bool) -> Option<AIConversationId> {
+    if !ai_enabled {
+        return None;
+    }
+    if !mode.status.as_ref()?.is_done() {
+        return None;
+    }
+    mode.ai_conversation_id
+}
+
 impl ConversationDetailsPanel {
     /// Create a new panel.
     /// - `show_open_button`: whether to show the "Open" button (management view: true, transcript: false)
@@ -441,22 +460,10 @@ impl ConversationDetailsPanel {
     /// finished conversation and AI is enabled.
     #[cfg(not(target_family = "wasm"))]
     fn local_continuation_info(&self, app: &AppContext) -> Option<AIConversationId> {
-        if !AISettings::as_ref(app).is_any_ai_enabled(app) {
-            return None;
-        }
-        let PanelMode {
-            ai_conversation_id,
-            status,
-            ..
-        } = &self.data.mode;
-        // Only a TERMINAL conversation is a valid fork source. Excluding just
-        // `is_in_progress()` would offer "Continue locally" for `TransientError`,
-        // `WaitingForEvents` and `Blocked`, which are non-terminal and resumable in place —
-        // forking those would branch a conversation the agent is still going to continue.
-        if !status.as_ref()?.is_done() {
-            return None;
-        }
-        *ai_conversation_id
+        continuation_target(
+            &self.data.mode,
+            AISettings::as_ref(app).is_any_ai_enabled(app),
+        )
     }
 
     fn set_artifacts(&mut self, data: &ConversationDetailsData, ctx: &mut ViewContext<Self>) {

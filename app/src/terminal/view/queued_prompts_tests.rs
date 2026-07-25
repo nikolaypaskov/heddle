@@ -86,6 +86,126 @@ where
 }
 
 #[test]
+fn enqueue_followup_prompt_targets_the_supplied_conversation_not_the_selected_one() {
+    // `/fork-and-compact` enqueues onto the NEWLY FORKED conversation, which is not the one
+    // currently selected in the pane, so the explicit `conversation_id` argument has to be
+    // honoured. Previously only covered indirectly by a test that drained a pre-populated
+    // queue and never called this helper, so ignoring the argument would have gone unnoticed.
+    App::test((), |mut app| async move {
+        initialize_app_for_terminal_view(&mut app);
+        let _queued_prompts_v2 = FeatureFlag::QueuedPromptsV2.override_enabled(true);
+
+        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
+        let terminal = add_window_with_terminal(&mut app, None);
+        let terminal_view_id = terminal.read(&app, |view, _| view.view_id);
+
+        // Entering agent view is what actually makes `selected_conversation_id` return
+        // `Some`. Without it the selection is `None` and the argument is used by default, so
+        // the test could not tell whether the code reads the argument or merely falls back to
+        // it -- an earlier draft of this test passed against exactly that mutation.
+        let selected = terminal.update(&mut app, |view, ctx| {
+            view.agent_view_controller().update(ctx, |controller, ctx| {
+                controller
+                    .try_enter_agent_view(
+                        None,
+                        AgentViewEntryOrigin::Input {
+                            was_prompt_autodetected: false,
+                        },
+                        ctx,
+                    )
+                    .expect("should enter agent view")
+            })
+        });
+        let forked = BlocklistAIHistoryModel::handle(&app).update(&mut app, |history, ctx| {
+            history.start_new_conversation(terminal_view_id, false, false, false, ctx)
+        });
+        assert_ne!(selected, forked);
+        terminal.read(&app, |view, ctx| {
+            assert_eq!(
+                view.ai_context_model
+                    .as_ref(ctx)
+                    .selected_conversation_id(ctx),
+                Some(selected),
+                "the selection must differ from the fork target for this test to discriminate"
+            );
+        });
+
+        terminal.update(&mut app, |view, ctx| {
+            view.enqueue_followup_prompt(
+                "after the fork".to_owned(),
+                QueuedQueryOrigin::ForkAndCompactSlashCommand,
+                forked,
+                ctx,
+            );
+        });
+
+        QueuedQueryModel::handle(&app).read(&app, |model, _| {
+            let forked_queue = model.queue(forked);
+            assert_eq!(
+                forked_queue.len(),
+                1,
+                "the fork target must receive the row"
+            );
+            assert_eq!(forked_queue[0].text(), "after the fork");
+            assert_eq!(
+                forked_queue[0].origin(),
+                QueuedQueryOrigin::ForkAndCompactSlashCommand
+            );
+            assert!(
+                model.queue(selected).is_empty(),
+                "the selected conversation must NOT receive it"
+            );
+        });
+    });
+}
+
+#[test]
+fn enqueue_followup_prompt_falls_back_to_the_pending_block_when_v2_is_disabled() {
+    // With `QueuedPromptsV2` off the helper must take the legacy pending-user-query path
+    // instead of the queue, so nothing lands in the queued-query model at all.
+    App::test((), |mut app| async move {
+        initialize_app_for_terminal_view(&mut app);
+        let _queued_prompts_v2 = FeatureFlag::QueuedPromptsV2.override_enabled(false);
+
+        let terminal = add_window_with_terminal(&mut app, None);
+        let terminal_view_id = terminal.read(&app, |view, _| view.view_id);
+
+        let conversation_id =
+            BlocklistAIHistoryModel::handle(&app).update(&mut app, |history, ctx| {
+                let id = history.start_new_conversation(terminal_view_id, false, false, false, ctx);
+                history.set_active_conversation_id(id, terminal_view_id, ctx);
+                id
+            });
+
+        terminal.update(&mut app, |view, ctx| {
+            view.enqueue_followup_prompt(
+                "legacy path".to_owned(),
+                QueuedQueryOrigin::CompactAndSlashCommand,
+                conversation_id,
+                ctx,
+            );
+        });
+
+        QueuedQueryModel::handle(&app).read(&app, |model, _| {
+            assert!(
+                model.queue(conversation_id).is_empty(),
+                "V2 disabled must not append to the queue"
+            );
+        });
+        terminal.read(&app, |view, _| {
+            // `queued_prompt_callback` is the fallback's load-bearing state: it fires the
+            // prompt when the conversation finishes. The visible pending block is additionally
+            // gated on `PendingUserQueryIndicator`, so asserting on the callback keeps this
+            // test about the branch under test rather than about that unrelated flag.
+            assert!(
+                view.queued_prompt_callback.is_some(),
+                "V2 disabled must arm the legacy after-finish callback"
+            );
+        });
+    });
+}
+
+#[test]
 fn complete_drain_pops_head_and_returns_submit_action() {
     // On Complete, the next queued prompt fires via Submit.
     with_singleton(|mut app, model, conv| {
