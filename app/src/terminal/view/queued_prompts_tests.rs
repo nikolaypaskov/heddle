@@ -202,6 +202,25 @@ fn enqueue_followup_prompt_falls_back_to_the_pending_block_when_v2_is_disabled()
                 "V2 disabled must arm the legacy after-finish callback"
             );
         });
+
+        // Arming it is not enough: the callback has to carry the ORIGINAL prompt. Checking
+        // only `is_some()` would pass for a fallback that armed an empty or wrong prompt and
+        // silently dropped the user's follow-up. Fire it on a cancelled finish, which
+        // restores the prompt into the input buffer rather than submitting it.
+        terminal.update(&mut app, |view, ctx| {
+            view.fire_conversation_finished_callbacks(FinishReason::Cancelled, ctx);
+        });
+        terminal.read(&app, |view, ctx| {
+            assert_eq!(
+                view.input().as_ref(ctx).buffer_text(ctx),
+                "legacy path",
+                "the fallback must carry the original prompt, not an empty or altered one"
+            );
+            assert!(
+                view.queued_prompt_callback.is_none(),
+                "firing must consume the callback"
+            );
+        });
     });
 }
 

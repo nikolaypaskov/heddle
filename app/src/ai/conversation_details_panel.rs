@@ -388,7 +388,12 @@ pub struct ConversationDetailsPanel {
 /// is still going to continue.
 ///
 /// Split out from the panel so the rule is testable without standing up a full view.
-#[cfg(not(target_family = "wasm"))]
+///
+/// Deliberately NOT `#[cfg(not(target_family = "wasm"))]` even though its only caller is:
+/// the rule is pure and identical on every target, and gating it made the unconditional
+/// test import fail to build on wasm. `allow(dead_code)` covers the wasm build where the
+/// caller is absent.
+#[cfg_attr(target_family = "wasm", allow(dead_code))]
 fn continuation_target(mode: &PanelMode, ai_enabled: bool) -> Option<AIConversationId> {
     if !ai_enabled {
         return None;
