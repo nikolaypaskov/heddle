@@ -11,19 +11,27 @@
 #      existed since the rename, so the GUI could not be bundled. Nobody noticed because
 #      nobody ever built it.
 #   2. The GUI still renders upstream's commercial UI -- a sign-in flow, a Warp Drive panel,
-#      "Log out", "Upgrade plan". The de-commercialization slices removed backend plumbing;
-#      view code was never audited, because no gate looked at it.
+#      "Log out", "Upgrade plan", an entire app/src/billing module. The de-commercialization
+#      slices removed backend plumbing; view code was never audited, because nothing looked.
 #
 # A feature that is never compiled cannot report anything, and `dead_code` does not see across
 # a feature gate. So the check has to be explicit.
 #
-#   ./script/heddle/gui-surface-gate                  # compile + surface comparison
-#   ./script/heddle/gui-surface-gate --surfaces-only  # skip the ~2-7min build
-#   ./script/heddle/gui-surface-gate --update         # re-record the baseline
+#   ./script/heddle/gui-surface-gate                     # compile + surface comparison
+#   ./script/heddle/gui-surface-gate --surfaces-only     # skip the build
+#   ./script/heddle/gui-surface-gate --update            # re-record after REMOVING surfaces
+#   ./script/heddle/gui-surface-gate --update --allow-additions   # deliberately baseline new ones
 #
-# The baseline is expected to SHRINK as the sweep proceeds. A removal is not a failure -- it
-# means the baseline is stale and must be re-recorded IN THE SAME CHANGE, which is enforced
-# with its own exit status rather than left to discipline.
+# Exit status is a contract, and every path honours it:
+#   0  the surface matches the baseline
+#   1  surfaces were ADDED, or the GUI does not compile
+#   2  infrastructure failure -- the check could not be performed at all
+#   3  surfaces were REMOVED and the baseline is now stale
+#
+# The baseline is expected to SHRINK as the sweep proceeds. A removal is not a failure; it
+# means the baseline must be re-recorded IN THE SAME CHANGE, enforced by exit 3 rather than
+# left to discipline. While a baseline still lists something that has been deleted, that thing
+# can be reintroduced up to the recorded count for free.
 
 set -euo pipefail
 
@@ -31,36 +39,75 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASELINE="$REPO_ROOT/script/heddle/gui-surfaces.baseline"
 
 # Kept identical to the oss branch of script/macos/bundle. If that feature list changes, this
-# one has to change with it, or the gate stops checking what actually ships.
+# one must change with it, or the gate stops checking what actually ships.
 GUI_FEATURES="release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2"
 
-# Roots that contain view code. Deliberately NOT the whole workspace: a match inside, say, a
-# protocol crate is a data field name, not something a user reads on screen.
+# Roots that contain view code. Deliberately NOT the whole workspace: a match inside a protocol
+# crate is a data field name, not something a user reads on screen.
 ROOTS=(app/src crates/warpui/src crates/onboarding/src)
 
-# Only user-facing string LITERALS: every alternative is anchored to a leading double quote.
-# Without that anchor `login` matches `parsed["owner"]["login"]` in app/src/util/git.rs, which
-# is a GitHub API field and not a sign-in button -- a false positive that would sit in the
-# baseline forever and could never be "removed".
-PATTERN='"(Sign in|Sign out|Sign up|Log in|Log out|Logout|Login|Upgrade|Warp Drive|Subscription|Subscribe|Create account|Manage plan|Billing|Your account|more credits|Refer a friend)'
+# Floors that catch a root being renamed, emptied or gutted. Actual counts are roughly 2131 /
+# 114 / 37, so these are loose enough to survive ordinary deletion and tight enough that a
+# vanished root cannot pass as a clean scan.
+MIN_RS_PER_ROOT=10
+MIN_RS_TOTAL=1000
 
-SURFACES_ONLY=false
-UPDATE=false
-case "${1:-}" in
-  --surfaces-only) SURFACES_ONLY=true ;;
-  --update)        UPDATE=true; SURFACES_ONLY=true ;;
-  "")              ;;
-  *) echo "usage: $0 [--surfaces-only|--update]" >&2; exit 2 ;;
-esac
+# Two classes of marker, because one rule cannot serve both.
+#
+# ANCHORED -- generic words that are only meaningful as UI when they open a string literal.
+# Without the leading-quote anchor, `login` matches `parsed["owner"]["login"]` in
+# app/src/util/git.rs, a GitHub API field and not a sign-in button. Such a row could never be
+# "removed", so it would sit in the baseline forever as permanent noise.
+#
+# UNANCHORED -- phrases distinctive enough to be commercial UI wherever they appear, including
+# mid-sentence. The first version of this gate anchored everything and therefore missed
+# "Compare plans", "Manage billing", "Your team has run out of credits. Purchase more credits
+# to continue." and "{credits} free cloud agent credits" -- real rendered text, invisible to a
+# rule that only looked at the first word of a literal.
+ANCHORED='Sign in|Sign out|Sign up|Log in|Log out|Login|Logout|Upgrade|Subscription|Subscribe|Billing|Create account|Manage plan|Your account|Refer a friend'
+UNANCHORED='Warp Drive|Compare plans|Manage billing|Pro plan|Team plan|out of credits|cloud agent credits|Purchase more credits|free credits|upgrade_url'
+PATTERN="(\"($ANCHORED)|($UNANCHORED))"
+
+RUN_BUILD=true
+MODE=compare
+ALLOW_ADDITIONS=false
+
+usage() {
+  echo "usage: $0 [--surfaces-only] [--update [--allow-additions]]" >&2
+}
+
+while (($#)); do
+  case "$1" in
+    --surfaces-only)   RUN_BUILD=false ;;
+    --update)          MODE=update; RUN_BUILD=false ;;
+    --allow-additions) ALLOW_ADDITIONS=true ;;
+    *) usage; exit 2 ;;
+  esac
+  shift
+done
+
+if [[ "$ALLOW_ADDITIONS" == true && "$MODE" != update ]]; then
+  echo "error: --allow-additions is only meaningful with --update." >&2
+  exit 2
+fi
+
+# Every infrastructure failure funnels through here so none of them can inherit an arbitrary
+# status. `mktemp`, `cp`, `sort` and `comm` all return 1 on failure, which is indistinguishable
+# from "surfaces were added" -- the difference between a real regression and a broken tool.
+die_infra() {
+  echo "error: $*" >&2
+  echo "       This is an infrastructure failure, not a result. Nothing was verified." >&2
+  exit 2
+}
 
 ##############################
 ## Part 1: does it compile? ##
 ##############################
 
-if [[ "$SURFACES_ONLY" == false ]]; then
+if [[ "$RUN_BUILD" == true ]]; then
   echo "Checking the GUI compiles (--bin heddle --features $GUI_FEATURES)..."
-  raw="$(mktemp)"
-  trap 'rm -f "$raw"' EXIT
+  raw="$(mktemp)" || die_infra "mktemp failed"
+  trap 'rm -f "${raw:-}"' EXIT
 
   set +e
   ( cd "$REPO_ROOT" && cargo check -p warp --bin heddle --features "$GUI_FEATURES" ) > "$raw" 2>&1
@@ -68,11 +115,10 @@ if [[ "$SURFACES_ONLY" == false ]]; then
   set -e
 
   # Distinguish "rustc rejected the code" from "cargo never ran". Both exit non-zero, and
-  # conflating them reports a compile failure that does not exist -- which is how this very
-  # script behaved on its first run: without ~/.cargo/bin on PATH the subshell exited 127 and
-  # the gate announced "the GUI does not compile" while printing no errors, because there
-  # were none. A verification tool that misattributes its own breakage to the code under test
-  # is worse than no tool, so demand positive evidence that a Rust compilation happened.
+  # conflating them reports a compile failure that does not exist -- which is how this script
+  # behaved on its first run: with no ~/.cargo/bin on PATH the subshell exited 127 and the gate
+  # announced "the GUI does not compile" while printing no errors, because there were none. A
+  # tool that blames the code for its own breakage sends you hunting a defect that isn't there.
   if ! grep -qE '^(    Finished|error: could not compile)' "$raw"; then
     echo "error: the GUI check did not complete a Rust compilation (cargo exit $status)." >&2
     echo "       This is an infrastructure failure, not a compile error. Last lines:" >&2
@@ -92,63 +138,101 @@ if [[ "$SURFACES_ONLY" == false ]]; then
   echo "PASS: the GUI compiles."
 fi
 
-######################################
+#######################################
 ## Part 2: the commercial UI surface ##
-######################################
+#######################################
 
-collect() {
+# Fail closed. EVERY root must exist and be populated. Requiring merely that *some* root
+# survives is not enough: if crates/warpui/src were renamed, app/src alone would clear an
+# aggregate threshold, the gate would scan two thirds of the tree, report the missing rows as
+# "removed", and invite a --update that would blind it to that root permanently.
+verify_roots() {
   cd "$REPO_ROOT"
-
-  # Fail closed. If a root is renamed or moved, grep would simply match nothing, every baseline
-  # row would read as "removed", and a gate whose whole job is detecting residue would report
-  # a clean sweep. Demand positive evidence that there was something to scan.
-  local present=()
-  local root
+  local root n total=0
   for root in "${ROOTS[@]}"; do
-    [[ -d "$root" ]] && present+=("$root")
+    [[ -d "$root" ]] || die_infra "scan root '$root' does not exist (renamed or moved?)"
+    n="$(find "$root" -name '*.rs' | wc -l | tr -d ' ')" || die_infra "find failed under '$root'"
+    if (( n < MIN_RS_PER_ROOT )); then
+      die_infra "scan root '$root' holds only $n .rs files (expected >= $MIN_RS_PER_ROOT)"
+    fi
+    total=$((total + n))
   done
-  if [[ ${#present[@]} -eq 0 ]]; then
-    echo "error: none of the scan roots exist: ${ROOTS[*]}" >&2
-    echo "       This is a broken scan, not a clean result." >&2
-    exit 2
+  if (( total < MIN_RS_TOTAL )); then
+    die_infra "only $total .rs files across all roots (expected >= $MIN_RS_TOTAL)"
   fi
-
-  local file_count
-  file_count="$(find "${present[@]}" -name '*.rs' | wc -l | tr -d ' ')"
-  if [[ "$file_count" -lt 100 ]]; then
-    echo "error: only $file_count .rs files under ${present[*]}; expected hundreds." >&2
-    echo "       Refusing to treat a near-empty scan as a pass." >&2
-    exit 2
-  fi
-
-  # `-o` so the recorded row is file + the offending literal, not the whole line: rewording the
-  # surrounding code must not read as a change, but moving it to another file must.
-  #
-  # `sort` and NOT `sort -u`: multiplicity is signal. Three "Upgrade" buttons in one file would
-  # collapse to one row under -u, and a fourth could then be added invisibly -- a false negative
-  # in the exact tool built to prevent one.
-  grep -rEno --include='*.rs' "$PATTERN" "${present[@]}" 2>/dev/null \
-    | sed -E 's/:[0-9]+:/:/' \
-    | sort || true
 }
 
-CURRENT="$(mktemp)"
-trap 'rm -f "$CURRENT" ${raw:-}' EXIT
-collect > "$CURRENT"
+# `-o` records file + the offending literal rather than the whole line, so rewording the
+# surrounding code does not read as a change while moving it to another file does. No `-n`, so
+# there are no line numbers to strip -- an earlier version stripped them with a
+# `s/:[0-9]+:/:/` substitution that would corrupt any path containing `:<digits>:`.
+#
+# Sorted under LC_ALL=C, and compared under it too: `comm` demands both inputs be ordered by
+# the SAME collation, and a locale change alone would otherwise manufacture phantom additions.
+collect() {
+  local out="$1" err gs
+  err="$(mktemp)" || die_infra "mktemp failed"
+  cd "$REPO_ROOT"
 
-if [[ "$UPDATE" == true ]]; then
-  cp "$CURRENT" "$BASELINE"
-  echo "Recorded $(wc -l < "$BASELINE" | tr -d ' ') commercial UI surfaces to $BASELINE"
-  exit 0
-fi
+  set +e
+  grep -rEo --include='*.rs' "$PATTERN" "${ROOTS[@]}" > "$out.raw" 2>"$err"
+  gs=$?
+  set -e
+
+  # grep: 0 = matched, 1 = no matches (a legitimate end state for this sweep), >=2 = a real
+  # error. The first version ended the pipeline with `|| true`, which swallowed all three
+  # alike -- so a grep that could not read the tree produced an empty result that then
+  # overwrote the baseline under --update and passed on every run afterwards.
+  if (( gs >= 2 )); then
+    local detail; detail="$(head -2 "$err")"; rm -f "$err"
+    die_infra "grep failed with status $gs: $detail"
+  fi
+  rm -f "$err"
+
+  LC_ALL=C sort "$out.raw" > "$out" || die_infra "sort failed while normalising the scan"
+  rm -f "$out.raw"
+}
+
+verify_roots
+
+CURRENT="$(mktemp)" || die_infra "mktemp failed"
+trap 'rm -f "$CURRENT" "$CURRENT.raw" "${raw:-}"' EXIT
+collect "$CURRENT"
 
 if [[ ! -f "$BASELINE" ]]; then
-  echo "error: no baseline at $BASELINE. Record one with --update." >&2
+  if [[ "$MODE" == update ]]; then
+    cp "$CURRENT" "$BASELINE" || die_infra "could not write $BASELINE"
+    echo "Bootstrapped $(wc -l < "$BASELINE" | tr -d ' ') commercial UI surfaces to $BASELINE"
+    exit 0
+  fi
+  echo "error: no baseline at $BASELINE. Bootstrap one with --update." >&2
   exit 2
 fi
 
-ADDED="$(comm -13 "$BASELINE" "$CURRENT")"
-REMOVED="$(comm -23 "$BASELINE" "$CURRENT")"
+# A baseline that is not sorted in this collation makes `comm` emit nonsense, and the nonsense
+# looks exactly like added surfaces -- exit 1, a regression that never happened.
+LC_ALL=C sort -c "$BASELINE" 2>/dev/null \
+  || die_infra "$BASELINE is not sorted under LC_ALL=C; re-record it with --update"
+
+ADDED="$(LC_ALL=C comm -13 "$BASELINE" "$CURRENT")" || die_infra "comm failed comparing to the baseline"
+REMOVED="$(LC_ALL=C comm -23 "$BASELINE" "$CURRENT")" || die_infra "comm failed comparing to the baseline"
+
+if [[ "$MODE" == update ]]; then
+  # --update must not be a rubber stamp. Recording whatever happens to be present would let
+  # anyone add a sign-in button and legitimise it in the same breath, which defeats the only
+  # purpose this gate has. Removals re-record freely; additions demand saying so out loud.
+  if [[ -n "$ADDED" && "$ALLOW_ADDITIONS" == false ]]; then
+    echo "FAIL: --update refuses to baseline ADDED commercial UI surfaces:" >&2
+    echo "$ADDED" | sed 's/^/  + /' >&2
+    echo >&2
+    echo "Removals re-record without ceremony; additions do not. If these are genuinely" >&2
+    echo "wanted, say so explicitly: --update --allow-additions" >&2
+    exit 1
+  fi
+  cp "$CURRENT" "$BASELINE" || die_infra "could not write $BASELINE"
+  echo "Recorded $(wc -l < "$BASELINE" | tr -d ' ') commercial UI surfaces to $BASELINE"
+  exit 0
+fi
 
 if [[ -n "$REMOVED" ]]; then
   echo "These commercial UI surfaces are GONE relative to the baseline:"
@@ -162,14 +246,10 @@ if [[ -n "$ADDED" ]]; then
   echo >&2
   echo "Heddle has no account and no vendor backend, so there is nothing for a sign-in," >&2
   echo "a Drive panel or an upgrade prompt to talk to. If this text is genuinely needed," >&2
-  echo "re-record the baseline deliberately rather than widening the pattern." >&2
+  echo "record it deliberately with --update --allow-additions." >&2
   exit 1
 fi
 
-# A stale baseline is a live hazard, not bookkeeping: while it still lists a surface that has
-# since been deleted, that surface can be REINTRODUCED up to the recorded count and this gate
-# will pass. So a removal fails too, with its own status, forcing the re-record to land in the
-# change that earned it.
 if [[ -n "$REMOVED" ]]; then
   echo "FAIL: the baseline is now stale. Until it is re-recorded, those surfaces could be" >&2
   echo "      reintroduced up to the recorded count without failing this gate." >&2

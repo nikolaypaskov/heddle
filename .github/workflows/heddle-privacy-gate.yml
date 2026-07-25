@@ -207,74 +207,13 @@ jobs:
           key: heddle-gui-surface
 
       # Same principle as the other two gates: prove it CAN fail before trusting a pass.
-      # Each plant asserts the EXACT exit status and message, because accepting any nonzero
+      # Each case asserts the EXACT exit status and message, because accepting any nonzero
       # status would let an unrelated failure -- a broken scan, a missing baseline -- pose as
-      # a working canary on a gate that is actually broken.
+      # a working canary on a gate that is actually broken. The cases live in a
+      # script rather than inline YAML so they can be run locally, unchanged, by whoever is
+      # doing the sweep -- a self-test that only exists in CI gets discovered after the push.
       - name: Self-test the GUI surface gate
-        run: |
-          set -uo pipefail
+        run: ./script/heddle/gui-surface-gate-selftest
 
-          assert_gate() {
-            local label="$1" want_status="$2" want_text="$3" out status
-            out="$(./script/heddle/gui-surface-gate --surfaces-only 2>&1)"; status=$?
-            if [ "$status" -ne "$want_status" ]; then
-              echo "::error::$label: expected exit $want_status, got $status."
-              echo "$out"
-              return 1
-            fi
-            if ! printf '%s' "$out" | grep -qF "$want_text"; then
-              echo "::error::$label: exited $want_status but not for the expected reason."
-              echo "expected to see: $want_text"
-              echo "$out"
-              return 1
-            fi
-            echo "$label: gate responded with exit $want_status and the expected message."
-          }
-
-          # Plant 1 -- an ADDED surface must be rejected.
-          printf 'fn canary() -> &%sstatic str { "Upgrade plan" }\n' "'" > app/src/__gate_canary.rs
-          assert_gate "added-surface plant" 1 "adds commercial UI surfaces"
-          rc=$?
-          rm -f app/src/__gate_canary.rs
-          [ "$rc" -eq 0 ] || exit 1
-
-          # Plant 2 -- a REMOVED surface must force a re-record rather than silently passing.
-          # A baseline that still lists a deleted surface lets it be reintroduced for free.
-          cp script/heddle/gui-surfaces.baseline /tmp/gui-baseline.bak
-          printf 'app/src/nonexistent_phantom.rs:"Warp Drive\n' >> script/heddle/gui-surfaces.baseline
-          sort -o script/heddle/gui-surfaces.baseline script/heddle/gui-surfaces.baseline
-          assert_gate "stale-baseline plant" 3 "baseline is now stale"
-          rc=$?
-          cp /tmp/gui-baseline.bak script/heddle/gui-surfaces.baseline
-          [ "$rc" -eq 0 ] || exit 1
-
-          # Plant 3 -- a broken scan must FAIL CLOSED. If a scan root is renamed, grep matches
-          # nothing, every baseline row reads as "removed", and a gate built to find residue
-          # would report a clean sweep. That is the worst possible failure mode here.
-          sed 's#^ROOTS=(app/src.*#ROOTS=(app/does_not_exist)#' \
-            script/heddle/gui-surface-gate > /tmp/gate-broken
-          chmod +x /tmp/gate-broken
-          out="$(/tmp/gate-broken --surfaces-only 2>&1)"; status=$?
-          if [ "$status" -ne 2 ] || ! printf '%s' "$out" | grep -qF "broken scan, not a clean result"; then
-            echo "::error::fail-closed plant: expected exit 2 with a broken-scan message, got $status."
-            echo "$out"
-            exit 1
-          fi
-          echo "fail-closed plant: gate refused to treat an empty scan as a pass."
-
-          # Plant 4 -- a missing toolchain must be reported as infrastructure (exit 2), not as
-          # a compile error. This one is not hypothetical: the gate's first run had no cargo on
-          # PATH, exited 127, and announced "the GUI does not compile" while printing no
-          # errors, because there were none. A tool that blames the code for its own breakage
-          # sends you debugging a defect that does not exist.
-          out="$(env PATH=/usr/bin:/bin ./script/heddle/gui-surface-gate 2>&1)"; status=$?
-          if [ "$status" -ne 2 ] || ! printf '%s' "$out" | grep -qF "infrastructure failure"; then
-            echo "::error::missing-toolchain plant: expected exit 2 with an infrastructure message, got $status."
-            echo "$out"
-            exit 1
-          fi
-          echo "missing-toolchain plant: gate reported infrastructure failure, not a compile error."
-
-      # Compiles the GUI AND compares its commercial UI surface against the baseline.
       - name: Gate the GUI
         run: ./script/heddle/gui-surface-gate

@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Prove gui-surface-gate CAN fail, before trusting it when it passes.
+#
+# A verification tool that cannot distinguish "checked and clean" from "did not really check"
+# converts uncertainty into false confidence. That has bitten this project repeatedly, and it
+# bit this very gate: its first fail-closed self-test copied the script to /tmp and ran it
+# there. But the script derives REPO_ROOT from its own location, so the copy resolved REPO_ROOT
+# to `/`, found no scan roots, and exited 2 -- the expected status, for entirely the wrong
+# reason. An UNMODIFIED copy would have "passed" that test identically. It proved nothing.
+#
+# Two rules follow, and every case here obeys them:
+#   1. Assert the exact status AND the expected message. Any-nonzero would let an unrelated
+#      failure pose as a working canary on a gate that is broken in some other way.
+#   2. Every negative test needs a CONTROL proving the harness itself is sound -- that the
+#      test fails for the reason claimed and not by construction.
+#
+# Mutated copies live in script/heddle/ so REPO_ROOT still resolves to the repository.
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
+
+GATE=script/heddle/gui-surface-gate
+BASELINE=script/heddle/gui-surfaces.baseline
+CANARY=app/src/__gate_canary.rs
+PARTIAL=script/heddle/.selftest-partial-root
+CONTROL=script/heddle/.selftest-control
+BACKUP="$(mktemp)"
+
+failures=0
+
+# Restore everything even if an assertion aborts mid-run, so a failed self-test never leaves
+# the checkout mutated.
+cleanup() {
+  rm -f "$CANARY" "$PARTIAL" "$CONTROL"
+  [[ -s "$BACKUP" ]] && cp "$BACKUP" "$BASELINE"
+  rm -f "$BACKUP"
+}
+trap cleanup EXIT
+
+cp "$BASELINE" "$BACKUP" || { echo "could not back up the baseline"; exit 2; }
+
+# expect <label> <script> <want_status> <want_text> [args...]
+expect() {
+  local label="$1" script="$2" want="$3" text="$4"; shift 4
+  local out status
+  out="$("$script" "$@" 2>&1)"; status=$?
+  if [[ "$status" -ne "$want" ]]; then
+    echo "  FAIL [$label]: expected exit $want, got $status"
+    echo "$out" | sed 's/^/    /' | head -8
+    failures=$((failures + 1))
+    return
+  fi
+  if ! printf '%s' "$out" | grep -qF "$text"; then
+    echo "  FAIL [$label]: exit $want was right, but not for the expected reason"
+    echo "    expected to see: $text"
+    echo "$out" | sed 's/^/    /' | head -8
+    failures=$((failures + 1))
+    return
+  fi
+  echo "  ok [$label]: exit $status with the expected message"
+}
+
+echo "1. An ADDED commercial surface must be rejected."
+printf 'fn canary() -> &%sstatic str { "Upgrade plan" }\n' "'" > "$CANARY"
+expect "added-surface" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
+rm -f "$CANARY"
+
+echo "2. --update must REFUSE to baseline an addition without --allow-additions."
+printf 'fn canary() -> &%sstatic str { "Manage billing" }\n' "'" > "$CANARY"
+expect "update-refuses-additions" "./$GATE" 1 "refuses to baseline ADDED" --update
+rm -f "$CANARY"
+cp "$BACKUP" "$BASELINE"
+
+echo "3. A REMOVED surface must force a re-record rather than passing quietly."
+printf 'app/src/nonexistent_phantom.rs:Warp Drive\n' >> "$BASELINE"
+LC_ALL=C sort -o "$BASELINE" "$BASELINE"
+expect "stale-baseline" "./$GATE" 3 "baseline is now stale" --surfaces-only
+cp "$BACKUP" "$BASELINE"
+
+echo "4. A single missing scan root must fail closed -- not scan the rest and call it clean."
+# CONTROL FIRST: an unmodified copy at the same path must PASS. Without this, case 4 would
+# still "succeed" if the sed silently stopped matching, which is exactly how the original
+# version of this test fooled itself.
+cp "$GATE" "$CONTROL"; chmod +x "$CONTROL"
+expect "control-unmodified-copy" "./$CONTROL" 0 "PASS: commercial UI surface" --surfaces-only
+rm -f "$CONTROL"
+
+sed 's#^ROOTS=(app/src crates/warpui/src crates/onboarding/src)#ROOTS=(app/src crates/renamed_away crates/onboarding/src)#' \
+  "$GATE" > "$PARTIAL"
+if ! grep -q 'crates/renamed_away' "$PARTIAL"; then
+  echo "  FAIL [partial-root]: the ROOTS substitution did not apply; this test would be vacuous."
+  failures=$((failures + 1))
+else
+  chmod +x "$PARTIAL"
+  expect "partial-root" "./$PARTIAL" 2 "does not exist" --surfaces-only
+fi
+rm -f "$PARTIAL"
+
+echo "5. A missing toolchain must be infrastructure (2), not a compile failure (1)."
+# Not hypothetical: the gate's first run had no cargo on PATH, exited 127, and announced "the
+# GUI does not compile" while printing no errors, because there were none.
+out="$(env PATH=/usr/bin:/bin "./$GATE" 2>&1)"; status=$?
+if [[ "$status" -ne 2 ]] || ! printf '%s' "$out" | grep -qF "infrastructure failure"; then
+  echo "  FAIL [missing-toolchain]: expected exit 2 with an infrastructure message, got $status"
+  failures=$((failures + 1))
+else
+  echo "  ok [missing-toolchain]: exit 2, reported as infrastructure"
+fi
+
+echo
+if [[ "$failures" -ne 0 ]]; then
+  echo "SELF-TEST FAILED: $failures case(s). A gate that cannot be shown to fail is not evidence."
+  exit 1
+fi
+echo "All gui-surface-gate self-tests passed."

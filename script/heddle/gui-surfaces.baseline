@@ -1,40 +1,223 @@
+app/src/ai/agent/conversation.rs:Warp Drive
+app/src/ai/agent_sdk/common.rs:Warp Drive
+app/src/ai/agent_sdk/common.rs:Warp Drive
+app/src/ai/agent_sdk/common.rs:Warp Drive
+app/src/ai/agent_sdk/common.rs:Warp Drive
 app/src/ai/agent_sdk/driver.rs:"Subscription
 app/src/ai/agent_sdk/driver.rs:"Subscription
-app/src/ai/agent_sdk/driver/error_classification.rs:"Warp Drive
-app/src/ai/agent_tips.rs:"Warp Drive
+app/src/ai/agent_sdk/driver.rs:Warp Drive
+app/src/ai/agent_sdk/driver.rs:Warp Drive
+app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
+app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
+app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
+app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
+app/src/ai/agent_sdk/driver/error_classification.rs:out of credits
+app/src/ai/agent_sdk/environment.rs:Warp Drive
+app/src/ai/agent_sdk/environment.rs:Warp Drive
+app/src/ai/agent_sdk/environment.rs:Warp Drive
+app/src/ai/agent_sdk/environment.rs:Warp Drive
+app/src/ai/agent_sdk/environment.rs:Warp Drive
+app/src/ai/agent_sdk/mod.rs:Warp Drive
+app/src/ai/agent_tips.rs:Warp Drive
+app/src/ai/agent_tips.rs:Warp Drive
+app/src/ai/ai_document_view.rs:Warp Drive
+app/src/ai/ai_document_view.rs:Warp Drive
+app/src/ai/ai_document_view.rs:Warp Drive
+app/src/ai/ai_document_view.rs:Warp Drive
+app/src/ai/ai_document_view.rs:Warp Drive
+app/src/ai/ai_document_view.rs:Warp Drive
+app/src/ai/artifacts/buttons.rs:Warp Drive
+app/src/ai/artifacts/mod.rs:Warp Drive
+app/src/ai/blocklist/action_model/execute/create_documents.rs:Warp Drive
+app/src/ai/blocklist/action_model/execute/read_documents.rs:Warp Drive
+app/src/ai/blocklist/action_model/execute/read_documents.rs:Warp Drive
 app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs:"Log in
+app/src/ai/blocklist/agent_view/zero_state_block.rs:cloud agent credits
+app/src/ai/blocklist/inline_action/requested_command.rs:Warp Drive
+app/src/ai/blocklist/inline_action/requested_command_attribution.rs:Warp Drive
+app/src/ai/blocklist/inline_action/requested_command_attribution.rs:Warp Drive
+app/src/ai/blocklist/local_agent_task_sync_model.rs:Purchase more credits
+app/src/ai/blocklist/local_agent_task_sync_model.rs:out of credits
 app/src/ai/blocklist/prompt/prompt_alert.rs:"Sign up
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/ai_document_model.rs:Warp Drive
+app/src/ai/document/plan_publication.rs:Warp Drive
+app/src/ai/execution_profiles/config.rs:Warp Drive
+app/src/ai/execution_profiles/editor/ui_helpers.rs:Warp Drive
+app/src/ai/execution_profiles/profiles.rs:Warp Drive
+app/src/ai/execution_profiles/profiles.rs:Warp Drive
+app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
+app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
+app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
+app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
+app/src/ai_assistant/requests.rs:out of credits
+app/src/ai_assistant/requests.rs:out of credits
+app/src/ai_assistant/requests.rs:out of credits
+app/src/ai_assistant/requests.rs:out of credits
+app/src/ai_assistant/requests.rs:out of credits
+app/src/ai_assistant/requests.rs:out of credits
+app/src/ai_assistant/requests.rs:upgrade_url
+app/src/ai_assistant/requests.rs:upgrade_url
+app/src/ai_assistant/requests.rs:upgrade_url
+app/src/ai_assistant/requests.rs:upgrade_url
 app/src/app_menus.rs:"Log out
+app/src/auth/auth_override_warning_body.rs:Warp Drive
 app/src/auth/auth_view_body.rs:"Sign in
 app/src/auth/auth_view_body.rs:"Sign in
 app/src/auth/auth_view_body.rs:"Sign up
 app/src/auth/auth_view_body.rs:"Sign up
+app/src/auth/auth_view_body.rs:Warp Drive
 app/src/auth/login_slide.rs:"Log in
 app/src/auth/login_slide.rs:"Login
 app/src/auth/login_slide.rs:"Sign in
 app/src/auth/login_slide.rs:"Sign in
-app/src/auth/login_slide.rs:"Warp Drive
+app/src/auth/login_slide.rs:Warp Drive
+app/src/auth/login_slide.rs:Warp Drive
+app/src/auth/login_slide.rs:Warp Drive
+app/src/auth/login_slide.rs:Warp Drive
+app/src/auth/login_slide.rs:Warp Drive
+app/src/auth/login_slide.rs:Warp Drive
 app/src/auth/mod.rs:"Log out
+app/src/auth/mod.rs:Warp Drive
+app/src/billing/shared_objects_creation_denied_body.rs:Compare plans
+app/src/billing/shared_objects_creation_denied_body.rs:Manage billing
+app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
+app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
+app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
+app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
+app/src/billing/shared_objects_creation_denied_modal.rs:upgrade_url
+app/src/billing/shared_objects_creation_denied_modal.rs:upgrade_url
+app/src/cloud_object/mod.rs:Warp Drive
+app/src/cloud_object/mod.rs:Warp Drive
+app/src/cloud_object/mod.rs:Warp Drive
+app/src/cloud_object/mod.rs:Warp Drive
+app/src/cloud_object/mod.rs:Warp Drive
+app/src/cloud_object/model/generic_string_model.rs:Warp Drive
+app/src/cloud_object/model/model_tests.rs:Warp Drive
+app/src/cloud_object/model/persistence.rs:Warp Drive
+app/src/cloud_object/model/view.rs:Warp Drive
+app/src/cloud_object/model/view.rs:Warp Drive
+app/src/drive/export.rs:Warp Drive
+app/src/drive/export.rs:Warp Drive
 app/src/drive/index.rs:"Sign up
 app/src/drive/index.rs:"Sign up
 app/src/drive/index.rs:"Upgrade
-app/src/drive/index.rs:"Warp Drive
-app/src/drive/index.rs:"Warp Drive
+app/src/drive/index.rs:Compare plans
+app/src/drive/index.rs:Manage billing
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:Warp Drive
+app/src/drive/index.rs:upgrade_url
+app/src/drive/index.rs:upgrade_url
+app/src/drive/items/item.rs:Warp Drive
+app/src/drive/items/mod.rs:Warp Drive
+app/src/drive/mod.rs:Warp Drive
+app/src/drive/mod.rs:Warp Drive
+app/src/drive/mod.rs:Warp Drive
+app/src/drive/panel.rs:Warp Drive
+app/src/drive/panel.rs:Warp Drive
+app/src/drive/panel.rs:Warp Drive
+app/src/drive/panel.rs:Warp Drive
+app/src/drive/panel.rs:Warp Drive
+app/src/drive/settings.rs:Warp Drive
+app/src/drive/settings.rs:Warp Drive
+app/src/drive/settings.rs:Warp Drive
+app/src/drive/settings.rs:Warp Drive
+app/src/drive/sharing/dialog/mod.rs:Warp Drive
+app/src/drive/sharing/dialog/mod.rs:Warp Drive
+app/src/drive/sharing/dialog/mod.rs:Warp Drive
+app/src/drive/sharing/dialog/mod.rs:Warp Drive
+app/src/drive/sharing/dialog/mod.rs:Warp Drive
+app/src/drive/sharing/dialog/mod.rs:Warp Drive
+app/src/drive/sharing/mod.rs:Warp Drive
+app/src/drive/sharing/mod.rs:Warp Drive
 app/src/experiments/login_layer.rs:"Login
-app/src/local_control/handlers/metadata.rs:"Warp Drive
+app/src/integration_testing/assertions.rs:Warp Drive
+app/src/integration_testing/warp_drive/assertion.rs:Warp Drive
+app/src/integration_testing/warp_drive/assertion.rs:Warp Drive
+app/src/launch_configs/save_modal.rs:Warp Drive
+app/src/local_control/handlers/app_state.rs:Warp Drive
+app/src/local_control/handlers/metadata.rs:Warp Drive
+app/src/notebooks/editor/mod.rs:Warp Drive
+app/src/notebooks/file/mod.rs:Warp Drive
+app/src/notebooks/manager.rs:Warp Drive
 app/src/notebooks/notebook/details_bar.rs:"Sign in
+app/src/notebooks/notebook/details_bar.rs:Warp Drive
+app/src/pane_group/pane/mod.rs:Warp Drive
+app/src/pane_group/pane/view/header/sharing.rs:Warp Drive
+app/src/resource_center/mod.rs:Warp Drive
+app/src/root_view.rs:Warp Drive
+app/src/search/command_palette/view.rs:Warp Drive
+app/src/search/command_palette/warp_drive/data_source.rs:Warp Drive
+app/src/search/command_palette/warp_drive/data_source.rs:Warp Drive
+app/src/search/command_search/workflows/cloud_workflows_data_source.rs:Warp Drive
 app/src/search/slash_command_menu/static_commands/commands.rs:"Log out
+app/src/server/cloud_objects/listener.rs:Warp Drive
+app/src/server/cloud_objects/listener.rs:Warp Drive
+app/src/server/server_api.rs:out of credits
 app/src/server/telemetry/events.rs:"Log in
 app/src/server/telemetry/events.rs:"Login
 app/src/server/telemetry/events.rs:"Login
 app/src/server/telemetry/events.rs:"Login
 app/src/server/telemetry/events.rs:"Login
-app/src/server/telemetry/events.rs:"Warp Drive
-app/src/server/telemetry/events.rs:"Warp Drive
-app/src/server/telemetry/events.rs:"Warp Drive
-app/src/server/telemetry/events.rs:"Warp Drive
-app/src/settings/privacy.rs:"Warp Drive
-app/src/settings/privacy.rs:"Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/server/telemetry/events.rs:Warp Drive
+app/src/settings/ai.rs:Warp Drive
+app/src/settings/cloud_preferences_syncer.rs:Warp Drive
+app/src/settings/privacy.rs:Warp Drive
+app/src/settings/privacy.rs:Warp Drive
+app/src/settings/shared_object_limit_banner.rs:Warp Drive
 app/src/settings_view/ai_page.rs:"Login
 app/src/settings_view/ai_page.rs:"Sign up
 app/src/settings_view/ai_page.rs:"Upgrade
@@ -42,50 +225,142 @@ app/src/settings_view/ai_page.rs:"Upgrade
 app/src/settings_view/ai_page.rs:"Upgrade
 app/src/settings_view/ai_page.rs:"Upgrade
 app/src/settings_view/ai_page.rs:"Upgrade
-app/src/settings_view/ai_page.rs:"Warp Drive
-app/src/settings_view/ai_page.rs:"Warp Drive
-app/src/settings_view/appearance_page.rs:"Warp Drive
+app/src/settings_view/ai_page.rs:Compare plans
+app/src/settings_view/ai_page.rs:Warp Drive
+app/src/settings_view/ai_page.rs:Warp Drive
+app/src/settings_view/ai_page.rs:Warp Drive
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/ai_page.rs:upgrade_url
+app/src/settings_view/appearance_page.rs:Warp Drive
+app/src/settings_view/appearance_page.rs:Warp Drive
+app/src/settings_view/execution_profile_view.rs:Warp Drive
 app/src/settings_view/main_page.rs:"Log out
 app/src/settings_view/main_page.rs:"Sign up
 app/src/settings_view/main_page.rs:"Upgrade
 app/src/settings_view/main_page.rs:"Upgrade
 app/src/settings_view/main_page.rs:"Upgrade
+app/src/settings_view/main_page.rs:Compare plans
+app/src/settings_view/main_page.rs:Compare plans
+app/src/settings_view/main_page.rs:Compare plans
+app/src/settings_view/main_page.rs:Manage billing
+app/src/settings_view/main_page.rs:upgrade_url
+app/src/settings_view/main_page.rs:upgrade_url
+app/src/settings_view/main_page.rs:upgrade_url
+app/src/settings_view/main_page.rs:upgrade_url
 app/src/settings_view/mcp_servers/edit_page.rs:"Log out
 app/src/settings_view/mcp_servers/server_card.rs:"Log out
-app/src/settings_view/mod.rs:"Warp Drive
-app/src/settings_view/mod.rs:"Warp Drive
+app/src/settings_view/mod.rs:Warp Drive
+app/src/settings_view/mod.rs:Warp Drive
+app/src/settings_view/mod.rs:Warp Drive
+app/src/settings_view/privacy_page.rs:Warp Drive
 app/src/settings_view/warp_drive_page.rs:"Sign up
-app/src/settings_view/warp_drive_page.rs:"Warp Drive
-app/src/settings_view/warp_drive_page.rs:"Warp Drive
+app/src/settings_view/warp_drive_page.rs:Warp Drive
+app/src/settings_view/warp_drive_page.rs:Warp Drive
+app/src/settings_view/warp_drive_page.rs:Warp Drive
+app/src/settings_view/warp_drive_page.rs:Warp Drive
+app/src/settings_view/warp_drive_page.rs:Warp Drive
 app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:"Upgrade
 app/src/terminal/input/models/data_source.rs:"Upgrade
+app/src/terminal/input/models/data_source.rs:upgrade_url
+app/src/terminal/input/models/data_source.rs:upgrade_url
 app/src/terminal/view.rs:"Upgrade
+app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:Warp Drive
+app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:Warp Drive
+app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:Warp Drive
+app/src/terminal/view/docker_sandbox/mod.rs:Warp Drive
+app/src/terminal/view/docker_sandbox/mod.rs:Warp Drive
 app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:"Login
 app/src/terminal/view/inline_banner/aws_bedrock_login.rs:"Log in
-app/src/wasm_nux_dialog.rs:"Warp Drive
+app/src/ui_components/menu_button.rs:Warp Drive
+app/src/ui_components/menu_button.rs:Warp Drive
+app/src/wasm_nux_dialog.rs:Warp Drive
+app/src/workflows/aliases.rs:Warp Drive
 app/src/workflows/workflow_view.rs:"Sign in
 app/src/workflows/workflow_view.rs:"Upgrade
 app/src/workflows/workflow_view.rs:"Upgrade
+app/src/workflows/workflow_view.rs:Warp Drive
+app/src/workspace/action.rs:Warp Drive
+app/src/workspace/action.rs:Warp Drive
+app/src/workspace/action.rs:Warp Drive
+app/src/workspace/action.rs:Warp Drive
+app/src/workspace/home.rs:Warp Drive
 app/src/workspace/mod.rs:"Log out
-app/src/workspace/mod.rs:"Warp Drive
+app/src/workspace/mod.rs:Warp Drive
+app/src/workspace/mod.rs:Warp Drive
+app/src/workspace/mod.rs:Warp Drive
+app/src/workspace/mod.rs:Warp Drive
+app/src/workspace/mod.rs:Warp Drive
 app/src/workspace/view.rs:"Log out
 app/src/workspace/view.rs:"Sign in
 app/src/workspace/view.rs:"Sign up
 app/src/workspace/view.rs:"Sign up
 app/src/workspace/view.rs:"Sign up
 app/src/workspace/view.rs:"Upgrade
-app/src/workspace/view.rs:"Warp Drive
-app/src/workspace/view.rs:"Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:Warp Drive
+app/src/workspace/view.rs:out of credits
 app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:"Upgrade
-app/src/workspace/view/left_panel.rs:"Warp Drive
-app/src/workspace/view_tests.rs:"Warp Drive
-app/src/workspace/view_tests.rs:"Warp Drive
-app/src/workspace/view_tests.rs:"Warp Drive
-app/src/workspace/view_tests.rs:"Warp Drive
-app/src/workspace/view_tests.rs:"Warp Drive
-app/src/workspace/view_tests.rs:"Warp Drive
-crates/onboarding/src/lib.rs:"Warp Drive
-crates/onboarding/src/slides/customize_slide.rs:"Warp Drive
+app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
+app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
+app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
+app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
+app/src/workspace/view/left_panel.rs:Warp Drive
+app/src/workspace/view/vertical_tabs.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspace/view_tests.rs:Warp Drive
+app/src/workspaces/update_manager_tests.rs:Warp Drive
+crates/onboarding/src/lib.rs:Warp Drive
+crates/onboarding/src/lib.rs:Warp Drive
+crates/onboarding/src/lib.rs:Warp Drive
+crates/onboarding/src/slides/customize_slide.rs:Warp Drive
 crates/onboarding/src/slides/intro_slide.rs:"Log in
+crates/onboarding/src/slides/theme_picker_slide.rs:Warp Drive
 crates/onboarding/src/telemetry.rs:"Log in
 crates/onboarding/src/telemetry.rs:"Upgrade
