@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Compare the wasm32 diagnostic SET against a recorded baseline.
+# Compare the wasm32 diagnostic MULTISET against a recorded baseline.
 #
-# Why a set comparison and not pass/fail: the wasm target does not currently build. It has
-# ten pre-existing errors that predate this fork's work, so "does it compile" is useless as
-# a gate -- it is always no. What IS meaningful is whether a change makes it WORSE.
+# Why a MULTISET comparison and not pass/fail: the wasm target does not currently build. It
+# has ten known errors, so "does it compile" is useless as a gate -- it is always no. What IS
+# meaningful is whether a change makes it WORSE.
+#
+# Those ten are NOT upstream debt. They trace to Heddle's own endpoint Result/Option
+# migration (5edec1b1, "OSS build carries no Warp endpoints"). They predate the ambient
+# removal work, but this fork owns them. An earlier version of this comment called them
+# "pre-existing errors that predate this fork's work", which was simply false.
 #
 # Why this exists at all: every wasm defect found in this fork so far was invisible to the
 # host build, because the offending code sits behind `#[cfg(target_family = "wasm")]` or was
@@ -45,29 +50,49 @@ fi
 # a false negative in the exact tool built to prevent them. `comm` compares duplicate counts
 # correctly, so keeping them costs nothing.
 collect() {
-  local raw
-  raw="$(mktemp)"
-  # cargo EXITS NON-ZERO here by design -- the target does not build, that is the whole
-  # premise of this gate. Swallow the status but keep the output, and fail loudly further
-  # down if the output is empty, which is what a genuinely broken invocation looks like.
+  local raw status
+  raw="$1"
+  # cargo EXITS NON-ZERO here by design -- the target does not build, that is the premise of
+  # this gate. But "rustc produced diagnostics" and "cargo never got as far as rustc" both
+  # exit non-zero, and they must NOT be conflated: an infrastructure failure yields few or no
+  # diagnostics, `comm` then reads every missing baseline row as "fixed", ADDED is empty, and
+  # the gate PASSES. Failing open is the worst possible behaviour for a verification tool.
+  #
+  # This is not hypothetical. Without CC_wasm32_unknown_unknown pointing at a clang that has
+  # the WebAssembly LLVM backend, the build dies in a C dependency long before rustc runs.
+  # `set -e` would kill the script on cargo's expected failure before the status is even
+  # read, so errexit is lifted for exactly this one command and restored immediately.
+  set +e
   ( cd "$REPO_ROOT" && cargo check -p warp --target "$TARGET" --message-format=short ) \
-    > "$raw" 2>&1 || true
-  if [[ ! -s "$raw" ]]; then
-    echo "error: the wasm check produced no output at all -- the invocation is broken," >&2
-    echo "       not the target. Refusing to record or compare an empty set." >&2
-    rm -f "$raw"
+    > "$raw" 2>&1
+  status=$?
+  set -e
+
+  # Demand positive evidence that the Rust compilation itself ran to completion: cargo either
+  # finished, or it stopped BECAUSE the crate had compile errors. Anything else -- a build
+  # script failure, a resolver error, a missing toolchain -- is an infrastructure problem and
+  # must be fatal rather than silently producing a short diagnostic list.
+  if ! grep -qE '^(    Finished|error: could not compile `warp`)' "$raw"; then
+    echo "error: the wasm check did not complete a Rust compilation (cargo exit $status)." >&2
+    echo "       This is an infrastructure failure, not a clean result. Last lines:" >&2
+    tail -5 "$raw" | sed 's/^/       /' >&2
+    echo >&2
+    echo "       If it died in a C dependency, your clang probably lacks the WebAssembly" >&2
+    echo "       LLVM backend (Apple clang does). Set CC_wasm32_unknown_unknown to one that" >&2
+    echo "       has it, e.g. /opt/homebrew/opt/llvm/bin/clang." >&2
     exit 2
   fi
+
   grep -E ': (error|warning)' "$raw" \
     | grep -vE '^(warning|error): ' \
     | sed -E 's/:[0-9]+:[0-9]+:/:/' \
     | sort || true
-  rm -f "$raw"
 }
 
 CURRENT="$(mktemp)"
-trap 'rm -f "$CURRENT"' EXIT
-collect > "$CURRENT"
+RAW="$(mktemp)"
+trap 'rm -f "$CURRENT" "$RAW"' EXIT
+collect "$RAW" > "$CURRENT"
 
 if [[ "${1:-}" == "--update" ]]; then
   cp "$CURRENT" "$BASELINE"
@@ -84,9 +109,8 @@ ADDED="$(comm -13 "$BASELINE" "$CURRENT")"
 REMOVED="$(comm -23 "$BASELINE" "$CURRENT")"
 
 if [[ -n "$REMOVED" ]]; then
-  echo "The following wasm diagnostics are FIXED relative to the baseline:"
+  echo "These wasm diagnostics are FIXED relative to the baseline:"
   echo "$REMOVED" | sed 's/^/  - /'
-  echo "Re-record with: ./script/heddle/wasm-diagnostic-gate --update"
   echo
 fi
 
@@ -100,4 +124,15 @@ if [[ -n "$ADDED" ]]; then
   exit 1
 fi
 
-echo "PASS: wasm diagnostic set matches the baseline ($(wc -l < "$BASELINE" | tr -d ' ') known)."
+# A stale baseline is a live hazard, not bookkeeping: while it still lists a diagnostic that
+# has since been fixed, that diagnostic can be REINTRODUCED up to the recorded count and the
+# gate will pass. So a removal fails too, with a distinct status, and the fix must land in the
+# same change as the improvement.
+if [[ -n "$REMOVED" ]]; then
+  echo "FAIL: the baseline is now stale. Until it is re-recorded, those diagnostics could be" >&2
+  echo "      reintroduced up to the recorded count without failing this gate." >&2
+  echo "      Re-record in THIS change: ./script/heddle/wasm-diagnostic-gate --update" >&2
+  exit 3
+fi
+
+echo "PASS: wasm diagnostic multiset matches the baseline ($(wc -l < "$BASELINE" | tr -d ' ') entries)."

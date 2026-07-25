@@ -106,34 +106,48 @@ jobs:
       # Same reasoning as the scanner self-test above: prove the gate CAN fail before
       # trusting it to pass. A check that cannot distinguish "clean" from "did not really
       # look" converts uncertainty into false confidence.
-      - name: Self-test the wasm gate against a planted regression
+      - name: Self-test the wasm gate against planted regressions
         run: |
-          set -euo pipefail
+          set -uo pipefail
+
+          # Assert the gate rejects a plant for the RIGHT reason. Accepting any nonzero
+          # status would let exit 2 (infrastructure failure) or an unrelated diagnostic
+          # masquerade as a working canary -- the canary would then "pass" on a gate that
+          # is broken in a different way.
+          assert_rejects() {
+            local label="$1" expected="$2" out status
+            out="$(./script/heddle/wasm-diagnostic-gate 2>&1)"; status=$?
+            if [ "$status" -ne 1 ]; then
+              echo "::error::$label: expected exit 1 (added diagnostic), got $status."
+              echo "$out"
+              return 1
+            fi
+            if ! printf '%s' "$out" | grep -qF "$expected"; then
+              echo "::error::$label: gate failed, but not for the expected diagnostic."
+              echo "expected to see: $expected"
+              echo "$out"
+              return 1
+            fi
+            echo "$label: gate rejected the plant with exit 1 and the expected diagnostic."
+          }
+
+          # Plant 1 -- a UNIQUE diagnostic: drop the cfg guard so an import is unused on wasm.
           target="app/src/terminal/view/pane_impl.rs"
           cp "$target" /tmp/pane_impl.bak
-          # Delete the `#[cfg(not(target_arch = "wasm32"))]` line guarding the
-          # PaneHeaderAction import, which makes that import unused on wasm and must
-          # therefore trip the gate.
           line="$(grep -n 'use crate::pane_group::pane::view::PaneHeaderAction;' "$target" | cut -d: -f1)"
           if [ -z "$line" ]; then
             echo "::error::Self-test anchor not found in $target; update this step."
             exit 1
           fi
           sed -i "$((line - 1))d" "$target"
-          if ./script/heddle/wasm-diagnostic-gate; then
-            cp /tmp/pane_impl.bak "$target"
-            echo "::error::The wasm gate PASSED a tree with a planted wasm-only regression."
-            echo "The gate is broken; a clean result from it would be meaningless."
-            exit 1
-          fi
+          assert_rejects "unique-diagnostic plant" "unused import: \`crate::pane_group::pane::view::PaneHeaderAction\`"
+          rc=$?
           cp /tmp/pane_impl.bak "$target"
-          echo "Gate correctly rejected the planted unique regression."
+          [ "$rc" -eq 0 ] || exit 1
 
-          # Second plant, covering a DIFFERENT failure mode: a DUPLICATE of a diagnostic
-          # already in the baseline. An earlier version of this gate used `sort -u`, which
-          # discarded multiplicity -- three identical `?` errors in one file collapsed to a
-          # single entry, so a fourth would have passed unnoticed. The plant above adds a
-          # UNIQUE warning and therefore never exercised that path.
+          # Plant 2 -- a DUPLICATE of a diagnostic already in the baseline. An earlier gate
+          # used `sort -u`, which discarded multiplicity, so a duplicate passed unnoticed;
+          # plant 1 adds a unique warning and never exercised that path.
           dup="app/src/workspace/tab_settings.rs"
           cp "$dup" /tmp/tab_settings.bak
           dupline="$(grep -n 'use settings_value::SettingsValue as _;' "$dup" | head -1 | cut -d: -f1)"
@@ -142,14 +156,10 @@ jobs:
             exit 1
           fi
           sed -i "${dupline}a\\        use settings_value::SettingsValue as _;" "$dup"
-          if ./script/heddle/wasm-diagnostic-gate; then
-            cp /tmp/tab_settings.bak "$dup"
-            echo "::error::The wasm gate PASSED a tree with a duplicated baseline diagnostic."
-            echo "Multiplicity is not being compared; the gate has a false negative."
-            exit 1
-          fi
+          assert_rejects "duplicate-diagnostic plant" "unused import: \`settings_value::SettingsValue\`"
+          rc=$?
           cp /tmp/tab_settings.bak "$dup"
-          echo "Gate correctly rejected the planted duplicate."
+          [ "$rc" -eq 0 ] || exit 1
 
       - name: Compare wasm diagnostics against the recorded baseline
         run: ./script/heddle/wasm-diagnostic-gate
