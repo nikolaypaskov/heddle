@@ -35,17 +35,6 @@ use crate::workspace::{WorkspaceAction, WorkspaceRegistry};
 
 type CapturedConversationUpdate = Mutex<Option<ConversationUpdateKind>>;
 
-/// Test-only handler that mirrors the production view subscription: extracts the
-/// `ConversationUpdated` payload and stashes it on a shared cell that test cases assert
-/// against.
-fn create_test_model() -> AgentConversationsModel {
-    AgentConversationsModel {
-        conversations: HashMap::new(),
-        active_data_consumers_per_window: HashMap::new(),
-        initial_load_state: InitialConversationLoadState::LoadingLocal,
-    }
-}
-
 fn handle_agent_conversation_model_event(
     captured: &CapturedConversationUpdate,
     event: &AgentConversationsModelEvent,
@@ -70,6 +59,13 @@ fn subscribe_to_conversation_updated(
         });
     });
     captured
+}
+
+fn create_test_model() -> AgentConversationsModel {
+    AgentConversationsModel {
+        conversations: HashMap::new(),
+        initial_load_state: InitialConversationLoadState::LoadingLocal,
+    }
 }
 
 fn create_server_conversation_metadata(

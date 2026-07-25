@@ -127,7 +127,7 @@ use crate::ai::agent::conversation::{
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 // Re-export ambient agent types for backwards compatibility
 pub use crate::ai::ambient_agents::{
-    AgentConfigSnapshot, AgentSource, AmbientAgentTask, AmbientAgentTaskState, TaskStatusMessage,
+    AgentConfigSnapshot, AgentSource, AmbientAgentTask, AmbientAgentTaskState,
     task::{AttachmentInput, TaskAttachment},
 };
 use crate::ai::artifacts::Artifact;
@@ -1515,29 +1515,6 @@ impl ServerApi {
             .post_public_api_response_for_task(task_id, "agent/messages", &request)
             .await?;
         let response = response.json::<SendAgentMessageResponse>().await?;
-        Ok(response)
-    }
-
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub(crate) async fn list_agent_messages_for_task(
-        &self,
-        task_id: &AmbientAgentTaskId,
-        run_id: &str,
-        request: ListAgentMessagesRequest,
-    ) -> anyhow::Result<Vec<AgentMessageHeader>, anyhow::Error> {
-        let mut params = vec![format!("limit={}", request.limit)];
-        if request.unread_only {
-            params.push("unread=true".to_string());
-        }
-        if let Some(since) = request.since {
-            params.push(format!("since={}", urlencoding::encode(&since)));
-        }
-
-        let path = format!("agent/messages/{run_id}?{}", params.join("&"));
-        let response = self
-            .get_public_api_response_for_task(task_id, &path)
-            .await?;
-        let response = response.json::<Vec<AgentMessageHeader>>().await?;
         Ok(response)
     }
 

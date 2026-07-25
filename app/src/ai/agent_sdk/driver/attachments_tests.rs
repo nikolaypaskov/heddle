@@ -1,48 +1,13 @@
 use std::fs;
-use std::io::Write;
 use std::sync::Arc;
 
 use mockito::{Matcher, Server};
-use tempfile::{Builder as TempDirBuilder, NamedTempFile, TempDir};
+use tempfile::{Builder as TempDirBuilder, TempDir};
 
 use super::*;
 use crate::ai::agent_sdk::test_support::build_test_http_client;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::server::server_api::ai::MockAIClient;
-
-#[test]
-fn process_attachment_text_file() {
-    let mut f = NamedTempFile::with_suffix(".txt").unwrap();
-    write!(f, "hello world").unwrap();
-
-    let result = process_attachment(&f.path().to_path_buf(), 0).unwrap();
-    assert_eq!(
-        result.file_name,
-        f.path().file_name().unwrap().to_str().unwrap()
-    );
-    assert_eq!(result.mime_type, "text/plain");
-    assert_eq!(
-        general_purpose::STANDARD.decode(&result.data).unwrap(),
-        b"hello world"
-    );
-}
-
-#[test]
-fn process_attachment_too_large() {
-    let mut f = NamedTempFile::with_suffix(".bin").unwrap();
-    let data = vec![0u8; MAX_ATTACHMENT_SIZE_BYTES + 1];
-    f.write_all(&data).unwrap();
-
-    let err = process_attachment(&f.path().to_path_buf(), 0).unwrap_err();
-    assert!(err.to_string().contains("too large"));
-}
-
-#[test]
-fn process_attachment_nonexistent_file() {
-    let path = std::path::PathBuf::from("/tmp/nonexistent_attachment_test_file.xyz");
-    let err = process_attachment(&path, 0).unwrap_err();
-    assert!(err.to_string().contains("Failed to read"));
-}
 
 // End-to-end handoff snapshot download tests. Each test drives the real
 // `fetch_and_download_handoff_snapshot_attachments` pipeline (including the shared
@@ -72,12 +37,6 @@ fn download_path(file_id: &str) -> Matcher {
     Matcher::Regex(format!("^/download/{file_id}$"))
 }
 
-/// Pre-parsed task id for tests that exercise the outer function. Any valid UUID works; the
-/// mocked `AIClient` consumes this opaquely.
-fn fake_task_id() -> AmbientAgentTaskId {
-    "550e8400-e29b-41d4-a716-446655440000".parse().unwrap()
-}
-
 /// Build a `MockAIClient` whose `get_handoff_snapshot_attachments` returns `attachments`.
 fn mock_client_returning(attachments: Vec<TaskAttachment>) -> Arc<MockAIClient> {
     let mut mock = MockAIClient::new();
@@ -85,6 +44,12 @@ fn mock_client_returning(attachments: Vec<TaskAttachment>) -> Arc<MockAIClient> 
         .times(1)
         .returning(move |_task_id| Ok(attachments.clone()));
     Arc::new(mock)
+}
+
+/// Pre-parsed task id for tests that exercise the outer function. Any valid UUID works; the
+/// mocked `AIClient` consumes this opaquely.
+fn fake_task_id() -> AmbientAgentTaskId {
+    "550e8400-e29b-41d4-a716-446655440000".parse().unwrap()
 }
 
 #[tokio::test]

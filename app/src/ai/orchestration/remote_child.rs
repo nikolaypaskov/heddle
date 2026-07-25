@@ -11,11 +11,9 @@ use warpui::{AppContext, SingletonEntity as _};
 
 use crate::ChannelState;
 use crate::ai::agent::UserQueryMode;
+use crate::ai::ambient_agents::github_auth_url;
 use crate::ai::ambient_agents::task::{
     HarnessAuthSecretsConfig, HarnessConfig, normalize_orchestrator_agent_name,
-};
-use crate::ai::ambient_agents::{
-    OUT_OF_CREDITS_TASK_FAILURE_MESSAGE, SERVER_OVERLOADED_TASK_FAILURE_MESSAGE, github_auth_url,
 };
 use crate::ai::blocklist::StartAgentRequest;
 use crate::ai::skills::{SkillManager, SkillReference};
@@ -26,6 +24,13 @@ use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::AdminEnablementSetting;
 
 /// Remote execution fields carried by [`crate::ai::agent::StartAgentExecutionMode`].
+/// Shown when the server rejects a cloud child launch for lack of credits.
+const OUT_OF_CREDITS_TASK_FAILURE_MESSAGE: &str =
+    "Out of credits. Upgrade your Warp plan to continue running cloud agents.";
+/// Shown when the server rejects a cloud child launch because it is over capacity.
+const SERVER_OVERLOADED_TASK_FAILURE_MESSAGE: &str =
+    "Warp is temporarily overloaded. Please try again shortly.";
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteChildLaunchConfig {
     pub environment_id: String,

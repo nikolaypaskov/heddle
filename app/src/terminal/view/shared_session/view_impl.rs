@@ -134,7 +134,7 @@ impl TerminalView {
                 return false;
             }
             if self
-                .ambient_agent_task_id_for_details_panel_from_model(&model, ctx)
+                .ambient_agent_task_id_for_details_panel_from_model(&model)
                 .is_some()
             {
                 return true;
@@ -721,7 +721,6 @@ impl TerminalView {
     /// Clear the presence manager and handle any UI necessary on shared session end.
     /// Applies to both sharer and viewer when the session sharing ends.
     pub fn on_session_share_ended(&mut self, ctx: &mut ViewContext<Self>) {
-        let _viewed_ambient_task_id = self.ambient_agent_task_id_for_details_panel(ctx);
         let should_insert_legacy_tombstone = {
             let model = self.model.lock();
             !FeatureFlag::CloudModeSetupV2.is_enabled()
@@ -1617,7 +1616,7 @@ impl TerminalView {
         if self.conversation_ended_tombstone_view_id.is_some() {
             self.remove_conversation_ended_tombstone(ctx);
         }
-        let task_id = self.ambient_agent_task_id_for_details_panel(ctx);
+        let task_id = self.ambient_agent_task_id_for_details_panel();
         let terminal_view_id = self.id();
 
         let tombstone_view_handle = ctx.add_typed_action_view(|ctx| {

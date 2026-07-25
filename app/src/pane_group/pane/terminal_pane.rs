@@ -347,7 +347,7 @@ impl PaneContent for TerminalPane {
         let active_stack_view = pane_stack.as_ref(ctx).active_view().clone();
         let active_ambient_session_registration = active_stack_view
             .as_ref(ctx)
-            .ambient_agent_task_id_for_details_panel(ctx)
+            .ambient_agent_task_id_for_details_panel()
             .map(|task_id| (active_stack_view.id(), task_id));
         ActiveAgentViewsModel::handle(ctx).update(ctx, |model, ctx| {
             model.register_agent_view_controller(

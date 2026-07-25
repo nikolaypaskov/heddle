@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use session_sharing_protocol::common::SessionId;
 use warp_cli::agent::Harness;
-use warp_core::features::FeatureFlag;
 use warpui::{AppContext, SingletonEntity};
 
 use super::{
@@ -11,12 +10,11 @@ use super::{
 };
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::ambient_agents::{AgentSource, AmbientAgentTask, AmbientAgentTaskId};
+use crate::ai::ambient_agents::{AgentSource, AmbientAgentTaskId};
 use crate::ai::artifacts::Artifact;
 use crate::ai::blocklist::history_model::{AIConversationMetadata, BlocklistAIHistoryModel};
 use crate::ai::conversation_navigation::ConversationNavigationData;
 use crate::auth::{AuthStateProvider, UserUid};
-use crate::util::time_format::human_readable_precise_duration;
 use crate::workspace::RestoreConversationLayout;
 use crate::workspaces::user_profiles::{UserProfileWithUID, UserProfiles};
 
@@ -259,17 +257,6 @@ impl AgentConversationEntry {
     }
 }
 
-pub(super) fn task_creator_name(task: &AmbientAgentTask, app: &AppContext) -> Option<String> {
-    task.creator_display_name().or_else(|| {
-        let uid = task.creator.as_ref().map(|creator| &creator.uid)?;
-        UserProfiles::as_ref(app).displayable_identifier_for_uid(UserUid::new(uid))
-    })
-}
-
-pub(super) fn task_creator_uid(task: &AmbientAgentTask) -> Option<String> {
-    task.creator.as_ref().map(|creator| creator.uid.clone())
-}
-
 fn current_user_name(app: &AppContext) -> Option<String> {
     AuthStateProvider::as_ref(app).get().username_for_display()
 }
@@ -279,42 +266,6 @@ fn current_user_uid(app: &AppContext) -> Option<String> {
         .get()
         .user_id()
         .map(|uid| uid.to_string())
-}
-
-fn task_session_id(task: &AmbientAgentTask) -> Option<SessionId> {
-    task.session_id.as_deref().and_then(parse_session_id)
-}
-
-fn task_session_status(task: &AmbientAgentTask) -> SessionStatus {
-    if FeatureFlag::CloudConversations.is_enabled() {
-        return if task.active_run_execution().session_link.is_some() {
-            SessionStatus::Available
-        } else {
-            SessionStatus::Unavailable
-        };
-    }
-
-    if task.active_run_execution().session_id.is_some() {
-        SessionStatus::Available
-    } else if (Utc::now() - task.created_at) > SESSION_EXPIRATION_TIME {
-        SessionStatus::Expired
-    } else {
-        SessionStatus::Unavailable
-    }
-}
-
-fn task_run_time(task: &AmbientAgentTask) -> Option<String> {
-    task.run_time().map(human_readable_precise_duration)
-}
-
-fn task_harness(task: &AmbientAgentTask) -> Option<Harness> {
-    task.agent_config_snapshot.as_ref().and_then(|config| {
-        config
-            .harness
-            .as_ref()
-            .map(|harness| harness.harness_type)
-            .or(Some(Harness::Oz))
-    })
 }
 
 fn conversation_title(

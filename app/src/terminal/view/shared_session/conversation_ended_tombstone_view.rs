@@ -17,14 +17,12 @@ use warpui::{
 use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::agent_management::telemetry::{AgentManagementTelemetryEvent, ArtifactType};
 use crate::ai::ambient_agents::{
-    AmbientAgentTask, AmbientAgentTaskId, AmbientConversationStatus,
-    conversation_output_status_from_conversation,
+    AmbientAgentTaskId, AmbientConversationStatus, conversation_output_status_from_conversation,
 };
 use crate::ai::artifacts::{Artifact, ArtifactButtonsRow, ArtifactButtonsRowEvent};
 use crate::ai::blocklist::{BlocklistAIHistoryModel, format_credits};
 use crate::appearance::Appearance;
 use crate::server::ids::SyncId;
-use crate::server::server_api::ServerApiProvider;
 use crate::settings::ai::{AISettings, AISettingsChangedEvent};
 use crate::ui_components::blended_colors;
 use crate::util::time_format::human_readable_precise_duration;
@@ -107,44 +105,6 @@ impl TombstoneDisplayData {
             artifacts: conversation.artifacts().to_vec(),
         }
     }
-
-    fn enrich_from_task(&mut self, task: AmbientAgentTask) {
-        // Use task title if we don't have a conversation title.
-        if self.title.is_none() {
-            self.title = Some(task.title.clone());
-        }
-
-        if let Some(source) = &task.source {
-            self.source = Some(source.display_name().to_string());
-        }
-        if let Some(config) = &task.agent_config_snapshot {
-            // FIXME: this can be the orchestrator agent name, not a skill.
-            self.skill_name = config.name.clone();
-        }
-
-        if task.state.is_failure_like() {
-            self.is_error = true;
-            if let Some(status_message) = &task.status_message {
-                self.error_message = Some(status_message.message.clone());
-            }
-        }
-
-        // We update to use the task values when we have them, which includes
-        // the full credit cost (inference + compute). This matches what we show in
-        // the details panel.
-        if let Some(run_time) = task.run_time() {
-            self.run_time = Some(human_readable_precise_duration(run_time));
-        }
-        if let Some(credits) = task.credits_used() {
-            self.credits = Some(format_credits(credits));
-        }
-
-        // Surface task artifacts (plans, PRs, files, screenshots) for third-party
-        // harness runs.
-        if !task.artifacts.is_empty() {
-            self.artifacts = task.artifacts;
-        }
-    }
 }
 
 /// Tombstone view shown when an agent conversation ends.
@@ -171,6 +131,25 @@ impl ConversationEndedTombstoneView {
             .next()
             .map(|c| c.id());
 
+        // The conversation a "Continue locally" click would fork. Deliberately NOT
+        // `conversation_id` above: `all_live_conversations_for_terminal_surface` is
+        // oldest-first and a surface can hold several live conversations, so `.next()`
+        // is the wrong one to fork. Prefer the surface's active conversation, and fall
+        // back to the most recent live one.
+        #[cfg(not(target_family = "wasm"))]
+        let continuation_conversation_id = {
+            let history = BlocklistAIHistoryModel::handle(ctx);
+            let history = history.as_ref(ctx);
+            history
+                .active_conversation_id(terminal_view_id)
+                .or_else(|| {
+                    history
+                        .all_live_conversations_for_terminal_surface(terminal_view_id)
+                        .last()
+                        .map(|c| c.id())
+                })
+        };
+
         let mut display_data = conversation_id
             .map(|id| {
                 TombstoneDisplayData::from_conversation(
@@ -190,9 +169,9 @@ impl ConversationEndedTombstoneView {
             ctx.add_typed_action_view(|ctx| ArtifactButtonsRow::new(&display_data.artifacts, ctx));
         // Heddle (FOSS): the cloud "Continue" CTA is gone with the task cache, but
         // "Continue locally" is a purely local fork of the pane's own conversation, so it
-        // is built from `conversation_id` above rather than from cloud task data.
+        // is built from local history rather than from cloud task data.
         #[cfg(not(target_family = "wasm"))]
-        let continue_locally_button = conversation_id.map(|conversation_id| {
+        let continue_locally_button = continuation_conversation_id.map(|conversation_id| {
             ctx.add_typed_action_view(move |_| {
                 ActionButton::new("Continue locally", PrimaryTheme)
                     .with_tooltip("Fork this conversation locally")
@@ -284,28 +263,6 @@ impl ConversationEndedTombstoneView {
                 ctx.notify();
             }
         });
-
-        // Fetch AmbientAgentTask for additional metadata (source, skill, artifacts, etc.)
-        if let Some(task_id) = task_id {
-            let ai_client = ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client();
-            ctx.spawn(
-                async move { ai_client.get_ambient_agent_task(&task_id).await },
-                |me, result, ctx| match result {
-                    Ok(task) => {
-                        me.display_data.enrich_from_task(task);
-                        me.artifact_buttons_view.update(ctx, |row, ctx| {
-                            row.update_artifacts(&me.display_data.artifacts, ctx);
-                        });
-                        ctx.notify();
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "Failed to fetch AmbientAgentTask for tombstone metadata: {err}"
-                        );
-                    }
-                },
-            );
-        }
 
         view
     }

@@ -4985,7 +4985,7 @@ impl Workspace {
                             return true;
                         }
                         // Fall back to checking the terminal view directly.
-                        tv.as_ref(ctx).ambient_agent_task_id_for_details_panel(ctx) == Some(task_id)
+                        tv.as_ref(ctx).ambient_agent_task_id_for_details_panel() == Some(task_id)
                     })
             });
             pane_id.map(|pane_id| {
@@ -5090,10 +5090,7 @@ impl Workspace {
         let focused_pane_id = pane_group.focused_pane_id(ctx);
         pane_group
             .terminal_view_from_pane_id(focused_pane_id, ctx)
-            .and_then(|view| {
-                view.as_ref(ctx)
-                    .ambient_agent_task_id_for_details_panel(ctx)
-            })
+            .and_then(|view| view.as_ref(ctx).ambient_agent_task_id_for_details_panel())
     }
 
     /// Notifies the agent views model and notifications model that a terminal view gained focus.
@@ -15885,7 +15882,7 @@ impl Workspace {
                 if pane_group.id() == self.active_tab_pane_group().id() {
                     self.left_panel_open = *is_open;
                     self.left_panel_view.update(ctx, |left_panel, ctx| {
-                        left_panel.on_left_panel_visibility_changed(*is_open, ctx);
+                        left_panel.on_left_panel_visibility_changed(ctx);
                     });
                 }
             }
@@ -17641,7 +17638,7 @@ impl Workspace {
                 {
                     let ambient_agent_task_id = terminal_view
                         .as_ref(ctx)
-                        .ambient_agent_task_id_for_details_panel(ctx);
+                        .ambient_agent_task_id_for_details_panel();
                     self.notify_terminal_focus_change(
                         Some(terminal_view.id()),
                         ambient_agent_task_id,

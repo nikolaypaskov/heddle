@@ -7719,7 +7719,7 @@ impl TerminalView {
     /// ambient setup command group. Owns both pieces of state so callers
     /// (the shared-session viewer arm, legacy fallbacks) don't have to
     /// orchestrate two unrelated mutations. Idempotent across both.
-    pub(crate) fn tear_down_cloud_mode_setup_phase(&mut self, _ctx: &mut ViewContext<Self>) {
+    pub(crate) fn tear_down_cloud_mode_setup_phase(&mut self) {
         self.model
             .lock()
             .block_list_mut()
@@ -7729,17 +7729,12 @@ impl TerminalView {
     fn ambient_agent_task_id_for_details_panel_from_model(
         &self,
         model: &TerminalModel,
-        app: &AppContext,
     ) -> Option<AmbientAgentTaskId> {
-        let _ = app;
         model.ambient_agent_task_id()
     }
-    pub fn ambient_agent_task_id_for_details_panel(
-        &self,
-        app: &AppContext,
-    ) -> Option<AmbientAgentTaskId> {
+    pub fn ambient_agent_task_id_for_details_panel(&self) -> Option<AmbientAgentTaskId> {
         let model = self.model.lock();
-        self.ambient_agent_task_id_for_details_panel_from_model(&model, app)
+        self.ambient_agent_task_id_for_details_panel_from_model(&model)
     }
 
     /// Populates the conversation details panel from the active local `AIConversation`.
@@ -7805,7 +7800,7 @@ impl TerminalView {
         model: &TerminalModel,
         app: &AppContext,
     ) -> bool {
-        self.ambient_agent_task_id_for_details_panel_from_model(model, app)
+        self.ambient_agent_task_id_for_details_panel_from_model(model)
             .is_some()
             || BlocklistAIHistoryModel::as_ref(app)
                 .active_conversation(self.view_id)
@@ -7886,18 +7881,9 @@ impl TerminalView {
         operations: Vec<CrdtOperation>,
         ctx: &mut ViewContext<Self>,
     ) {
-        if self.should_suppress_ambient_setup_input_sync(ctx) {
-            return;
-        }
-
         self.input().update(ctx, |input, ctx| {
             input.process_remote_edits(block_id, operations, ctx);
         });
-    }
-
-    fn should_suppress_ambient_setup_input_sync(&self, app: &AppContext) -> bool {
-        let _ = app;
-        false
     }
 
     pub fn ssh_file_upload(&self) -> &ViewHandle<FileUpload> {

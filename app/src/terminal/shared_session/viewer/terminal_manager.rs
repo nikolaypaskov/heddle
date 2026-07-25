@@ -1743,16 +1743,6 @@ impl TerminalManager {
         model
             .lock()
             .clear_write_to_pty_events_for_shared_session_tx();
-        if FeatureFlag::HandoffCloudCloud.is_enabled() {
-            terminal_view.update(ctx, |terminal_view, ctx| {
-                // Heddle (FOSS): no viewer resolves as the run's owner, so an ended shared
-                // ambient session always leaves a read-only finished viewer.
-                model
-                    .lock()
-                    .set_shared_session_status(SharedSessionStatus::FinishedViewer);
-                terminal_view.on_ambient_agent_execution_ended(ctx);
-            });
-        }
         if Self::current_network(current_network)
             .is_some_and(|network| network.as_ref(ctx).session_id() == ended_session_id)
         {

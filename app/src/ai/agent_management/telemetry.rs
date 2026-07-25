@@ -85,11 +85,6 @@ pub enum AgentManagementTelemetryEvent {
         conversation_id: String,
         opened_from: OpenedFrom,
     },
-    /// User opened a cloud run
-    CloudRunOpened {
-        task_id: String,
-        opened_from: OpenedFrom,
-    },
     /// User clicked an artifact button
     ArtifactClicked { artifact_type: ArtifactType },
     /// User changed a filter
@@ -104,18 +99,11 @@ pub enum AgentManagementTelemetryEvent {
         conversation_id: String,
         copied_from: OpenedFrom,
     },
-    /// User copied a session link
-    SessionLinkCopied {
-        task_id: String,
-        copied_from: OpenedFrom,
-    },
     /// User clicked an artifact in the tombstone view
     TombstoneArtifactClicked { artifact_type: ArtifactType },
     /// User clicked "Continue locally" in the tombstone
     #[cfg(not(target_family = "wasm"))]
     TombstoneContinueLocally,
-    /// User clicked "Continue" in the tombstone to start a cloud follow-up.
-    TombstoneContinueInCloud { task_id: String },
     /// User clicked "Continue locally" in the details panel
     #[cfg(not(target_family = "wasm"))]
     DetailsPanelContinueLocally,
@@ -125,8 +113,6 @@ pub enum AgentManagementTelemetryEvent {
     /// User clicked "Open in Warp" in the tombstone (wasm)
     #[cfg(target_family = "wasm")]
     TombstoneOpenInWarp,
-    /// User cancelled a cloud run
-    CloudRunCancelled { task_id: String },
     /// User forked a conversation
     ConversationForked { conversation_id: String },
 }
@@ -162,13 +148,6 @@ impl TelemetryEvent for AgentManagementTelemetryEvent {
                 "conversation_id": conversation_id,
                 "opened_from": opened_from,
             })),
-            AgentManagementTelemetryEvent::CloudRunOpened {
-                task_id,
-                opened_from,
-            } => Some(json!({
-                "task_id": task_id,
-                "opened_from": opened_from,
-            })),
             AgentManagementTelemetryEvent::ArtifactClicked { artifact_type } => {
                 Some(json!({ "artifact_type": artifact_type }))
             }
@@ -189,30 +168,17 @@ impl TelemetryEvent for AgentManagementTelemetryEvent {
                 "conversation_id": conversation_id,
                 "copied_from": copied_from,
             })),
-            AgentManagementTelemetryEvent::SessionLinkCopied {
-                task_id,
-                copied_from,
-            } => Some(json!({
-                "task_id": task_id,
-                "copied_from": copied_from,
-            })),
             AgentManagementTelemetryEvent::TombstoneArtifactClicked { artifact_type } => {
                 Some(json!({ "artifact_type": artifact_type }))
             }
             #[cfg(not(target_family = "wasm"))]
             AgentManagementTelemetryEvent::TombstoneContinueLocally => None,
-            AgentManagementTelemetryEvent::TombstoneContinueInCloud { task_id } => Some(json!({
-                "task_id": task_id,
-            })),
             #[cfg(not(target_family = "wasm"))]
             AgentManagementTelemetryEvent::DetailsPanelContinueLocally => None,
             #[cfg(not(target_family = "wasm"))]
             AgentManagementTelemetryEvent::SlashCommandContinueLocally => None,
             #[cfg(target_family = "wasm")]
             AgentManagementTelemetryEvent::TombstoneOpenInWarp => None,
-            AgentManagementTelemetryEvent::CloudRunCancelled { task_id } => {
-                Some(json!({ "task_id": task_id }))
-            }
             AgentManagementTelemetryEvent::ConversationForked { conversation_id } => {
                 Some(json!({ "conversation_id": conversation_id }))
             }
@@ -249,23 +215,19 @@ impl TelemetryEventDesc for AgentManagementTelemetryEventDiscriminants {
             Self::SetupGuideStepCopy => "AgentManagement.SetupGuideStepCopy",
             Self::SetupGuideDocsLink => "AgentManagement.SetupGuideDocsLink",
             Self::ConversationOpened => "AgentManagement.ConversationOpened",
-            Self::CloudRunOpened => "AgentManagement.CloudRunOpened",
             Self::ArtifactClicked => "AgentManagement.ArtifactClicked",
             Self::FilterChanged => "AgentManagement.FilterChanged",
             Self::DetailsViewed => "AgentManagement.DetailsViewed",
             Self::ConversationLinkCopied => "AgentManagement.ConversationLinkCopied",
-            Self::SessionLinkCopied => "AgentManagement.SessionLinkCopied",
             Self::TombstoneArtifactClicked => "AgentManagement.TombstoneArtifactClicked",
             #[cfg(not(target_family = "wasm"))]
             Self::TombstoneContinueLocally => "AgentManagement.TombstoneContinueLocally",
-            Self::TombstoneContinueInCloud => "AgentManagement.TombstoneContinueInCloud",
             #[cfg(not(target_family = "wasm"))]
             Self::DetailsPanelContinueLocally => "AgentManagement.DetailsPanelContinueLocally",
             #[cfg(not(target_family = "wasm"))]
             Self::SlashCommandContinueLocally => "AgentManagement.SlashCommandContinueLocally",
             #[cfg(target_family = "wasm")]
             Self::TombstoneOpenInWarp => "AgentManagement.TombstoneOpenInWarp",
-            Self::CloudRunCancelled => "AgentManagement.CloudRunCancelled",
             Self::ConversationForked => "AgentManagement.ConversationForked",
         }
     }
@@ -284,18 +246,13 @@ impl TelemetryEventDesc for AgentManagementTelemetryEventDiscriminants {
             Self::SetupGuideStepCopy => "User copied a workflow step from the setup guide",
             Self::SetupGuideDocsLink => "User clicked a docs URL in the setup guide",
             Self::ConversationOpened => "User opened a conversation",
-            Self::CloudRunOpened => "User opened a cloud run",
             Self::ArtifactClicked => "User clicked an artifact button",
             Self::FilterChanged => "User changed a filter in the management view",
             Self::DetailsViewed => "User clicked View details",
             Self::ConversationLinkCopied => "User copied a conversation link",
-            Self::SessionLinkCopied => "User copied a session link",
             Self::TombstoneArtifactClicked => "User clicked an artifact in the tombstone view",
             #[cfg(not(target_family = "wasm"))]
             Self::TombstoneContinueLocally => "User clicked Continue locally in the tombstone",
-            Self::TombstoneContinueInCloud => {
-                "User clicked Continue in the tombstone to start a cloud follow-up"
-            }
             #[cfg(not(target_family = "wasm"))]
             Self::DetailsPanelContinueLocally => {
                 "User clicked Continue locally in the details panel"
@@ -306,7 +263,6 @@ impl TelemetryEventDesc for AgentManagementTelemetryEventDiscriminants {
             }
             #[cfg(target_family = "wasm")]
             Self::TombstoneOpenInWarp => "User clicked Open in Warp in the tombstone",
-            Self::CloudRunCancelled => "User cancelled a cloud run",
             Self::ConversationForked => "User forked a conversation",
         }
     }

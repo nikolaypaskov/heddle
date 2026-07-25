@@ -3,7 +3,6 @@ use warpui::{App, SingletonEntity};
 
 use super::{AISettings, FEATURE_INTROS, FeatureIntroId, OneTimeModalModel};
 use crate::test_util::terminal::{add_window_with_terminal, initialize_app_for_terminal_view};
-use crate::workspaces::workspace::CustomerType;
 
 #[test]
 fn wait_until_auto_handoff_sleep_modal_closed_tracks_modal_state() {

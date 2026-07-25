@@ -18,7 +18,7 @@ use warp_core::features::FeatureFlag;
 use warp_core::ui::theme::WarpTheme;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::color::ColorU;
-use warpui::{AppContext, Entity, EntityId, ModelContext, SingletonEntity, WindowId};
+use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent::api::ServerConversationToken;
@@ -31,23 +31,6 @@ use crate::ai::blocklist::{
 use crate::ai::conversation_navigation::ConversationNavigationData;
 use crate::ui_components::icons::Icon;
 use crate::workspace::{RestoreConversationLayout, WorkspaceAction};
-
-/// Error details for a failed ambient-agent task metadata fetch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TaskFetchError {
-    message: String,
-    status: Option<u16>,
-}
-
-impl TaskFetchError {
-    pub(crate) fn message(&self) -> &str {
-        &self.message
-    }
-
-    pub(crate) fn is_access_denied(&self) -> bool {
-        matches!(self.status, Some(401 | 403))
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InitialConversationLoadState {
@@ -409,9 +392,6 @@ pub(crate) fn artifacts_match_filter(
 pub struct AgentConversationsModel {
     /// A map of conversation IDs to local conversations.
     conversations: HashMap<AIConversationId, ConversationMetadata>,
-    /// Set of view IDs actively consuming this model's data per window.
-    /// When a window has at least one consumer, we poll for new tasks while that window is active.
-    active_data_consumers_per_window: HashMap<WindowId, HashSet<EntityId>>,
     initial_load_state: InitialConversationLoadState,
 }
 
@@ -451,7 +431,6 @@ impl AgentConversationsModel {
         if !FeatureFlag::AgentManagementView.is_enabled() {
             return Self {
                 conversations: HashMap::new(),
-                active_data_consumers_per_window: HashMap::new(),
                 initial_load_state: InitialConversationLoadState::Loaded,
             };
         }
@@ -468,7 +447,6 @@ impl AgentConversationsModel {
 
         let mut model = Self {
             conversations: HashMap::new(),
-            active_data_consumers_per_window: HashMap::new(),
             initial_load_state: InitialConversationLoadState::LoadingLocal,
         };
 
@@ -505,41 +483,14 @@ impl AgentConversationsModel {
             let metadata = ConversationMetadata { nav_data };
             self.conversations.insert(conversation_id, metadata);
         }
-        if self.initial_load_state == InitialConversationLoadState::LoadingLocal {
-            self.initial_load_state = InitialConversationLoadState::LoadingLocal;
-        }
+        // Heddle (FOSS): the local sync is the whole load — upstream moved to a
+        // `WaitingForCloud` phase here and only reached `Loaded` once the cloud fetch
+        // settled. Leaving the state at `LoadingLocal` would pin `is_loading()` true
+        // forever and the TUI conversation list would render "Loading conversations…"
+        // with no rows.
+        self.initial_load_state = InitialConversationLoadState::Loaded;
 
         ctx.emit(AgentConversationsModelEvent::ConversationsLoaded);
-    }
-
-    /// Called when a view that consumes this model's data becomes visible.
-    /// Uses view_id to make registration idempotent.
-    pub fn register_view_open(
-        &mut self,
-        window_id: WindowId,
-        view_id: EntityId,
-        _ctx: &mut ModelContext<Self>,
-    ) {
-        self.active_data_consumers_per_window
-            .entry(window_id)
-            .or_default()
-            .insert(view_id);
-    }
-
-    /// Called when a view that consumes this model's data becomes hidden.
-    /// Uses view_id to make unregistration idempotent.
-    pub fn register_view_closed(
-        &mut self,
-        window_id: WindowId,
-        view_id: EntityId,
-        _ctx: &mut ModelContext<Self>,
-    ) {
-        if let Some(views) = self.active_data_consumers_per_window.get_mut(&window_id) {
-            views.remove(&view_id);
-            if views.is_empty() {
-                self.active_data_consumers_per_window.remove(&window_id);
-            }
-        }
     }
 
     /// Returns normalized, owned entries for agent management/navigation surfaces.
@@ -801,8 +752,9 @@ impl AgentConversationsModel {
     /// This is used when logging out to ensure no conversation history persists across users.
     pub(crate) fn reset(&mut self) {
         self.conversations.clear();
-        self.active_data_consumers_per_window.clear();
-        self.initial_load_state = InitialConversationLoadState::LoadingLocal;
+        // Empty, and nothing is being fetched — not "loading". Upstream parked this in
+        // `WaitingForCloud`, which `is_loading()` also treated as done.
+        self.initial_load_state = InitialConversationLoadState::Loaded;
     }
 }
 

@@ -109,11 +109,6 @@ impl TuiConversationMenuModel {
         let mut list = TuiInlineMenuListState::default();
         list.set_loading(true);
         self.state = TuiConversationMenuState::Open { list };
-        let window_id = self.window_id;
-        let model_id = ctx.model_id();
-        AgentConversationsModel::handle(ctx).update(ctx, |model, ctx| {
-            model.register_view_open(window_id, model_id, ctx);
-        });
         self.refresh_rows(ctx);
     }
 
@@ -204,11 +199,6 @@ impl TuiConversationMenuModel {
     fn close(&mut self, ctx: &mut ModelContext<Self>) {
         if self.has_open_state() {
             self.state = TuiConversationMenuState::Closed;
-            let window_id = self.window_id;
-            let model_id = ctx.model_id();
-            AgentConversationsModel::handle(ctx).update(ctx, |model, ctx| {
-                model.register_view_closed(window_id, model_id, ctx);
-            });
             ctx.emit(TuiConversationMenuEvent::Updated);
         }
         self.suggestions_mode.update(ctx, |mode, ctx| {

@@ -120,7 +120,7 @@ impl Workspace {
         let terminal_view_ref = focused_terminal_view.as_ref(ctx);
 
         if terminal_view_ref
-            .ambient_agent_task_id_for_details_panel(ctx)
+            .ambient_agent_task_id_for_details_panel()
             .is_some()
         {
             return true;
