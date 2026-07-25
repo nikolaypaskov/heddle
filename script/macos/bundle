@@ -313,10 +313,15 @@ elif [[ $RELEASE_CHANNEL = "stable" ]]; then
     # Enable heap usage tracking & profiling using jemalloc through pprof.
     FEATURES="$FEATURES,jemalloc_pprof,heap_usage_tracking"
 elif [[ $RELEASE_CHANNEL = "oss" ]]; then
-    WARP_BIN="warp-oss"
-    BUNDLE_ID="dev.warp.WarpOss"
-    WARP_APP_NAME="WarpOss"
-    WARP_SCHEME_NAME="warposs"
+    # These four must track the rename: the bin name has to match a [[bin]] in
+    # app/Cargo.toml, and BUNDLE_ID has to match the identifier under
+    # [package.metadata.bundle.bin.heddle] or the bundled app disagrees with its
+    # own Info.plist. They were left on the pre-fork Warp values, so `cargo
+    # bundle --bin warp-oss` failed on a bin target that does not exist.
+    WARP_BIN="heddle"
+    BUNDLE_ID="dev.heddle.Heddle"
+    WARP_APP_NAME="Heddle"
+    WARP_SCHEME_NAME="heddle"
     # The OSS channel does not ship Sentry, so drop the cocoa_sentry feature
     # (which would otherwise pull in the Sentry framework dependency).
     FEATURES="release_bundle,extern_plist"
@@ -368,7 +373,9 @@ elif [[ "$ARTIFACT" == tui ]]; then
   OPEN_AFTER_BUNDLE=false
   case "$RELEASE_CHANNEL" in
     local) WARP_BIN="warp-tui" ;;
-    oss) WARP_BIN="warp-tui-oss" ;;
+    # Renamed with the fork; crates/warp_tui declares `heddle-tui`, not
+    # `warp-tui-oss`. The other channels keep upstream's naming.
+    oss) WARP_BIN="heddle-tui" ;;
     *) WARP_BIN="warp-tui-$RELEASE_CHANNEL" ;;
   esac
   WARP_TUI_FEATURES="release_bundle,standalone"
