@@ -1,6 +1,7 @@
 mod action;
 mod agent_view;
 pub mod ambient_agent;
+pub mod auth_secret_ftux;
 mod block_banner;
 pub mod block_onboarding;
 pub(crate) mod blocklist_filter;
@@ -267,7 +268,9 @@ use crate::ai::blocklist::{
     get_ai_block_overflow_menu_element_position_id, get_attached_blocks_chip_element_position_id,
     is_lrc_auto_queue_active,
 };
-use crate::ai::conversation_details_panel::ConversationDetailsPanelEvent;
+use crate::ai::conversation_details_panel::{
+    ConversationDetailsData, ConversationDetailsPanelEvent,
+};
 use crate::ai::conversation_utils;
 use crate::ai::document::ai_document_model::{AIDocumentId, AIDocumentModel, AIDocumentVersion};
 use crate::ai::execution_profiles::ExecutionProfileId;
@@ -7981,6 +7984,87 @@ impl TerminalView {
     ) -> Option<AmbientAgentTaskId> {
         let model = self.model.lock();
         self.ambient_agent_task_id_for_details_panel_from_model(&model, app)
+    }
+
+    /// Fetches task data and updates the conversation details panel.
+    ///
+    /// Prefers cloud `AmbientAgentTask` data when this terminal view has an
+    /// associated task ID. Otherwise falls back to populating the panel from
+    /// the active local `AIConversation`, so the same panel can surface
+    /// conversation metadata for non-cloud Warp Agent runs (APP-3595).
+    pub(in crate::terminal::view) fn fetch_and_update_conversation_details_panel(
+        &mut self,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if let Some(task_id) = self.ambient_agent_task_id_for_details_panel(ctx) {
+            let conversations_handle =
+                crate::ai::agent_conversations_model::AgentConversationsModel::handle(ctx);
+            let task = conversations_handle.update(ctx, |model, ctx| {
+                model.get_or_async_fetch_task_data(&task_id, ctx)
+            });
+
+            let data = task
+                .as_ref()
+                .map(|task| ConversationDetailsData::from_task(task, None, None, ctx))
+                .unwrap_or_else(|| {
+                    let fetch_error = conversations_handle
+                        .as_ref(ctx)
+                        .task_fetch_error(&task_id)
+                        .cloned();
+                    ConversationDetailsData::from_task_id(task_id, fetch_error)
+                });
+            self.conversation_details_panel.update(ctx, |panel, ctx| {
+                panel.set_conversation_details(data, ctx);
+            });
+            return;
+        }
+
+        // No backing cloud task — populate from the active local conversation, if any.
+        let view_id = self.id();
+        let history_model = BlocklistAIHistoryModel::handle(ctx);
+        let data = history_model
+            .as_ref(ctx)
+            .active_conversation(view_id)
+            .map(|conversation| ConversationDetailsData::from_conversation(conversation, ctx));
+
+        if let Some(data) = data {
+            self.conversation_details_panel.update(ctx, |panel, ctx| {
+                panel.set_conversation_details(data, ctx);
+            });
+        }
+    }
+
+    pub(in crate::terminal::view) fn refresh_conversation_details_panel_if_open(
+        &mut self,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if self.is_conversation_details_panel_open && self.can_show_conversation_details_ui(ctx) {
+            self.fetch_and_update_conversation_details_panel(ctx);
+            ctx.notify();
+        }
+    }
+
+    /// Auto-opens the conversation details panel once for cloud mode runs.
+    /// This is used for legacy local cloud mode session startup and shared
+    /// ambient session joins. Local non-cloud conversations require an explicit
+    /// user click on the pane-header toggle button.
+    pub(in crate::terminal::view) fn maybe_auto_open_conversation_details_panel(
+        &mut self,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if self.has_auto_opened_conversation_details_panel {
+            return;
+        }
+        self.has_auto_opened_conversation_details_panel = true;
+
+        match self.conversation_details_panel_auto_open_policy {
+            ConversationDetailsPanelAutoOpenPolicy::DefaultOpen => {
+                self.is_conversation_details_panel_open = true;
+                self.fetch_and_update_conversation_details_panel(ctx);
+                ctx.notify();
+            }
+            ConversationDetailsPanelAutoOpenPolicy::DefaultClosed => {}
+        }
     }
 
     /// Whether the conversation details side panel should be available in the

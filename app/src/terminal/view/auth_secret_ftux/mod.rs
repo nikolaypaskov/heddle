@@ -1,3 +1,5 @@
+mod dropdown;
+
 use warp_cli::agent::Harness;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::theme::Fill;
@@ -27,7 +29,7 @@ use crate::editor::{
     SingleLineEditorOptions, TextOptions,
 };
 use crate::menu::{Event as MenuEvent, Menu, MenuItem, MenuItemFields};
-use crate::terminal::view::ambient_agent::auth_secret_ftux_dropdown::{
+use crate::terminal::view::auth_secret_ftux::dropdown::{
     AuthSecretFtuxDropdown, FtuxDropdownEvent,
 };
 use crate::ui_components::icons::Icon as UiIcon;

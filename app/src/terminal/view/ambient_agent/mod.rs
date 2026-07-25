@@ -1,5 +1,3 @@
-mod auth_secret_ftux_dropdown;
-mod auth_secret_ftux_view;
 mod block;
 mod model;
 mod progress;
@@ -7,7 +5,6 @@ mod progress_ui_state;
 mod tips;
 mod view_impl;
 
-pub use auth_secret_ftux_view::{AuthSecretFtuxAction, AuthSecretFtuxView, AuthSecretFtuxViewEvent};
 pub use block::*;
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 pub(crate) use model::PendingHandoff;
