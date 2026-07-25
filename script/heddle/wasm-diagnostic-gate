@@ -39,6 +39,11 @@ fi
 
 # Normalize away line:col so that unrelated edits above a diagnostic do not read as a
 # change. What we care about is "which file has which diagnostic", not where it sits today.
+#
+# Deliberately `sort` and NOT `sort -u`: multiplicity is signal. Three identical `?` errors
+# in one file collapse to a single entry under `-u`, and a fourth would then be invisible --
+# a false negative in the exact tool built to prevent them. `comm` compares duplicate counts
+# correctly, so keeping them costs nothing.
 collect() {
   local raw
   raw="$(mktemp)"
@@ -56,7 +61,7 @@ collect() {
   grep -E ': (error|warning)' "$raw" \
     | grep -vE '^(warning|error): ' \
     | sed -E 's/:[0-9]+:[0-9]+:/:/' \
-    | sort -u || true
+    | sort || true
   rm -f "$raw"
 }
 

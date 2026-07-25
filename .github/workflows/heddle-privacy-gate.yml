@@ -111,7 +111,7 @@ jobs:
           set -euo pipefail
           target="app/src/terminal/view/pane_impl.rs"
           cp "$target" /tmp/pane_impl.bak
-          # Delete the `#[cfg(not(target_family = "wasm"))]` line guarding the
+          # Delete the `#[cfg(not(target_arch = "wasm32"))]` line guarding the
           # PaneHeaderAction import, which makes that import unused on wasm and must
           # therefore trip the gate.
           line="$(grep -n 'use crate::pane_group::pane::view::PaneHeaderAction;' "$target" | cut -d: -f1)"
@@ -127,7 +127,29 @@ jobs:
             exit 1
           fi
           cp /tmp/pane_impl.bak "$target"
-          echo "Gate correctly rejected the planted regression."
+          echo "Gate correctly rejected the planted unique regression."
+
+          # Second plant, covering a DIFFERENT failure mode: a DUPLICATE of a diagnostic
+          # already in the baseline. An earlier version of this gate used `sort -u`, which
+          # discarded multiplicity -- three identical `?` errors in one file collapsed to a
+          # single entry, so a fourth would have passed unnoticed. The plant above adds a
+          # UNIQUE warning and therefore never exercised that path.
+          dup="app/src/workspace/tab_settings.rs"
+          cp "$dup" /tmp/tab_settings.bak
+          dupline="$(grep -n 'use settings_value::SettingsValue as _;' "$dup" | head -1 | cut -d: -f1)"
+          if [ -z "$dupline" ]; then
+            echo "::error::Duplicate self-test anchor not found in $dup; update this step."
+            exit 1
+          fi
+          sed -i "${dupline}a\\        use settings_value::SettingsValue as _;" "$dup"
+          if ./script/heddle/wasm-diagnostic-gate; then
+            cp /tmp/tab_settings.bak "$dup"
+            echo "::error::The wasm gate PASSED a tree with a duplicated baseline diagnostic."
+            echo "Multiplicity is not being compared; the gate has a false negative."
+            exit 1
+          fi
+          cp /tmp/tab_settings.bak "$dup"
+          echo "Gate correctly rejected the planted duplicate."
 
       - name: Compare wasm diagnostics against the recorded baseline
         run: ./script/heddle/wasm-diagnostic-gate

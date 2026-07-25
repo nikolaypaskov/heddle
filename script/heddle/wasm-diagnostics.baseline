@@ -7,5 +7,8 @@ app/src/terminal/view/shared_session/conversation_ended_tombstone_view.rs: error
 app/src/terminal/view/shared_session/conversation_ended_tombstone_view.rs: error[E0308]: mismatched types: expected `&str`, found `&Option<String>`
 app/src/terminal/view/shared_session/view_impl.rs: error[E0308]: mismatched types: expected `&str`, found `&Option<String>`
 app/src/workspace/tab_settings.rs: warning: unused import: `settings_value::SettingsValue`
+app/src/workspace/tab_settings.rs: warning: unused import: `settings_value::SettingsValue`
+app/src/workspace/view.rs: error[E0277]: the `?` operator can only be used in a method that returns `Result` or `Option` (or another type that implements `FromResidual`): cannot use the `?` operator in a method that returns `()`
+app/src/workspace/view.rs: error[E0277]: the `?` operator can only be used in a method that returns `Result` or `Option` (or another type that implements `FromResidual`): cannot use the `?` operator in a method that returns `()`
 app/src/workspace/view.rs: error[E0277]: the `?` operator can only be used in a method that returns `Result` or `Option` (or another type that implements `FromResidual`): cannot use the `?` operator in a method that returns `()`
 app/src/workspace/view/wasm_view.rs: error[E0277]: the `?` operator can only be used in a function that returns `Result` or `Option` (or another type that implements `FromResidual`): cannot use the `?` operator in a function that returns `std::string::String`
