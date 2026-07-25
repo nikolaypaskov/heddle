@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# Gate the GUI: it must still COMPILE, and its commercial UI surface must only ever SHRINK.
+#
+# Why this exists: no other gate enables the `gui` feature. Host clippy, the test suite and the
+# wasm gate all build the `warp` lib and `warp_tui`. The `heddle` bin -- the actual GUI app --
+# is built with `gui` and was, until this script, never compiled by any check at all.
+#
+# That blind spot was not theoretical. Two defects lived in it undetected:
+#
+#   1. script/macos/bundle's oss channel referenced `warp-oss`, a bin target that has not
+#      existed since the rename, so the GUI could not be bundled. Nobody noticed because
+#      nobody ever built it.
+#   2. The GUI still renders upstream's commercial UI -- a sign-in flow, a Warp Drive panel,
+#      "Log out", "Upgrade plan". The de-commercialization slices removed backend plumbing;
+#      view code was never audited, because no gate looked at it.
+#
+# A feature that is never compiled cannot report anything, and `dead_code` does not see across
+# a feature gate. So the check has to be explicit.
+#
+#   ./script/heddle/gui-surface-gate                  # compile + surface comparison
+#   ./script/heddle/gui-surface-gate --surfaces-only  # skip the ~2-7min build
+#   ./script/heddle/gui-surface-gate --update         # re-record the baseline
+#
+# The baseline is expected to SHRINK as the sweep proceeds. A removal is not a failure -- it
+# means the baseline is stale and must be re-recorded IN THE SAME CHANGE, which is enforced
+# with its own exit status rather than left to discipline.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+BASELINE="$REPO_ROOT/script/heddle/gui-surfaces.baseline"
+
+# Kept identical to the oss branch of script/macos/bundle. If that feature list changes, this
+# one has to change with it, or the gate stops checking what actually ships.
+GUI_FEATURES="release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2"
+
+# Roots that contain view code. Deliberately NOT the whole workspace: a match inside, say, a
+# protocol crate is a data field name, not something a user reads on screen.
+ROOTS=(app/src crates/warpui/src crates/onboarding/src)
+
+# Only user-facing string LITERALS: every alternative is anchored to a leading double quote.
+# Without that anchor `login` matches `parsed["owner"]["login"]` in app/src/util/git.rs, which
+# is a GitHub API field and not a sign-in button -- a false positive that would sit in the
+# baseline forever and could never be "removed".
+PATTERN='"(Sign in|Sign out|Sign up|Log in|Log out|Logout|Login|Upgrade|Warp Drive|Subscription|Subscribe|Create account|Manage plan|Billing|Your account|more credits|Refer a friend)'
+
+SURFACES_ONLY=false
+UPDATE=false
+case "${1:-}" in
+  --surfaces-only) SURFACES_ONLY=true ;;
+  --update)        UPDATE=true; SURFACES_ONLY=true ;;
+  "")              ;;
+  *) echo "usage: $0 [--surfaces-only|--update]" >&2; exit 2 ;;
+esac
+
+##############################
+## Part 1: does it compile? ##
+##############################
+
+if [[ "$SURFACES_ONLY" == false ]]; then
+  echo "Checking the GUI compiles (--bin heddle --features $GUI_FEATURES)..."
+  raw="$(mktemp)"
+  trap 'rm -f "$raw"' EXIT
+
+  set +e
+  ( cd "$REPO_ROOT" && cargo check -p warp --bin heddle --features "$GUI_FEATURES" ) > "$raw" 2>&1
+  status=$?
+  set -e
+
+  # Distinguish "rustc rejected the code" from "cargo never ran". Both exit non-zero, and
+  # conflating them reports a compile failure that does not exist -- which is how this very
+  # script behaved on its first run: without ~/.cargo/bin on PATH the subshell exited 127 and
+  # the gate announced "the GUI does not compile" while printing no errors, because there
+  # were none. A verification tool that misattributes its own breakage to the code under test
+  # is worse than no tool, so demand positive evidence that a Rust compilation happened.
+  if ! grep -qE '^(    Finished|error: could not compile)' "$raw"; then
+    echo "error: the GUI check did not complete a Rust compilation (cargo exit $status)." >&2
+    echo "       This is an infrastructure failure, not a compile error. Last lines:" >&2
+    tail -5 "$raw" | sed 's/^/       /' >&2
+    echo >&2
+    echo "       If cargo was not found, put ~/.cargo/bin on PATH." >&2
+    exit 2
+  fi
+
+  if [[ $status -ne 0 ]]; then
+    echo "FAIL: the GUI does not compile." >&2
+    grep -E '^error' "$raw" | head -20 >&2
+    echo >&2
+    echo "The lib and TUI can be green while this is broken -- they do not enable \`gui\`." >&2
+    exit 1
+  fi
+  echo "PASS: the GUI compiles."
+fi
+
+######################################
+## Part 2: the commercial UI surface ##
+######################################
+
+collect() {
+  cd "$REPO_ROOT"
+
+  # Fail closed. If a root is renamed or moved, grep would simply match nothing, every baseline
+  # row would read as "removed", and a gate whose whole job is detecting residue would report
+  # a clean sweep. Demand positive evidence that there was something to scan.
+  local present=()
+  local root
+  for root in "${ROOTS[@]}"; do
+    [[ -d "$root" ]] && present+=("$root")
+  done
+  if [[ ${#present[@]} -eq 0 ]]; then
+    echo "error: none of the scan roots exist: ${ROOTS[*]}" >&2
+    echo "       This is a broken scan, not a clean result." >&2
+    exit 2
+  fi
+
+  local file_count
+  file_count="$(find "${present[@]}" -name '*.rs' | wc -l | tr -d ' ')"
+  if [[ "$file_count" -lt 100 ]]; then
+    echo "error: only $file_count .rs files under ${present[*]}; expected hundreds." >&2
+    echo "       Refusing to treat a near-empty scan as a pass." >&2
+    exit 2
+  fi
+
+  # `-o` so the recorded row is file + the offending literal, not the whole line: rewording the
+  # surrounding code must not read as a change, but moving it to another file must.
+  #
+  # `sort` and NOT `sort -u`: multiplicity is signal. Three "Upgrade" buttons in one file would
+  # collapse to one row under -u, and a fourth could then be added invisibly -- a false negative
+  # in the exact tool built to prevent one.
+  grep -rEno --include='*.rs' "$PATTERN" "${present[@]}" 2>/dev/null \
+    | sed -E 's/:[0-9]+:/:/' \
+    | sort || true
+}
+
+CURRENT="$(mktemp)"
+trap 'rm -f "$CURRENT" ${raw:-}' EXIT
+collect > "$CURRENT"
+
+if [[ "$UPDATE" == true ]]; then
+  cp "$CURRENT" "$BASELINE"
+  echo "Recorded $(wc -l < "$BASELINE" | tr -d ' ') commercial UI surfaces to $BASELINE"
+  exit 0
+fi
+
+if [[ ! -f "$BASELINE" ]]; then
+  echo "error: no baseline at $BASELINE. Record one with --update." >&2
+  exit 2
+fi
+
+ADDED="$(comm -13 "$BASELINE" "$CURRENT")"
+REMOVED="$(comm -23 "$BASELINE" "$CURRENT")"
+
+if [[ -n "$REMOVED" ]]; then
+  echo "These commercial UI surfaces are GONE relative to the baseline:"
+  echo "$REMOVED" | sed 's/^/  - /'
+  echo
+fi
+
+if [[ -n "$ADDED" ]]; then
+  echo "FAIL: this change adds commercial UI surfaces that are not in the baseline:" >&2
+  echo "$ADDED" | sed 's/^/  + /' >&2
+  echo >&2
+  echo "Heddle has no account and no vendor backend, so there is nothing for a sign-in," >&2
+  echo "a Drive panel or an upgrade prompt to talk to. If this text is genuinely needed," >&2
+  echo "re-record the baseline deliberately rather than widening the pattern." >&2
+  exit 1
+fi
+
+# A stale baseline is a live hazard, not bookkeeping: while it still lists a surface that has
+# since been deleted, that surface can be REINTRODUCED up to the recorded count and this gate
+# will pass. So a removal fails too, with its own status, forcing the re-record to land in the
+# change that earned it.
+if [[ -n "$REMOVED" ]]; then
+  echo "FAIL: the baseline is now stale. Until it is re-recorded, those surfaces could be" >&2
+  echo "      reintroduced up to the recorded count without failing this gate." >&2
+  echo "      Re-record in THIS change: ./script/heddle/gui-surface-gate --update" >&2
+  exit 3
+fi
+
+echo "PASS: commercial UI surface matches the baseline ($(wc -l < "$BASELINE" | tr -d ' ') entries)."

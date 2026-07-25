@@ -1,0 +1,91 @@
+app/src/ai/agent_sdk/driver.rs:"Subscription
+app/src/ai/agent_sdk/driver.rs:"Subscription
+app/src/ai/agent_sdk/driver/error_classification.rs:"Warp Drive
+app/src/ai/agent_tips.rs:"Warp Drive
+app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs:"Log in
+app/src/ai/blocklist/prompt/prompt_alert.rs:"Sign up
+app/src/app_menus.rs:"Log out
+app/src/auth/auth_view_body.rs:"Sign in
+app/src/auth/auth_view_body.rs:"Sign in
+app/src/auth/auth_view_body.rs:"Sign up
+app/src/auth/auth_view_body.rs:"Sign up
+app/src/auth/login_slide.rs:"Log in
+app/src/auth/login_slide.rs:"Login
+app/src/auth/login_slide.rs:"Sign in
+app/src/auth/login_slide.rs:"Sign in
+app/src/auth/login_slide.rs:"Warp Drive
+app/src/auth/mod.rs:"Log out
+app/src/drive/index.rs:"Sign up
+app/src/drive/index.rs:"Sign up
+app/src/drive/index.rs:"Upgrade
+app/src/drive/index.rs:"Warp Drive
+app/src/drive/index.rs:"Warp Drive
+app/src/experiments/login_layer.rs:"Login
+app/src/local_control/handlers/metadata.rs:"Warp Drive
+app/src/notebooks/notebook/details_bar.rs:"Sign in
+app/src/search/slash_command_menu/static_commands/commands.rs:"Log out
+app/src/server/telemetry/events.rs:"Log in
+app/src/server/telemetry/events.rs:"Login
+app/src/server/telemetry/events.rs:"Login
+app/src/server/telemetry/events.rs:"Login
+app/src/server/telemetry/events.rs:"Login
+app/src/server/telemetry/events.rs:"Warp Drive
+app/src/server/telemetry/events.rs:"Warp Drive
+app/src/server/telemetry/events.rs:"Warp Drive
+app/src/server/telemetry/events.rs:"Warp Drive
+app/src/settings/privacy.rs:"Warp Drive
+app/src/settings/privacy.rs:"Warp Drive
+app/src/settings_view/ai_page.rs:"Login
+app/src/settings_view/ai_page.rs:"Sign up
+app/src/settings_view/ai_page.rs:"Upgrade
+app/src/settings_view/ai_page.rs:"Upgrade
+app/src/settings_view/ai_page.rs:"Upgrade
+app/src/settings_view/ai_page.rs:"Upgrade
+app/src/settings_view/ai_page.rs:"Upgrade
+app/src/settings_view/ai_page.rs:"Warp Drive
+app/src/settings_view/ai_page.rs:"Warp Drive
+app/src/settings_view/appearance_page.rs:"Warp Drive
+app/src/settings_view/main_page.rs:"Log out
+app/src/settings_view/main_page.rs:"Sign up
+app/src/settings_view/main_page.rs:"Upgrade
+app/src/settings_view/main_page.rs:"Upgrade
+app/src/settings_view/main_page.rs:"Upgrade
+app/src/settings_view/mcp_servers/edit_page.rs:"Log out
+app/src/settings_view/mcp_servers/server_card.rs:"Log out
+app/src/settings_view/mod.rs:"Warp Drive
+app/src/settings_view/mod.rs:"Warp Drive
+app/src/settings_view/warp_drive_page.rs:"Sign up
+app/src/settings_view/warp_drive_page.rs:"Warp Drive
+app/src/settings_view/warp_drive_page.rs:"Warp Drive
+app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:"Upgrade
+app/src/terminal/input/models/data_source.rs:"Upgrade
+app/src/terminal/view.rs:"Upgrade
+app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:"Login
+app/src/terminal/view/inline_banner/aws_bedrock_login.rs:"Log in
+app/src/wasm_nux_dialog.rs:"Warp Drive
+app/src/workflows/workflow_view.rs:"Sign in
+app/src/workflows/workflow_view.rs:"Upgrade
+app/src/workflows/workflow_view.rs:"Upgrade
+app/src/workspace/mod.rs:"Log out
+app/src/workspace/mod.rs:"Warp Drive
+app/src/workspace/view.rs:"Log out
+app/src/workspace/view.rs:"Sign in
+app/src/workspace/view.rs:"Sign up
+app/src/workspace/view.rs:"Sign up
+app/src/workspace/view.rs:"Sign up
+app/src/workspace/view.rs:"Upgrade
+app/src/workspace/view.rs:"Warp Drive
+app/src/workspace/view.rs:"Warp Drive
+app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:"Upgrade
+app/src/workspace/view/left_panel.rs:"Warp Drive
+app/src/workspace/view_tests.rs:"Warp Drive
+app/src/workspace/view_tests.rs:"Warp Drive
+app/src/workspace/view_tests.rs:"Warp Drive
+app/src/workspace/view_tests.rs:"Warp Drive
+app/src/workspace/view_tests.rs:"Warp Drive
+app/src/workspace/view_tests.rs:"Warp Drive
+crates/onboarding/src/lib.rs:"Warp Drive
+crates/onboarding/src/slides/customize_slide.rs:"Warp Drive
+crates/onboarding/src/slides/intro_slide.rs:"Log in
+crates/onboarding/src/telemetry.rs:"Log in
+crates/onboarding/src/telemetry.rs:"Upgrade

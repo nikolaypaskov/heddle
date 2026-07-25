@@ -70,3 +70,6 @@ __pycache__/
 # Project notes
 .note/
 .claude/scheduled_tasks.lock
+
+# Release artefacts staged by script/heddle packaging; never committed (hundreds of MB).
+dist/
