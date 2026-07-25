@@ -783,22 +783,6 @@ impl TerminalView {
         });
     }
 
-    pub fn on_ambient_agent_execution_ended(&mut self, ctx: &mut ViewContext<Self>) {
-        self.handle_non_running_ambient_agent_task(ctx);
-    }
-
-    fn handle_non_running_ambient_agent_task(&mut self, ctx: &mut ViewContext<Self>) {
-        self.refresh_conversation_details_panel_if_open(ctx);
-        let has_live_shared_session = {
-            let status = self.model.lock().shared_session_status().clone();
-            status.is_active_viewer() || status.is_active_sharer()
-        };
-        if has_live_shared_session || !FeatureFlag::CloudModeSetupV2.is_enabled() {
-            return;
-        }
-        self.insert_conversation_ended_tombstone(ctx);
-    }
-
     pub fn handle_inactivity_modal_event(
         &mut self,
         event: &InactivityModalEvent,

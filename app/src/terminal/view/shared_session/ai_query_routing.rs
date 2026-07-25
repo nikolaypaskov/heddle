@@ -96,3 +96,7 @@ pub(in crate::terminal::view) fn conversation_failed_before_task_creation(
         .and_then(conversation_output_status_from_conversation)
         .is_some_and(|status| matches!(status, AmbientConversationStatus::Error { .. }))
 }
+
+#[cfg(test)]
+#[path = "ai_query_routing_tests.rs"]
+mod tests;

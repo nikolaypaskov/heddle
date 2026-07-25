@@ -558,19 +558,34 @@ fn resolve_prompt(prompt: &Prompt, ctx: &AppContext) -> Result<String, AgentDriv
 
 /// Run the task with the provided command.
 ///
-/// Heddle (FOSS): every `run`/`task` subcommand reads or writes a run record on Warp's
-/// servers — listing runs, fetching a run's status or conversation, messaging between
-/// runs. There is no server here, so the whole subcommand reports that rather than
-/// failing with a connection error that looks like a transient outage.
+/// Heddle (FOSS): `list`/`get`/`conversation` read run records that only exist on Warp's
+/// servers, so they are retired.
+///
+/// `message` is NOT in that category and must not be lumped in with them: it is the
+/// mailbox a LOCAL Claude Code child uses to coordinate with its lead agent — see the
+/// launch prompt in `pane_group/pane/local_harness_launch.rs`, which instructs children to
+/// run `run message send|list|read|mark-delivered`. The transport happens to be
+/// server-backed (`AIClient::send_agent_message`), so it cannot work here either, but it
+/// deserves an error that names the real limitation rather than calling a local
+/// orchestration feature a cloud run record.
 fn run_task(
     _ctx: &mut AppContext,
     _global_options: GlobalOptions,
-    _command: TaskCommand,
+    command: TaskCommand,
 ) -> anyhow::Result<()> {
-    Err(anyhow::anyhow!(
-        "`run` operates on agent runs stored on Warp's servers, which this build does not \
-         talk to. Local agent conversations are managed from the app, not this subcommand."
-    ))
+    match command {
+        TaskCommand::Message(_) => Err(anyhow::anyhow!(
+            "Agent-to-agent messaging needs Warp's run mailbox to relay between runs, and \
+             this build does not talk to it. A local child agent cannot report back to its \
+             lead agent through `run message`; drive local children from the app instead."
+        )),
+        TaskCommand::List(_) | TaskCommand::Get(_) | TaskCommand::Conversation(_) => {
+            Err(anyhow::anyhow!(
+                "`run` operates on agent runs stored on Warp's servers, which this build \
+                 does not talk to. Local agent conversations are managed from the app."
+            ))
+        }
+    }
 }
 
 /// Singleton model that provides a ModelContext for spawning async operations
@@ -1475,7 +1490,9 @@ fn command_requires_auth(command: &CliCommand) -> bool {
     match command {
         CliCommand::Agent(agent_cmd) => match agent_cmd {
             AgentCommand::Run { .. } => true,
-            AgentCommand::RunCloud { .. } => true,
+            // Heddle (FOSS): retired -- it returns an explanation, not a server request.
+            // Requiring auth first would replace that explanation with "please log in".
+            AgentCommand::RunCloud { .. } => false,
             AgentCommand::Profile(sub) => match sub {
                 AgentProfileCommand::List => true,
             },
@@ -1497,12 +1514,10 @@ fn command_requires_auth(command: &CliCommand) -> bool {
         CliCommand::MCP(mcp_cmd) => match mcp_cmd {
             MCPCommand::List => true,
         },
-        CliCommand::Run(task_cmd) => match task_cmd {
-            TaskCommand::List { .. } => true,
-            TaskCommand::Get { .. } => true,
-            TaskCommand::Conversation { .. } => true,
-            TaskCommand::Message { .. } => true,
-        },
+        // Heddle (FOSS): every `run` subcommand either explains that it is retired or, for
+        // `run message`, reports that the run mailbox needs a server. Neither is a server
+        // request, so neither should be gated behind auth.
+        CliCommand::Run(_) => false,
         CliCommand::Model(model_cmd) => match model_cmd {
             ModelCommand::List => true,
         },
@@ -1516,7 +1531,8 @@ fn command_requires_auth(command: &CliCommand) -> bool {
         CliCommand::Schedule(_) => true,
         CliCommand::Secret(_) => true,
         CliCommand::Federate(_) => true,
-        CliCommand::HarnessSupport(_) => true,
+        // Heddle (FOSS): retired; returns an explanation rather than calling the server.
+        CliCommand::HarnessSupport(_) => false,
         CliCommand::Artifact(_) => true,
         CliCommand::ApiKey(_) => true,
         CliCommand::Runner(_) => true,

@@ -14,8 +14,8 @@ use super::entry::{
 use super::query::{DEFAULT_RESULT_COUNT, MAX_SEARCH_RESULTS};
 use super::{
     AgentConversationsModel, AgentConversationsModelEvent, AgentManagementFilters, ArtifactFilter,
-    ConversationMetadata, ConversationUpdateKind, HarnessFilter, InitialConversationLoadState,
-    OwnerFilter, StatusFilter, query_conversation_entries,
+    ConversationMetadata, ConversationUpdateKind, EnvironmentFilter, HarnessFilter,
+    InitialConversationLoadState, OwnerFilter, StatusFilter, query_conversation_entries,
 };
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent::api::ServerConversationToken;
@@ -105,6 +105,36 @@ fn create_test_conversation_metadata_at(
     let mut metadata = create_test_conversation_metadata(conversation_id, title);
     metadata.nav_data.last_updated = last_updated;
     metadata
+}
+
+#[test]
+fn environment_none_filter_includes_local_conversations() {
+    // A local conversation has no cloud environment, so it must survive the
+    // "no environment" filter rather than being filtered out as unmatched.
+    // `EnvironmentFilter::NoEnvironment` and its matching arm are both still live; the
+    // original test covered this alongside cloud tasks and was deleted with them.
+    App::test((), |mut app| async move {
+        add_entry_projection_test_models(&mut app);
+
+        let mut model = create_test_model();
+        let conversation_id = AIConversationId::new();
+        model.conversations.insert(
+            conversation_id,
+            create_test_conversation_metadata(conversation_id, "Test conversation"),
+        );
+
+        let filters = AgentManagementFilters {
+            owners: OwnerFilter::All,
+            environment: EnvironmentFilter::NoEnvironment,
+            ..Default::default()
+        };
+
+        app.update(|ctx| {
+            let entries = model.get_entries(&filters, ctx);
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].display.title, "Test conversation");
+        });
+    });
 }
 
 #[test]

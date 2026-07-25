@@ -19,6 +19,47 @@ use crate::test_util::terminal::initialize_app_for_terminal_view;
 use crate::{FeatureFlag, assert_lines_approx_eq};
 
 #[test]
+fn suppressed_auto_open_survives_the_first_maybe_auto_open() {
+    // Local orchestration restores hidden child panes and calls
+    // `suppress_initial_conversation_details_panel_auto_open()` on them
+    // (`pane_group/child_agent/restoration.rs`) so a child does not pop its details panel.
+    // The one-shot must consume without opening, and a later manual toggle must still work.
+    // The original coverage lived in tests keyed on the deleted ambient child-pane helper
+    // and went with it, though the suppression policy itself is live and local.
+    App::test((), |mut app| async move {
+        initialize_app_for_terminal_view(&mut app);
+        let tips_model = app.add_model(|_| Default::default());
+        let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
+            TerminalView::new_for_test(tips_model, None, ctx)
+        });
+
+        terminal.update(&mut app, |view, _| {
+            assert!(
+                !view.is_initial_conversation_details_panel_auto_open_suppressed_for_test(),
+                "default policy should allow auto-open"
+            );
+            view.suppress_initial_conversation_details_panel_auto_open();
+            assert!(view.is_initial_conversation_details_panel_auto_open_suppressed_for_test());
+        });
+
+        terminal.update(&mut app, |view, ctx| {
+            view.maybe_auto_open_conversation_details_panel(ctx);
+        });
+
+        terminal.read(&app, |view, _| {
+            assert!(
+                !view.is_conversation_details_panel_open,
+                "a suppressed pane must not auto-open its details panel"
+            );
+            assert!(
+                view.has_auto_opened_conversation_details_panel,
+                "the one-shot must still be consumed, so a later call cannot open it either"
+            );
+        });
+    });
+}
+
+#[test]
 fn test_prompt_context_menu_items_shared_session_viewer_no_edit_prompt() {
     App::test((), |mut app| async move {
         let terminal = terminal_view_for_viewer(&mut app);
@@ -599,30 +640,6 @@ fn test_shared_followup_on_existing_conversation_converts_user_query_input() {
                 .expect("shared-session replay should reconstruct the user query input");
             assert!(matches!(input, AIAgentInput::UserQuery { .. }));
             assert_eq!(input.display_query().as_deref(), Some(followup_query));
-        });
-    });
-}
-
-#[test]
-fn test_on_ambient_agent_execution_ended_inserts_tombstone_without_handoff() {
-    let _handoff_flag = FeatureFlag::HandoffCloudCloud.override_enabled(false);
-    let _setup_v2_flag = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        let terminal = terminal_view_for_viewer(&mut app);
-        let initial_block_height_items = terminal.read(&app, |view, _| {
-            view.model.lock().block_list().block_heights().items().len()
-        });
-
-        terminal.update(&mut app, |view, ctx| {
-            view.on_ambient_agent_execution_ended(ctx);
-        });
-
-        terminal.read(&app, |view, _| {
-            let final_block_height_items =
-                view.model.lock().block_list().block_heights().items().len();
-            assert_eq!(final_block_height_items, initial_block_height_items + 1);
-            assert!(view.conversation_ended_tombstone_view_id.is_some());
         });
     });
 }

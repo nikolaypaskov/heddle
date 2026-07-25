@@ -449,7 +449,11 @@ impl ConversationDetailsPanel {
             status,
             ..
         } = &self.data.mode;
-        if status.as_ref()?.is_in_progress() {
+        // Only a TERMINAL conversation is a valid fork source. Excluding just
+        // `is_in_progress()` would offer "Continue locally" for `TransientError`,
+        // `WaitingForEvents` and `Blocked`, which are non-terminal and resumable in place —
+        // forking those would branch a conversation the agent is still going to continue.
+        if !status.as_ref()?.is_done() {
             return None;
         }
         *ai_conversation_id

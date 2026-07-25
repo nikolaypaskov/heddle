@@ -32,8 +32,17 @@ fn artifact_download_requires_auth() {
 }
 
 #[test]
-fn run_message_send_requires_auth() {
-    assert!(command_requires_auth(&CliCommand::Run(
+fn run_message_send_does_not_require_auth() {
+    // DELIBERATE INVERSION of the upstream contract. Upstream, `run message send` relayed
+    // through Warp's run mailbox, so it needed auth. Here it makes no server request at
+    // all -- it returns an error explaining that the mailbox is unreachable. Requiring
+    // auth first would replace that explanation with "please log in" for a logged-out
+    // user, and send a logged-in user through an auth refresh to reach the same dead end.
+    //
+    // This matters for LOCAL orchestration: `pane_group/pane/local_harness_launch.rs`
+    // tells local Claude Code children to coordinate via `run message`, so the error they
+    // surface to the user has to name the real limitation.
+    assert!(!command_requires_auth(&CliCommand::Run(
         TaskCommand::Message(MessageCommand::Send(MessageSendArgs {
             to: vec!["run-456".to_string()],
             subject: "subject".to_string(),

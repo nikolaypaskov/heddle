@@ -118,6 +118,27 @@ pub struct ConversationEndedTombstoneView {
     open_in_warp_button: Option<ViewHandle<ActionButton>>,
 }
 
+/// The single conversation a tombstone is ABOUT: what the card describes, what
+/// "Continue locally" forks, and what WASM's "Open in Warp" opens.
+///
+/// `all_live_conversations_for_terminal_surface` is oldest-first and a surface can hold
+/// several live conversations, so taking `.next()` picks the wrong one — the card could
+/// describe conversation A while the button forked conversation B. Prefer the surface's
+/// ACTIVE conversation, and fall back to the most recent live one.
+fn tombstone_conversation_id(
+    terminal_view_id: EntityId,
+    history: &BlocklistAIHistoryModel,
+) -> Option<AIConversationId> {
+    history
+        .active_conversation_id(terminal_view_id)
+        .or_else(|| {
+            history
+                .all_live_conversations_for_terminal_surface(terminal_view_id)
+                .last()
+                .map(|conversation| conversation.id())
+        })
+}
+
 impl ConversationEndedTombstoneView {
     #[cfg_attr(target_family = "wasm", allow(unused_variables))]
     pub fn new(
@@ -125,29 +146,9 @@ impl ConversationEndedTombstoneView {
         terminal_view_id: EntityId,
         task_id: Option<AmbientAgentTaskId>,
     ) -> Self {
-        let conversation_id = BlocklistAIHistoryModel::handle(ctx)
-            .as_ref(ctx)
-            .all_live_conversations_for_terminal_surface(terminal_view_id)
-            .next()
-            .map(|c| c.id());
-
-        // The conversation a "Continue locally" click would fork. Deliberately NOT
-        // `conversation_id` above: `all_live_conversations_for_terminal_surface` is
-        // oldest-first and a surface can hold several live conversations, so `.next()`
-        // is the wrong one to fork. Prefer the surface's active conversation, and fall
-        // back to the most recent live one.
-        #[cfg(not(target_family = "wasm"))]
-        let continuation_conversation_id = {
+        let conversation_id = {
             let history = BlocklistAIHistoryModel::handle(ctx);
-            let history = history.as_ref(ctx);
-            history
-                .active_conversation_id(terminal_view_id)
-                .or_else(|| {
-                    history
-                        .all_live_conversations_for_terminal_surface(terminal_view_id)
-                        .last()
-                        .map(|c| c.id())
-                })
+            tombstone_conversation_id(terminal_view_id, history.as_ref(ctx))
         };
 
         let mut display_data = conversation_id
@@ -171,7 +172,7 @@ impl ConversationEndedTombstoneView {
         // "Continue locally" is a purely local fork of the pane's own conversation, so it
         // is built from local history rather than from cloud task data.
         #[cfg(not(target_family = "wasm"))]
-        let continue_locally_button = continuation_conversation_id.map(|conversation_id| {
+        let continue_locally_button = conversation_id.map(|conversation_id| {
             ctx.add_typed_action_view(move |_| {
                 ActionButton::new("Continue locally", PrimaryTheme)
                     .with_tooltip("Fork this conversation locally")

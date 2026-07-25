@@ -7760,16 +7760,6 @@ impl TerminalView {
         }
     }
 
-    pub(in crate::terminal::view) fn refresh_conversation_details_panel_if_open(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if self.is_conversation_details_panel_open && self.can_show_conversation_details_ui(ctx) {
-            self.fetch_and_update_conversation_details_panel(ctx);
-            ctx.notify();
-        }
-    }
-
     /// Auto-opens the conversation details panel once for cloud mode runs.
     /// This is used for legacy local cloud mode session startup and shared
     /// ambient session joins. Local non-cloud conversations require an explicit
@@ -7823,6 +7813,16 @@ impl TerminalView {
     pub(crate) fn suppress_initial_conversation_details_panel_auto_open(&mut self) {
         self.conversation_details_panel_auto_open_policy =
             ConversationDetailsPanelAutoOpenPolicy::DefaultClosed;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_initial_conversation_details_panel_auto_open_suppressed_for_test(
+        &self,
+    ) -> bool {
+        matches!(
+            self.conversation_details_panel_auto_open_policy,
+            ConversationDetailsPanelAutoOpenPolicy::DefaultClosed
+        )
     }
 
     pub fn active_session(&self) -> &ModelHandle<ActiveSession> {
