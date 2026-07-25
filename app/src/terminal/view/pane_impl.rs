@@ -8,7 +8,6 @@ use warpui::elements::{
 };
 use warpui::prelude::{ChildView, Container};
 use warpui::text_layout::ClipConfig;
-use warpui::ui_components::components::UiComponent;
 #[cfg(not(target_arch = "wasm32"))]
 use warpui::ui_components::components::UiComponentStyles;
 use warpui::{
@@ -29,6 +28,7 @@ use crate::drive::sharing::ShareableObject;
 use crate::features::FeatureFlag;
 use crate::menu::{MenuItem, MenuItemFields};
 use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusEvent, PaneGroupFocusState};
+#[cfg(not(target_family = "wasm"))]
 use crate::pane_group::pane::view::PaneHeaderAction;
 use crate::pane_group::pane::view::header::components::{
     CenteredHeaderEdgeWidth, header_edge_min_width, render_pane_header_buttons,
@@ -46,11 +46,14 @@ use crate::terminal::shared_session::participant_avatar_view::render_participant
 use crate::terminal::shared_session::render_util::shared_session_indicator_color;
 use crate::terminal::{TerminalManager, TerminalView};
 use crate::ui_components::agent_icon::terminal_view_agent_icon_variant;
+#[cfg(not(target_family = "wasm"))]
 use crate::ui_components::buttons::icon_button_with_color;
 use crate::ui_components::icon_with_status::render_icon_with_status;
 use crate::ui_components::{blended_colors, icons};
 use crate::util::bindings::keybinding_name_to_display_string;
 use crate::workspace::tab_settings::TabSettings;
+#[cfg(not(target_family = "wasm"))]
+use warpui::ui_components::components::UiComponent;
 
 /// Total size of the agent icon-with-status component rendered in the pane header.
 /// Sub-components (circle, badge, cloud) are derived inside `render_icon_with_status`.

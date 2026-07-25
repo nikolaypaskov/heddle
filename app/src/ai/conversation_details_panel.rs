@@ -17,8 +17,11 @@ use warpui::elements::{
     Border, ChildView, ClippedScrollStateHandle, ConstrainedBox, Container, CornerRadius,
     CrossAxisAlignment, DragBarSide, Empty, Expanded, Flex, MainAxisAlignment, MainAxisSize,
     MouseStateHandle, ParentElement, Radius, Resizable, ResizableStateHandle, SelectableArea,
-    SelectionHandle, Shrinkable, Text, Wrap, resizable_state_handle,
+    SelectionHandle, Shrinkable, Text, resizable_state_handle,
 };
+// Only used by the non-wasm "Continue locally" row.
+#[cfg(not(target_family = "wasm"))]
+use warpui::elements::Wrap;
 use warpui::fonts::{Properties, Weight};
 use warpui::keymap::FixedBinding;
 use warpui::platform::Cursor;
@@ -54,8 +57,7 @@ use crate::util::bindings::CustomAction;
 use crate::util::time_format::{format_approx_duration_from_now, human_readable_precise_duration};
 use crate::view_components::DismissibleToast;
 #[cfg(not(target_family = "wasm"))]
-use crate::view_components::action_button::PrimaryTheme;
-use crate::view_components::action_button::{ActionButton, ButtonSize};
+use crate::view_components::action_button::{ActionButton, ButtonSize, PrimaryTheme};
 use crate::view_components::copyable_text_field::{
     COPY_FEEDBACK_DURATION, CopyableTextFieldConfig, render_copyable_text_field,
 };
@@ -1106,17 +1108,12 @@ impl View for ConversationDetailsPanel {
         // Add continue locally button (left-aligned) and action icon buttons (right-aligned).
         let has_action_buttons = !self.action_buttons.as_ref(app).is_empty();
 
+        // "Continue locally" does not exist on wasm, so the whole row is gated rather than
+        // compiled behind a constant-false flag (which left `buttons_wrap` unused-mut there).
         #[cfg(not(target_family = "wasm"))]
-        let has_local_continuation_info = self.local_continuation_info(app).is_some();
-        #[cfg(target_family = "wasm")]
-        let has_local_continuation_info = false;
-        if has_local_continuation_info {
+        if self.local_continuation_info(app).is_some() {
             let mut buttons_wrap = Wrap::row().with_spacing(8.).with_run_spacing(8.);
-
-            #[cfg(not(target_family = "wasm"))]
-            if has_local_continuation_info {
-                buttons_wrap.add_child(ChildView::new(&self.continue_locally_button).finish());
-            }
+            buttons_wrap.add_child(ChildView::new(&self.continue_locally_button).finish());
             header_row.add_child(
                 Expanded::new(
                     1.,

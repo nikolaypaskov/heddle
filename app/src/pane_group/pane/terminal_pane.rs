@@ -27,10 +27,14 @@ use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent::StartAgentExecutionMode;
 use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
 use crate::ai::ambient_agents::AmbientAgentTaskId;
+#[cfg(not(target_family = "wasm"))]
 use crate::ai::ambient_agents::task::normalize_orchestrator_agent_name;
 #[cfg(feature = "local_fs")]
 use crate::ai::blocklist::BlocklistAIHistoryEvent;
-use crate::ai::blocklist::agent_view::{AgentViewControllerEvent, AgentViewEntryOrigin};
+use crate::ai::blocklist::agent_view::AgentViewControllerEvent;
+// Only used by the non-wasm child-agent entry paths below.
+#[cfg(not(target_family = "wasm"))]
+use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
 use crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer;
 use crate::ai::blocklist::{BlocklistAIHistoryModel, StartAgentRequest};
 #[cfg(not(target_family = "wasm"))]

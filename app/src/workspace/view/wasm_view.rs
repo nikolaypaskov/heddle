@@ -6,7 +6,6 @@ use warpui::{AppContext, SingletonEntity, ViewContext, ViewHandle};
 
 use super::PanelPosition;
 use crate::BlocklistAIHistoryModel;
-use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::ai::conversation_details_panel::{
     ConversationDetailsData, ConversationDetailsPanel, ConversationDetailsPanelEvent,
 };
