@@ -28,7 +28,6 @@ use warpui::{
 };
 
 use crate::ai::agent::api::ServerConversationToken;
-#[cfg(not(target_family = "wasm"))]
 use crate::ai::agent::conversation::{
     AIConversation, AIConversationId, ConversationStatus, StatusColorStyle,
 };

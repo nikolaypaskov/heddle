@@ -117,7 +117,6 @@ use self::vertical_tabs::{
     render_settings_popup, render_summary_pane_kind_icons, show_before_indicator,
     vtab_group_position_id,
 };
-#[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 use super::action::{
     InitContent, NewSessionMenuAnchor, RestoreConversationLayout, TabContextMenuAnchor,
     VerticalTabsPaneContextMenuTarget, WorkspaceAction,
@@ -171,7 +170,6 @@ use crate::ai::agent_management::notifications::view::{
 use crate::ai::agent_sdk::driver::harness::{claude_transcript, codex_transcript};
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::ambient_agents::telemetry::CloudAgentTelemetryEvent;
-#[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
 use crate::ai::blocklist::agent_view::agent_input_footer::editor::AgentToolbarEditorMode;
 use crate::ai::blocklist::agent_view::editor::{AgentToolbarEditorEvent, AgentToolbarEditorModal};
@@ -3015,10 +3013,9 @@ impl Workspace {
         ctx.subscribe_to_model(
             &AgentConversationsModel::handle(ctx),
             |me, _, event, ctx| match event {
-                // Update transcript details if task or conversation data is updated
-                AgentConversationsModelEvent::NewTasksReceived
-                | AgentConversationsModelEvent::TasksUpdated
-                | AgentConversationsModelEvent::ConversationUpdated { .. }
+                // Refresh transcript details when conversation data changes. The
+                // `NewTasksReceived`/`TasksUpdated` arms went with the cloud task cache.
+                AgentConversationsModelEvent::ConversationUpdated { .. }
                 | AgentConversationsModelEvent::ConversationArtifactsUpdated { .. } => {
                     me.update_transcript_details_panel_data(ctx);
                 }
