@@ -110,7 +110,7 @@ cargo build --release -p warp_tui --bin heddle-tui
 ```
 
 <details>
-<summary><strong>macOS notes</strong> — Metal Toolchain, and why there are no macOS binaries</summary>
+<summary><strong>macOS notes</strong> — Metal Toolchain, and the unsigned Apple Silicon binary</summary>
 
 On macOS the Metal Toolchain is a separate Xcode component and the build fails without it.
 Note that `xcrun -f metal` resolves even when the component is absent, so its presence proves
@@ -120,11 +120,23 @@ nothing — only a build does:
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-**Binaries are published for Linux x86_64 only.** macOS is built from source deliberately:
-notarization needs a paid Apple Developer ID this project does not have, and shipping unsigned
-binaries would mean publishing `xattr -d com.apple.quarantine` as the official install path. That
-normalizes bypassing a security control and leaves users unable to distinguish a genuine download
-from a tampered one.
+**The published Apple Silicon binary is unsigned and not notarized.** Notarization requires a
+paid Apple Developer ID this project does not have. Read that plainly before you use it:
+
+- macOS will quarantine the download and refuse to open it. Clearing that flag is you
+  overriding a security control, so it belongs in *your* hands, not in an install script.
+- A SHA-256 published beside the artefact proves the file matches what the release job
+  produced. It does **not** prove provenance the way a signature does — anyone who can write
+  to the release page can replace both.
+
+If that trade-off is not acceptable to you, build from source; it is the same code and you
+establish provenance yourself. If it is acceptable:
+
+```bash
+shasum -a 256 -c heddle-aarch64-apple-darwin.tar.gz.sha256
+tar -xzf heddle-aarch64-apple-darwin.tar.gz
+xattr -d com.apple.quarantine heddle-aarch64-apple-darwin/heddle-tui
+```
 
 </details>
 
@@ -175,7 +187,7 @@ Honest caveats:
 | Telemetry / experiments / Drive | Removed |
 | Ambient cloud-agent runtime | Being excised slice by slice, each independently reviewed — [plan](docs/superpowers/plans/2026-07-24-ambient-runtime-removal.md) |
 | Rebrand | Own name, icon, logo, bundle ID, paths; upstream doc links remain |
-| Release builds | Linux x86_64; macOS builds from source |
+| Release builds | Linux x86_64; macOS Apple Silicon (**unsigned, not notarized** — see macOS notes) |
 | Agent support (ACP) | Designed + `AgentBackend` seam planned; **not implemented** (next milestone) |
 
 Warp's built-in agent runs on their proprietary server and cannot work here. The intended

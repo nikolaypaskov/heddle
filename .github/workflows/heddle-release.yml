@@ -38,14 +38,17 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
-          # macOS is deliberately absent. Notarization needs a paid Apple
-          # Developer ID this project does not have, and shipping unsigned
-          # binaries would mean publishing `xattr -d com.apple.quarantine` as
-          # the official install path. That normalizes bypassing a security
-          # control AND leaves users unable to distinguish a real Heddle
-          # download from a tampered one -- a checksum hosted beside the
-          # artefact does not fix that. macOS users build from source until
-          # someone accepts the cost and the duty of protecting signing keys.
+          # Apple Silicon. This artefact is UNSIGNED and NOT NOTARIZED:
+          # notarization needs a paid Apple Developer ID this project does not
+          # have. That is a real limitation, not a formality -- macOS will
+          # quarantine the download, and a checksum published beside an artefact
+          # cannot prove provenance the way a signature can. It is shipped
+          # anyway, clearly labelled, because forcing every macOS user to build
+          # a 1.5M-line Rust workspace is its own barrier. Build from source if
+          # you want a binary whose provenance you established yourself; the
+          # README documents both paths and the trade-off.
+          - target: aarch64-apple-darwin
+            runner: macos-14
 
     steps:
       # Check out the exact ref being released. Without this, a manual run
@@ -67,6 +70,18 @@ jobs:
             build-essential cmake pkg-config unzip \
             libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
             libfontconfig1-dev libasound2-dev libclang-dev
+
+      # On macOS the Metal Toolchain is a separate Xcode component and the
+      # build fails without it. `xcrun -f metal` resolves even when the
+      # component is absent, so its presence proves nothing -- only the
+      # download does.
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          set -euxo pipefail
+          brew install protobuf cmake
+          protoc --version
+          xcodebuild -downloadComponent MetalToolchain
 
       - name: Install protoc with well-known types (Linux)
         if: runner.os == 'Linux'
