@@ -37,50 +37,15 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASELINE="$REPO_ROOT/script/heddle/gui-surfaces.baseline"
+VOCABULARY="$REPO_ROOT/script/heddle/gui-surfaces.vocabulary"
 
 # Kept identical to the oss branch of script/macos/bundle. If that feature list changes, this
 # one must change with it, or the gate stops checking what actually ships.
 GUI_FEATURES="release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2"
 
-# Scan the WHOLE repository, not a curated list of view directories.
-#
-# An earlier version named three roots and required each to exist with a floor of ten .rs
-# files. That still failed open: a root can keep ten unrelated files while its GUI code moves
-# somewhere unlisted, the aggregate floor still clears, the new location is never scanned, and
-# the apparent removals invite a --update that blesses the blindness. Any curated location list
-# has that hole, and the sweep is going to be MOVING code, so the hole would be open exactly
-# when it matters most. Scanning everything removes the class rather than tightening the floor.
-SCAN_EXCLUDES=(--exclude-dir=target --exclude-dir=.git --exclude-dir=node_modules)
-
 # Floor that catches a scan which silently covered almost nothing. The tree holds ~3740 .rs
 # files, so this survives very large deletions while refusing an empty or truncated walk.
 MIN_RS_TOTAL=2000
-
-# Two classes of marker, because one rule cannot serve both.
-#
-# ANCHORED -- generic words that are only meaningful as UI when they open a string literal.
-# Without the leading-quote anchor, `login` matches `parsed["owner"]["login"]` in
-# app/src/util/git.rs, a GitHub API field and not a sign-in button. Such a row could never be
-# "removed", so it would sit in the baseline forever as permanent noise.
-#
-# UNANCHORED -- phrases distinctive enough to be commercial UI wherever they appear, including
-# mid-sentence. The first version of this gate anchored everything and therefore missed
-# "Compare plans", "Manage billing", "Your team has run out of credits. Purchase more credits
-# to continue." and "{credits} free cloud agent credits" -- real rendered text, invisible to a
-# rule that only looked at the first word of a literal.
-# Matching is CASE-INSENSITIVE. Case sensitivity was a silent false-negative source: the tree
-# renders "Sign Up" (app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs) and
-# lowercase "upgrade..." copy, neither of which matched a list written as "Sign up"/"Upgrade".
-# Three real strings -- "Create an account", "Sign Up", "View plans" -- were present in the
-# tree and absent from the baseline, so the gate reported PASS over live commercial UI.
-#
-# The vocabulary is derived from the actual copy in the known commercial modules
-# (app/src/billing, app/src/auth, cloud_agent_capacity_modal, share_modal/denied_body,
-# inline_banner/anonymous_user_ai_sign_up) rather than guessed, which is how the phrasing
-# variants above were found.
-ANCHORED='Sign in|Sign out|Sign up|Log in|Log out|Login|Logout|Upgrade|Subscription|Subscribe|Billing|Create account|Create an account|Manage plan|Your account|Refer a friend|Purchase'
-UNANCHORED='Warp Drive|Compare plans|Manage billing|View plans|Pro plan|Paid plan|Business plan|Team plan|free trial|AI credits|more credits|free credits|out of credits|cloud agent credits|upgrade_url'
-PATTERN="(\"($ANCHORED)|($UNANCHORED))"
 
 RUN_BUILD=true
 MODE=compare
@@ -156,45 +121,86 @@ fi
 ## Part 2: the commercial UI surface ##
 #######################################
 
-# Fail closed on a scan that did not really walk the tree. With the whole repository in scope
-# there is no root to rename, so the only remaining way to under-scan is for the walk itself to
-# cover almost nothing -- a wrong working directory, a broken checkout, an exclude that ate too
-# much. A near-empty walk would read every baseline row as "removed" and invite a --update that
-# permanently blinds the gate, so it must be fatal rather than merely quiet.
-verify_tree() {
+# The scan EXTRACTS RUST STRING LITERALS FIRST, then looks for vocabulary inside them.
+#
+# Earlier versions matched the source text directly and anchored generic words to a leading
+# double quote, because without that anchor `login` matches `parsed["owner"]["login"]` in
+# app/src/util/git.rs -- a GitHub API field, not a sign-in button. But anchoring only ever sees
+# the FIRST words of a literal, so it missed rendered copy that mentions an account midway
+# through a sentence:
+#
+#   "AI features are unavailable for logged-out users. Create an account to use AI."
+#   "Connect your account to save and share notebooks, workflows, and more across devices."
+#   "Continue without signing in?"
+#
+# All three were live in the tree and absent from the baseline: the gate reported PASS over
+# commercial UI it was built to find. Extracting literals removes the need for the anchor
+# entirely -- we only ever look inside a literal, so identifiers and paths cannot match, and
+# the vocabulary is then free to match anywhere within the text a user actually reads.
+#
+# KNOWN LIMITATION, stated rather than papered over: this recognises single-line literals. Copy
+# split across lines by a `\` continuation, or written as a raw string (r#"..."#), is matched
+# only in the fragment that carries the quote. It is a floor on coverage, not a ceiling.
+
+##########################################################################
+# ONE authoritative file list, used for BOTH the count and the matching. #
+##########################################################################
+# These were previously two different expressions with different exclusion semantics, so a
+# directory could satisfy the floor while being excluded from the scan -- unrelated files
+# padding the count for GUI source that was never read. Deriving both from a single list means
+# the thing that is counted is exactly the thing that is searched, by construction.
+build_file_list() {
+  local out="$1"
   cd "$REPO_ROOT"
-  local total
-  total="$(find . -name '*.rs' -not -path './target/*' -not -path './.git/*' | wc -l | tr -d ' ')" \
-    || die_infra "find failed while counting .rs files"
-  if (( total < MIN_RS_TOTAL )); then
-    die_infra "only $total .rs files found in the tree (expected >= $MIN_RS_TOTAL)"
+  # Excludes only build output and VCS metadata: directories that cannot hold hand-written GUI
+  # source. Everything else is in scope, including generated code checked into the tree.
+  find . -name '*.rs' -not -path './target/*' -not -path './.git/*' -print0 > "$out" \
+    || die_infra "find failed while enumerating .rs files"
+  local n
+  n="$(tr -cd '\0' < "$out" | wc -c | tr -d ' ')"
+  if (( n < MIN_RS_TOTAL )); then
+    die_infra "only $n .rs files found in the tree (expected >= $MIN_RS_TOTAL)"
   fi
+  echo "$n"
 }
 
-# `-o` records file + the offending literal rather than the whole line, so rewording the
-# surrounding code does not read as a change while moving it to another file does. No `-n`, so
-# there are no line numbers to strip -- an earlier version stripped them with a
-# `s/:[0-9]+:/:/` substitution that would corrupt any path containing `:<digits>:`.
+# Rows are `path:term`, not `path:whole literal`: rewording the sentence around a marker must
+# not read as a change, while moving it to another file must. Sorted under LC_ALL=C, and
+# compared under it too -- `comm` demands both inputs share a collation, and a locale change
+# alone would otherwise manufacture phantom additions.
 #
-# Sorted under LC_ALL=C, and compared under it too: `comm` demands both inputs be ordered by
-# the SAME collation, and a locale change alone would otherwise manufacture phantom additions.
+# NOT `sort -u`: multiplicity is signal. Three "Upgrade" buttons in one file collapse to a
+# single row under -u, and a fourth could then be added invisibly -- a false negative in the
+# exact tool built to prevent one.
 collect() {
-  local out="$1" err gs
+  local out="$1" filelist="$2" err gs
   err="$(mktemp)" || die_infra "mktemp failed"
   cd "$REPO_ROOT"
 
   set +e
-  grep -rEoi --include='*.rs' "${SCAN_EXCLUDES[@]}" "$PATTERN" . > "$out.raw" 2>"$err"
-  gs=$?
+  # -H forces the filename prefix even when xargs hands grep a single file, which would
+  # otherwise emit bare literals and silently drop every path from the last batch.
+  xargs -0 grep -Ho '"[^"]*"' < "$filelist" 2>"$err" \
+    | awk -F':"' '
+        NR==FNR { term[NR] = tolower($0); n = NR; next }
+        {
+          split_at = index($0, ":\"")
+          if (split_at == 0) next
+          path = substr($0, 1, split_at - 1)
+          lit  = tolower(substr($0, split_at + 2))
+          for (i = 1; i <= n; i++) if (index(lit, term[i])) print path ":" term[i]
+        }
+      ' "$VOCABULARY" - > "$out.raw"
+  gs=${PIPESTATUS[0]}
   set -e
 
   # grep: 0 = matched, 1 = no matches (a legitimate end state for this sweep), >=2 = a real
-  # error. The first version ended the pipeline with `|| true`, which swallowed all three
+  # error. An earlier version ended the pipeline with `|| true`, which swallowed all three
   # alike -- so a grep that could not read the tree produced an empty result that then
   # overwrote the baseline under --update and passed on every run afterwards.
   if (( gs >= 2 )); then
     local detail; detail="$(head -2 "$err")"; rm -f "$err"
-    die_infra "grep failed with status $gs: $detail"
+    die_infra "literal extraction failed with status $gs: $detail"
   fi
   rm -f "$err"
 
@@ -202,11 +208,14 @@ collect() {
   rm -f "$out.raw"
 }
 
-verify_tree
+[[ -f "$VOCABULARY" ]] || die_infra "no vocabulary at $VOCABULARY"
 
+FILELIST="$(mktemp)" || die_infra "mktemp failed"
 CURRENT="$(mktemp)" || die_infra "mktemp failed"
-trap 'rm -f "$CURRENT" "$CURRENT.raw" "${raw:-}"' EXIT
-collect "$CURRENT"
+trap 'rm -f "$CURRENT" "$CURRENT.raw" "$FILELIST" "${raw:-}"' EXIT
+
+SCANNED="$(build_file_list "$FILELIST")"
+collect "$CURRENT" "$FILELIST"
 
 if [[ ! -f "$BASELINE" ]]; then
   # A missing baseline is the --update rubber stamp in another costume: delete the file, run
@@ -276,4 +285,4 @@ if [[ -n "$REMOVED" ]]; then
   exit 3
 fi
 
-echo "PASS: commercial UI surface matches the baseline ($(wc -l < "$BASELINE" | tr -d ' ') entries)."
+echo "PASS: commercial UI surface matches the baseline ($(wc -l < "$BASELINE" | tr -d ' ') entries, $SCANNED files scanned)."

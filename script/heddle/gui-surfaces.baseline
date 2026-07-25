@@ -1,568 +1,786 @@
-./app/src/ai/agent/conversation.rs:Warp Drive
-./app/src/ai/agent_sdk/common.rs:Warp Drive
-./app/src/ai/agent_sdk/common.rs:Warp Drive
-./app/src/ai/agent_sdk/common.rs:Warp Drive
-./app/src/ai/agent_sdk/common.rs:Warp Drive
-./app/src/ai/agent_sdk/driver.rs:"Subscription
-./app/src/ai/agent_sdk/driver.rs:"Subscription
-./app/src/ai/agent_sdk/driver.rs:Warp Drive
-./app/src/ai/agent_sdk/driver.rs:Warp Drive
-./app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
-./app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
-./app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
-./app/src/ai/agent_sdk/driver/error_classification.rs:Warp Drive
-./app/src/ai/agent_sdk/driver/error_classification.rs:out of credits
-./app/src/ai/agent_sdk/environment.rs:Warp Drive
-./app/src/ai/agent_sdk/environment.rs:Warp Drive
-./app/src/ai/agent_sdk/environment.rs:Warp Drive
-./app/src/ai/agent_sdk/environment.rs:Warp Drive
-./app/src/ai/agent_sdk/environment.rs:Warp Drive
-./app/src/ai/agent_sdk/mod.rs:Warp Drive
-./app/src/ai/agent_tips.rs:AI credits
-./app/src/ai/agent_tips.rs:Warp Drive
-./app/src/ai/agent_tips.rs:Warp Drive
-./app/src/ai/ai_document_view.rs:Warp Drive
-./app/src/ai/ai_document_view.rs:Warp Drive
-./app/src/ai/ai_document_view.rs:Warp Drive
-./app/src/ai/ai_document_view.rs:Warp Drive
-./app/src/ai/ai_document_view.rs:Warp Drive
-./app/src/ai/ai_document_view.rs:Warp Drive
-./app/src/ai/artifacts/buttons.rs:Warp Drive
-./app/src/ai/artifacts/mod.rs:Warp Drive
-./app/src/ai/blocklist/action_model/execute/create_documents.rs:Warp Drive
-./app/src/ai/blocklist/action_model/execute/read_documents.rs:Warp Drive
-./app/src/ai/blocklist/action_model/execute/read_documents.rs:Warp Drive
-./app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs:"Log in
+./app/src/ai/agent/conversation.rs:credits
+./app/src/ai/agent/conversation.rs:credits
+./app/src/ai/agent/conversation.rs:upgrade
+./app/src/ai/agent/conversation.rs:upgrade
+./app/src/ai/agent/mod.rs:subscription
+./app/src/ai/agent/task.rs:upgrade
+./app/src/ai/agent/task.rs:upgrade
+./app/src/ai/agent/task.rs:upgrade
+./app/src/ai/agent/task.rs:upgrade
+./app/src/ai/agent_management/telemetry.rs:cloud agent
+./app/src/ai/agent_sdk/admin.rs:log in
+./app/src/ai/agent_sdk/admin.rs:log in
+./app/src/ai/agent_sdk/admin.rs:logged out
+./app/src/ai/agent_sdk/artifact_upload.rs:cloud agent
+./app/src/ai/agent_sdk/artifact_upload_tests.rs:cloud agent
+./app/src/ai/agent_sdk/artifact_upload_tests.rs:cloud agent
+./app/src/ai/agent_sdk/common.rs:warp drive
+./app/src/ai/agent_sdk/driver.rs:log in
+./app/src/ai/agent_sdk/driver.rs:login
+./app/src/ai/agent_sdk/driver.rs:subscription
+./app/src/ai/agent_sdk/driver.rs:subscription
+./app/src/ai/agent_sdk/driver.rs:subscription
+./app/src/ai/agent_sdk/driver.rs:subscription
+./app/src/ai/agent_sdk/driver.rs:warp drive
+./app/src/ai/agent_sdk/driver/error_classification.rs:log in
+./app/src/ai/agent_sdk/driver/error_classification.rs:login
+./app/src/ai/agent_sdk/driver/error_classification.rs:warp drive
+./app/src/ai/agent_sdk/driver/error_classification.rs:warp drive
+./app/src/ai/agent_sdk/driver/error_classification.rs:warp drive
+./app/src/ai/agent_sdk/driver/error_classification.rs:warp drive
+./app/src/ai/agent_sdk/driver/harness/codex.rs:billing
+./app/src/ai/agent_sdk/driver/harness/codex.rs:login
+./app/src/ai/agent_sdk/environment.rs:warp drive
+./app/src/ai/agent_sdk/environment.rs:warp drive
+./app/src/ai/agent_sdk/environment.rs:warp drive
+./app/src/ai/agent_sdk/environment.rs:warp drive
+./app/src/ai/agent_sdk/environment.rs:warp drive
+./app/src/ai/agent_sdk/mod.rs:log in
+./app/src/ai/agent_sdk/mod.rs:log in
+./app/src/ai/agent_sdk/mod.rs:log in
+./app/src/ai/agent_sdk/mod.rs:login
+./app/src/ai/agent_sdk/mod.rs:login
+./app/src/ai/agent_sdk/mod_tests.rs:log in
+./app/src/ai/agent_sdk/telemetry.rs:logged out
+./app/src/ai/agent_sdk/telemetry.rs:login
+./app/src/ai/agent_sdk/telemetry.rs:logout
+./app/src/ai/agent_tips.rs:credits
+./app/src/ai/agent_tips.rs:warp drive
+./app/src/ai/agent_tips.rs:warp drive
+./app/src/ai/ai_document_view.rs:warp drive
+./app/src/ai/ai_document_view.rs:warp drive
+./app/src/ai/ai_document_view.rs:warp drive
+./app/src/ai/ai_document_view.rs:warp drive
+./app/src/ai/aws_credentials.rs:log in
+./app/src/ai/aws_credentials.rs:login
+./app/src/ai/aws_credentials.rs:login
+./app/src/ai/aws_credentials.rs:login
+./app/src/ai/aws_credentials_tests.rs:log in
+./app/src/ai/aws_credentials_tests.rs:login
+./app/src/ai/aws_credentials_tests.rs:login
+./app/src/ai/blocklist/action_model/execute/read_documents.rs:warp drive
+./app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs:cloud agent
+./app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs:cloud agent
+./app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs:log in
 ./app/src/ai/blocklist/agent_view/agent_message_bar.rs:view plans
-./app/src/ai/blocklist/agent_view/zero_state_block.rs:cloud agent credits
-./app/src/ai/blocklist/controller/input_context.rs:warp drive
-./app/src/ai/blocklist/history_model.rs:"upgrade
-./app/src/ai/blocklist/inline_action/requested_command.rs:Warp Drive
-./app/src/ai/blocklist/inline_action/requested_command_attribution.rs:Warp Drive
-./app/src/ai/blocklist/inline_action/requested_command_attribution.rs:Warp Drive
-./app/src/ai/blocklist/local_agent_task_sync_model.rs:"billing
-./app/src/ai/blocklist/local_agent_task_sync_model.rs:more credits
-./app/src/ai/blocklist/local_agent_task_sync_model.rs:out of credits
-./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:Out of credits
-./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:Out of credits
-./app/src/ai/blocklist/prompt/prompt_alert.rs:"Sign up
-./app/src/ai/blocklist/prompt/prompt_alert.rs:AI credits
-./app/src/ai/blocklist/prompt/prompt_alert.rs:Out of credits
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/ai_document_model.rs:Warp Drive
-./app/src/ai/document/plan_publication.rs:Warp Drive
-./app/src/ai/execution_profiles/config.rs:Warp Drive
-./app/src/ai/execution_profiles/editor/ui_helpers.rs:Warp Drive
-./app/src/ai/execution_profiles/profiles.rs:Warp Drive
-./app/src/ai/execution_profiles/profiles.rs:Warp Drive
-./app/src/ai/execution_profiles/profiles_tests.rs:"log in
-./app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
-./app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
-./app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
-./app/src/ai/mcp/templatable_manager/wasm.rs:Warp Drive
-./app/src/ai/orchestration/remote_child.rs:Out of credits
-./app/src/ai/orchestration/remote_child_tests.rs:more credits
-./app/src/ai/orchestration/remote_child_tests.rs:more credits
-./app/src/ai/request_usage_model.rs:ai credits
-./app/src/ai/request_usage_model.rs:team plan
-./app/src/ai_assistant/requests.rs:more credits
-./app/src/ai_assistant/requests.rs:more credits
-./app/src/ai_assistant/requests.rs:more credits
-./app/src/ai_assistant/requests.rs:out of credits
-./app/src/ai_assistant/requests.rs:out of credits
-./app/src/ai_assistant/requests.rs:out of credits
-./app/src/ai_assistant/requests.rs:out of credits
-./app/src/ai_assistant/requests.rs:out of credits
-./app/src/ai_assistant/requests.rs:out of credits
-./app/src/ai_assistant/requests.rs:upgrade_url
-./app/src/ai_assistant/requests.rs:upgrade_url
-./app/src/ai_assistant/requests.rs:upgrade_url
-./app/src/ai_assistant/requests.rs:upgrade_url
-./app/src/app_menus.rs:"Log out
-./app/src/auth/auth_override_warning_body.rs:Warp Drive
-./app/src/auth/auth_override_warning_body.rs:Warp drive
-./app/src/auth/auth_view_body.rs:"Sign in
-./app/src/auth/auth_view_body.rs:"Sign in
-./app/src/auth/auth_view_body.rs:"Sign up
-./app/src/auth/auth_view_body.rs:"Sign up
-./app/src/auth/auth_view_body.rs:"sign up
-./app/src/auth/auth_view_body.rs:"sign up
-./app/src/auth/auth_view_body.rs:Warp Drive
-./app/src/auth/login_slide.rs:"Create an account
-./app/src/auth/login_slide.rs:"Create an account
-./app/src/auth/login_slide.rs:"Log in
-./app/src/auth/login_slide.rs:"Login
-./app/src/auth/login_slide.rs:"Sign in
-./app/src/auth/login_slide.rs:"Sign in
-./app/src/auth/login_slide.rs:Warp Drive
-./app/src/auth/login_slide.rs:Warp Drive
-./app/src/auth/login_slide.rs:Warp Drive
-./app/src/auth/login_slide.rs:Warp Drive
-./app/src/auth/login_slide.rs:Warp Drive
-./app/src/auth/login_slide.rs:Warp Drive
-./app/src/auth/mod.rs:"Log out
-./app/src/auth/mod.rs:Warp Drive
-./app/src/billing/shared_objects_creation_denied_body.rs:Compare plans
-./app/src/billing/shared_objects_creation_denied_body.rs:Manage billing
-./app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
-./app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
-./app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
-./app/src/billing/shared_objects_creation_denied_body.rs:Pro plan
+./app/src/ai/blocklist/agent_view/controller.rs:cloud agent
+./app/src/ai/blocklist/agent_view/zero_state_block.rs:cloud agent
+./app/src/ai/blocklist/agent_view/zero_state_block.rs:cloud agent
+./app/src/ai/blocklist/agent_view/zero_state_block.rs:cloud agent
+./app/src/ai/blocklist/agent_view/zero_state_block.rs:credits
+./app/src/ai/blocklist/block/cli_controller.rs:upgrade
+./app/src/ai/blocklist/block/view_impl/common.rs:cloud agent
+./app/src/ai/blocklist/block/view_impl/output.rs:credits
+./app/src/ai/blocklist/block/view_impl/output.rs:credits
+./app/src/ai/blocklist/controller.rs:subscribe
+./app/src/ai/blocklist/history_model.rs:upgrade
+./app/src/ai/blocklist/history_model_tests.rs:upgrade
+./app/src/ai/blocklist/history_model_tests.rs:upgrade
+./app/src/ai/blocklist/history_model_tests.rs:upgrade
+./app/src/ai/blocklist/history_model_tests.rs:upgrade
+./app/src/ai/blocklist/history_model_tests.rs:upgrade
+./app/src/ai/blocklist/local_agent_task_sync_model.rs:billing
+./app/src/ai/blocklist/local_agent_task_sync_model.rs:credits
+./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:cloud agent
+./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:credits
+./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:credits
+./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:credits
+./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:credits
+./app/src/ai/blocklist/local_agent_task_sync_model_tests.rs:upgrade
+./app/src/ai/blocklist/prompt/prompt_alert.rs:credits
+./app/src/ai/blocklist/prompt/prompt_alert.rs:credits
+./app/src/ai/blocklist/prompt/prompt_alert.rs:sign up
+./app/src/ai/blocklist/usage/conversation_usage_view.rs:credits
+./app/src/ai/blocklist/usage/conversation_usage_view.rs:credits
+./app/src/ai/blocklist/usage/conversation_usage_view.rs:credits
+./app/src/ai/blocklist/usage/conversation_usage_view.rs:credits
+./app/src/ai/blocklist/usage/conversation_usage_view.rs:credits
+./app/src/ai/blocklist/usage/conversation_usage_view.rs:credits
+./app/src/ai/blocklist/usage/conversation_usage_view.rs:credits
+./app/src/ai/blocklist/view_util.rs:credits
+./app/src/ai/blocklist/view_util.rs:credits
+./app/src/ai/blocklist/view_util.rs:credits
+./app/src/ai/cloud_agent_config/mod.rs:cloud agent
+./app/src/ai/conversation_details_panel.rs:credits
+./app/src/ai/conversation_details_panel.rs:credits
+./app/src/ai/document/ai_document_model.rs:warp drive
+./app/src/ai/document/ai_document_model.rs:warp drive
+./app/src/ai/document/ai_document_model.rs:warp drive
+./app/src/ai/document/ai_document_model.rs:warp drive
+./app/src/ai/execution_profiles/config.rs:warp drive
+./app/src/ai/execution_profiles/editor/ui_helpers.rs:warp drive
+./app/src/ai/execution_profiles/profiles_tests.rs:log in
+./app/src/ai/execution_profiles/profiles_tests.rs:login
+./app/src/ai/execution_profiles/profiles_tests.rs:login
+./app/src/ai/execution_profiles/profiles_tests.rs:login
+./app/src/ai/llms.rs:upgrade
+./app/src/ai/llms.rs:upgrade
+./app/src/ai/orchestration/remote_child.rs:cloud agent
+./app/src/ai/orchestration/remote_child.rs:credits
+./app/src/ai/orchestration/remote_child.rs:upgrade
+./app/src/ai/orchestration/remote_child_tests.rs:credits
+./app/src/ai/orchestration/remote_child_tests.rs:credits
+./app/src/ai/orchestration/validation.rs:cloud agent
+./app/src/ai/orchestration/validation.rs:cloud agent
+./app/src/ai/request_usage_model.rs:credits
+./app/src/ai/request_usage_model_tests.rs:billing
+./app/src/ai/request_usage_model_tests.rs:credits
+./app/src/ai/request_usage_model_tests.rs:credits
+./app/src/ai/request_usage_model_tests.rs:credits
+./app/src/ai/request_usage_model_tests.rs:credits
+./app/src/ai/request_usage_model_tests.rs:credits
+./app/src/ai/request_usage_model_tests.rs:subscription
+./app/src/ai/request_usage_model_tests.rs:subscription
+./app/src/ai_assistant/requests.rs:credits
+./app/src/ai_assistant/requests.rs:credits
+./app/src/ai_assistant/requests.rs:credits
+./app/src/ai_assistant/requests.rs:credits
+./app/src/ai_assistant/requests.rs:credits
+./app/src/ai_assistant/requests.rs:credits
+./app/src/ai_assistant/requests.rs:upgrade
+./app/src/ai_assistant/requests.rs:upgrade
+./app/src/ai_assistant/requests.rs:upgrade
+./app/src/ai_assistant/utils.rs:credits
+./app/src/app_menus.rs:log out
+./app/src/auth/auth_manager.rs:login
+./app/src/auth/auth_manager.rs:login
+./app/src/auth/auth_manager.rs:login
+./app/src/auth/auth_manager_tests.rs:logged out
+./app/src/auth/auth_override_warning_body.rs:login
+./app/src/auth/auth_override_warning_body.rs:login
+./app/src/auth/auth_override_warning_body.rs:login
+./app/src/auth/auth_override_warning_body.rs:warp drive
+./app/src/auth/auth_override_warning_body.rs:warp drive
+./app/src/auth/auth_view_body.rs:create an account
+./app/src/auth/auth_view_body.rs:create an account
+./app/src/auth/auth_view_body.rs:create an account
+./app/src/auth/auth_view_body.rs:login
+./app/src/auth/auth_view_body.rs:login
+./app/src/auth/auth_view_body.rs:sign in
+./app/src/auth/auth_view_body.rs:sign in
+./app/src/auth/auth_view_body.rs:sign in
+./app/src/auth/auth_view_body.rs:sign in
+./app/src/auth/auth_view_body.rs:sign up
+./app/src/auth/auth_view_body.rs:sign up
+./app/src/auth/auth_view_body.rs:sign up
+./app/src/auth/auth_view_body.rs:sign up
+./app/src/auth/auth_view_body.rs:sign up
+./app/src/auth/auth_view_body.rs:sign up
+./app/src/auth/auth_view_body.rs:warp drive
+./app/src/auth/auth_view_shared_helpers.rs:log in
+./app/src/auth/auth_view_shared_helpers.rs:logged-out
+./app/src/auth/auth_view_shared_helpers.rs:logout
+./app/src/auth/login_failure_notification.rs:log in
+./app/src/auth/login_failure_notification.rs:sign up
+./app/src/auth/login_slide.rs:connect your account
+./app/src/auth/login_slide.rs:connect your account
+./app/src/auth/login_slide.rs:create an account
+./app/src/auth/login_slide.rs:create an account
+./app/src/auth/login_slide.rs:log in
+./app/src/auth/login_slide.rs:login
+./app/src/auth/login_slide.rs:sign in
+./app/src/auth/login_slide.rs:sign in
+./app/src/auth/login_slide.rs:sign in
+./app/src/auth/login_slide.rs:signing in
+./app/src/auth/login_slide.rs:warp drive
+./app/src/auth/login_slide.rs:warp drive
+./app/src/auth/login_slide.rs:warp drive
+./app/src/auth/login_slide.rs:warp drive
+./app/src/auth/login_slide.rs:warp drive
+./app/src/auth/login_slide.rs:your account
+./app/src/auth/login_slide.rs:your account
+./app/src/auth/mod.rs:log out
+./app/src/auth/mod.rs:log out
+./app/src/auth/needs_sso_link_view.rs:your account
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/linux.rs:upgrade
+./app/src/autoupdate/mod_tests.rs:login
+./app/src/autoupdate/mod_tests.rs:login
+./app/src/billing/shared_objects_creation_denied_body.rs:billing
+./app/src/billing/shared_objects_creation_denied_body.rs:compare plans
+./app/src/billing/shared_objects_creation_denied_body.rs:manage billing
 ./app/src/billing/shared_objects_creation_denied_body.rs:paid plan
 ./app/src/billing/shared_objects_creation_denied_body.rs:paid plan
 ./app/src/billing/shared_objects_creation_denied_body.rs:paid plan
 ./app/src/billing/shared_objects_creation_denied_body.rs:paid plan
-./app/src/billing/shared_objects_creation_denied_body.rs:paid plan
-./app/src/billing/shared_objects_creation_denied_body.rs:paid plan
-./app/src/billing/shared_objects_creation_denied_modal.rs:manage billing
-./app/src/billing/shared_objects_creation_denied_modal.rs:upgrade_url
-./app/src/billing/shared_objects_creation_denied_modal.rs:upgrade_url
-./app/src/cloud_object/mod.rs:Warp Drive
-./app/src/cloud_object/mod.rs:Warp Drive
-./app/src/cloud_object/mod.rs:Warp Drive
-./app/src/cloud_object/mod.rs:Warp Drive
-./app/src/cloud_object/mod.rs:Warp Drive
-./app/src/cloud_object/mod.rs:warp drive
-./app/src/cloud_object/mod.rs:warp drive
-./app/src/cloud_object/mod.rs:warp drive
-./app/src/cloud_object/mod.rs:warp drive
-./app/src/cloud_object/model/generic_string_model.rs:Warp Drive
-./app/src/cloud_object/model/generic_string_model.rs:warp drive
-./app/src/cloud_object/model/model_tests.rs:Warp Drive
-./app/src/cloud_object/model/persistence.rs:Warp Drive
-./app/src/cloud_object/model/view.rs:Warp Drive
-./app/src/cloud_object/model/view.rs:Warp Drive
-./app/src/code_review/comment_list_view.rs:AI credits
-./app/src/code_review/comment_list_view.rs:AI credits
-./app/src/context_chips/display_chip.rs:AI credits
-./app/src/drive/export.rs:Warp Drive
-./app/src/drive/export.rs:Warp Drive
-./app/src/drive/import/modal_body.rs:warp drive
-./app/src/drive/index.rs:"Sign up
-./app/src/drive/index.rs:"Sign up
-./app/src/drive/index.rs:"Upgrade
-./app/src/drive/index.rs:AI credits
-./app/src/drive/index.rs:Compare plans
-./app/src/drive/index.rs:Manage Billing
-./app/src/drive/index.rs:Manage billing
-./app/src/drive/index.rs:View Plans
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
-./app/src/drive/index.rs:Warp Drive
+./app/src/billing/shared_objects_creation_denied_body.rs:pro plan
+./app/src/billing/shared_objects_creation_denied_body.rs:pro plan
+./app/src/billing/shared_objects_creation_denied_body.rs:pro plan
+./app/src/billing/shared_objects_creation_denied_body.rs:pro plan
+./app/src/billing/shared_objects_creation_denied_body.rs:subscription
+./app/src/billing/shared_objects_creation_denied_body.rs:subscription
+./app/src/billing/shared_objects_creation_denied_body.rs:subscription
+./app/src/billing/shared_objects_creation_denied_body.rs:subscription
+./app/src/billing/shared_objects_creation_denied_body.rs:subscription
+./app/src/billing/shared_objects_creation_denied_body.rs:subscription
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/billing/shared_objects_creation_denied_body.rs:upgrade
+./app/src/changelog_model.rs:log in
+./app/src/changelog_model.rs:log in
+./app/src/code/global_buffer_model.rs:subscription
+./app/src/code_review/code_review_view.rs:subscribe
+./app/src/code_review/code_review_view.rs:subscribe
+./app/src/code_review/comment_list_view.rs:credits
+./app/src/code_review/find_model.rs:upgrade
+./app/src/code_review/git_dialog/mod.rs:login
+./app/src/code_review/git_dialog/mod.rs:login
+./app/src/context_chips/display_chip.rs:credits
+./app/src/context_chips/mod.rs:login
+./app/src/context_chips/mod.rs:login
+./app/src/context_chips/mod.rs:login
+./app/src/drive/cloud_action_confirmation_dialog.rs:billing
+./app/src/drive/cloud_action_confirmation_dialog.rs:credits
+./app/src/drive/cloud_action_confirmation_dialog.rs:credits
+./app/src/drive/cloud_action_confirmation_dialog.rs:credits
+./app/src/drive/index.rs:billing
+./app/src/drive/index.rs:billing
+./app/src/drive/index.rs:compare plans
+./app/src/drive/index.rs:credits
 ./app/src/drive/index.rs:manage billing
-./app/src/drive/index.rs:upgrade_url
-./app/src/drive/index.rs:upgrade_url
+./app/src/drive/index.rs:manage billing
+./app/src/drive/index.rs:sign up
+./app/src/drive/index.rs:sign up
+./app/src/drive/index.rs:subscription
+./app/src/drive/index.rs:upgrade
+./app/src/drive/index.rs:view plans
 ./app/src/drive/index.rs:warp drive
 ./app/src/drive/index.rs:warp drive
 ./app/src/drive/index.rs:warp drive
-./app/src/drive/index.rs:warp drive
-./app/src/drive/index.rs:warp drive
-./app/src/drive/items/item.rs:Warp Drive
-./app/src/drive/items/item.rs:warp drive
-./app/src/drive/items/item.rs:warp drive
-./app/src/drive/items/mod.rs:Warp Drive
-./app/src/drive/mod.rs:Warp Drive
-./app/src/drive/mod.rs:Warp Drive
-./app/src/drive/mod.rs:Warp Drive
-./app/src/drive/panel.rs:Warp Drive
-./app/src/drive/panel.rs:Warp Drive
-./app/src/drive/panel.rs:Warp Drive
-./app/src/drive/panel.rs:Warp Drive
-./app/src/drive/panel.rs:Warp Drive
-./app/src/drive/panel.rs:warp drive
-./app/src/drive/settings.rs:Warp Drive
-./app/src/drive/settings.rs:Warp Drive
-./app/src/drive/settings.rs:Warp Drive
-./app/src/drive/settings.rs:Warp Drive
-./app/src/drive/sharing/dialog/mod.rs:Warp Drive
-./app/src/drive/sharing/dialog/mod.rs:Warp Drive
-./app/src/drive/sharing/dialog/mod.rs:Warp Drive
-./app/src/drive/sharing/dialog/mod.rs:Warp Drive
-./app/src/drive/sharing/dialog/mod.rs:Warp Drive
-./app/src/drive/sharing/dialog/mod.rs:Warp Drive
-./app/src/drive/sharing/mod.rs:Warp Drive
-./app/src/drive/sharing/mod.rs:Warp Drive
-./app/src/drive/workflows/ai_assist.rs:AI credits
-./app/src/experiments/login_layer.rs:"Login
-./app/src/integration_testing/assertions.rs:"subscription
-./app/src/integration_testing/assertions.rs:"subscription
-./app/src/integration_testing/assertions.rs:"subscription
-./app/src/integration_testing/assertions.rs:"subscription
-./app/src/integration_testing/assertions.rs:Warp Drive
-./app/src/integration_testing/warp_drive/assertion.rs:Warp Drive
-./app/src/integration_testing/warp_drive/assertion.rs:Warp Drive
-./app/src/launch_configs/save_modal.rs:Warp Drive
-./app/src/local_control/handlers/app_state.rs:Warp Drive
-./app/src/local_control/handlers/metadata.rs:Warp Drive
-./app/src/notebooks/editor/mod.rs:Warp Drive
-./app/src/notebooks/file/mod.rs:Warp Drive
-./app/src/notebooks/manager.rs:Warp Drive
-./app/src/notebooks/notebook/details_bar.rs:"Sign in
-./app/src/notebooks/notebook/details_bar.rs:Warp Drive
-./app/src/pane_group/pane/mod.rs:Warp Drive
-./app/src/pane_group/pane/view/header/sharing.rs:Warp Drive
-./app/src/quit_warning/mod.rs:"log out
-./app/src/resource_center/mod.rs:Warp Drive
-./app/src/root_view.rs:Warp Drive
+./app/src/drive/mod.rs:warp drive
+./app/src/drive/settings.rs:warp drive
+./app/src/drive/settings.rs:warp drive
+./app/src/drive/sharing/dialog/mod.rs:upgrade
+./app/src/drive/sharing/dialog/mod.rs:upgrade
+./app/src/drive/sharing/dialog/mod.rs:upgrade
+./app/src/drive/sharing/dialog/mod.rs:upgrade
+./app/src/drive/workflows/ai_assist.rs:credits
+./app/src/experiments/login_layer.rs:login
+./app/src/integration_testing/assertions.rs:subscription
+./app/src/integration_testing/assertions.rs:subscription
+./app/src/integration_testing/assertions.rs:subscription
+./app/src/integration_testing/assertions.rs:subscription
+./app/src/integration_testing/assertions.rs:warp drive
+./app/src/integration_testing/warp_drive/assertion.rs:warp drive
+./app/src/integration_testing/warp_drive/assertion.rs:warp drive
+./app/src/lib.rs:logged out
+./app/src/local_control/handlers/app_state.rs:warp drive
+./app/src/local_control/handlers/metadata.rs:warp drive
+./app/src/login_item/macos.rs:login
+./app/src/login_item/macos.rs:login
+./app/src/login_item/macos.rs:login
+./app/src/login_item/mod.rs:login
+./app/src/login_item/mod.rs:login
+./app/src/login_item/windows.rs:login
+./app/src/login_item/windows.rs:login
+./app/src/login_item/windows.rs:login
+./app/src/login_item/windows_tests.rs:login
+./app/src/login_item/windows_tests.rs:login
+./app/src/notebooks/notebook/details_bar.rs:sign in
+./app/src/pane_group/pane/view/header/sharing.rs:sign in
+./app/src/quit_warning/mod.rs:log out
+./app/src/remote_server/server_model.rs:subscribe
+./app/src/remote_server/server_model.rs:subscribe
+./app/src/remote_server/server_model.rs:subscribe
+./app/src/remote_server/server_model.rs:subscribe
+./app/src/remote_server/server_model.rs:subscribe
 ./app/src/root_view.rs:warp drive
 ./app/src/root_view.rs:warp drive
-./app/src/root_view.rs:warp drive
-./app/src/search/command_palette/view.rs:Warp Drive
-./app/src/search/command_palette/warp_drive/data_source.rs:Warp Drive
-./app/src/search/command_palette/warp_drive/data_source.rs:Warp Drive
-./app/src/search/command_palette/warp_drive/data_source.rs:warp drive
-./app/src/search/command_search/warp_ai.rs:AI credits
-./app/src/search/command_search/workflows/cloud_workflows_data_source.rs:Warp Drive
-./app/src/search/slash_command_menu/static_commands/commands.rs:"Log out
-./app/src/server/cloud_objects/listener.rs:Warp Drive
-./app/src/server/cloud_objects/listener.rs:Warp Drive
-./app/src/server/server_api.rs:out of credits
-./app/src/server/telemetry/events.rs:"Log In
-./app/src/server/telemetry/events.rs:"Log Out
-./app/src/server/telemetry/events.rs:"Log Out
-./app/src/server/telemetry/events.rs:"Log Out
-./app/src/server/telemetry/events.rs:"Log in
-./app/src/server/telemetry/events.rs:"Login
-./app/src/server/telemetry/events.rs:"Login
-./app/src/server/telemetry/events.rs:"Login
-./app/src/server/telemetry/events.rs:"Login
-./app/src/server/telemetry/events.rs:"Sign Up
-./app/src/server/telemetry/events.rs:"Sign Up
-./app/src/server/telemetry/events.rs:Out of credits
-./app/src/server/telemetry/events.rs:Out of credits
-./app/src/server/telemetry/events.rs:View Plans
-./app/src/server/telemetry/events.rs:View Plans
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/server/telemetry/events.rs:Warp Drive
-./app/src/settings/ai.rs:Warp Drive
-./app/src/settings/ai.rs:paid plan
+./app/src/search/ai_context_menu/view.rs:upgrade
+./app/src/search/command_search/view.rs:upgrade
+./app/src/search/command_search/warp_ai.rs:credits
+./app/src/search/external_secrets/view.rs:upgrade
+./app/src/search/notebook_embedding/view.rs:upgrade
+./app/src/search/search_results_menu/view.rs:upgrade
+./app/src/search/slash_command_menu/static_commands/commands.rs:cloud agent
+./app/src/search/slash_command_menu/static_commands/commands.rs:cloud agent
+./app/src/search/slash_command_menu/static_commands/commands.rs:cloud agent
+./app/src/search/slash_command_menu/static_commands/commands.rs:cloud agent
+./app/src/search/slash_command_menu/static_commands/commands.rs:log out
+./app/src/search/slash_command_menu/static_commands/commands.rs:logout
+./app/src/server/server_api.rs:credits
+./app/src/server/server_api.rs:login
+./app/src/server/server_api.rs:login
+./app/src/server/server_api.rs:login
+./app/src/server/server_api.rs:login
+./app/src/server/server_api.rs:subscription
+./app/src/server/server_api/auth_tests.rs:login
+./app/src/server/server_api/auth_tests.rs:login
+./app/src/server/server_api/auth_tests.rs:login
+./app/src/server/server_api/workspace.rs:credits
+./app/src/server/telemetry/events.rs:billing
+./app/src/server/telemetry/events.rs:billing
+./app/src/server/telemetry/events.rs:cloud agent
+./app/src/server/telemetry/events.rs:cloud agent
+./app/src/server/telemetry/events.rs:cloud agent
+./app/src/server/telemetry/events.rs:credits
+./app/src/server/telemetry/events.rs:credits
+./app/src/server/telemetry/events.rs:credits
+./app/src/server/telemetry/events.rs:credits
+./app/src/server/telemetry/events.rs:credits
+./app/src/server/telemetry/events.rs:credits
+./app/src/server/telemetry/events.rs:log in
+./app/src/server/telemetry/events.rs:log out
+./app/src/server/telemetry/events.rs:log out
+./app/src/server/telemetry/events.rs:log out
+./app/src/server/telemetry/events.rs:log out
+./app/src/server/telemetry/events.rs:log out
+./app/src/server/telemetry/events.rs:log out
+./app/src/server/telemetry/events.rs:logged out
+./app/src/server/telemetry/events.rs:logged out
+./app/src/server/telemetry/events.rs:logged-out
+./app/src/server/telemetry/events.rs:logged-out
+./app/src/server/telemetry/events.rs:login
+./app/src/server/telemetry/events.rs:login
+./app/src/server/telemetry/events.rs:login
+./app/src/server/telemetry/events.rs:login
+./app/src/server/telemetry/events.rs:login
+./app/src/server/telemetry/events.rs:sign up
+./app/src/server/telemetry/events.rs:sign up
+./app/src/server/telemetry/events.rs:sign-in
+./app/src/server/telemetry/events.rs:subscription
+./app/src/server/telemetry/events.rs:subscription
+./app/src/server/telemetry/events.rs:subscription
+./app/src/server/telemetry/events.rs:upgrade
+./app/src/server/telemetry/events.rs:upgrade
+./app/src/server/telemetry/events.rs:upgrade
+./app/src/server/telemetry/events.rs:upgrade
+./app/src/server/telemetry/events.rs:upgrade
+./app/src/server/telemetry/events.rs:upgrade
+./app/src/server/telemetry/events.rs:view plans
+./app/src/server/telemetry/events.rs:view plans
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/server/telemetry/events.rs:warp drive
+./app/src/settings/ai.rs:billing
+./app/src/settings/ai.rs:billing
+./app/src/settings/ai.rs:billing
+./app/src/settings/ai.rs:billing
+./app/src/settings/ai.rs:cloud agent
+./app/src/settings/ai.rs:credits
+./app/src/settings/ai.rs:credits
+./app/src/settings/ai.rs:credits
+./app/src/settings/ai.rs:credits
+./app/src/settings/ai.rs:login
+./app/src/settings/ai.rs:login
+./app/src/settings/ai.rs:login
 ./app/src/settings/ai.rs:warp drive
-./app/src/settings/cloud_preferences_syncer.rs:Warp Drive
-./app/src/settings/cloud_preferences_syncer.rs:warp drive
-./app/src/settings/cloud_preferences_syncer.rs:warp drive
-./app/src/settings/privacy.rs:Warp Drive
-./app/src/settings/privacy.rs:Warp Drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/privacy.rs:warp drive
-./app/src/settings/shared_object_limit_banner.rs:Warp Drive
-./app/src/settings_view/ai_page.rs:"Create an account
-./app/src/settings_view/ai_page.rs:"Login
-./app/src/settings_view/ai_page.rs:"Sign up
-./app/src/settings_view/ai_page.rs:"Upgrade
-./app/src/settings_view/ai_page.rs:"Upgrade
-./app/src/settings_view/ai_page.rs:"Upgrade
-./app/src/settings_view/ai_page.rs:"Upgrade
-./app/src/settings_view/ai_page.rs:"Upgrade
-./app/src/settings_view/ai_page.rs:AI credits
-./app/src/settings_view/ai_page.rs:Compare plans
-./app/src/settings_view/ai_page.rs:Warp Drive
-./app/src/settings_view/ai_page.rs:Warp Drive
-./app/src/settings_view/ai_page.rs:Warp Drive
-./app/src/settings_view/ai_page.rs:paid plan
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
-./app/src/settings_view/ai_page.rs:upgrade_url
+./app/src/settings/onboarding_tests.rs:login
+./app/src/settings_view/ai_page.rs:billing
+./app/src/settings_view/ai_page.rs:cloud agent
+./app/src/settings_view/ai_page.rs:cloud agent
+./app/src/settings_view/ai_page.rs:cloud agent
+./app/src/settings_view/ai_page.rs:cloud agent
+./app/src/settings_view/ai_page.rs:compare plans
+./app/src/settings_view/ai_page.rs:create an account
+./app/src/settings_view/ai_page.rs:create an account
+./app/src/settings_view/ai_page.rs:credits
+./app/src/settings_view/ai_page.rs:credits
+./app/src/settings_view/ai_page.rs:credits
+./app/src/settings_view/ai_page.rs:credits
+./app/src/settings_view/ai_page.rs:credits
+./app/src/settings_view/ai_page.rs:log in
+./app/src/settings_view/ai_page.rs:log in
+./app/src/settings_view/ai_page.rs:log in
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:login
+./app/src/settings_view/ai_page.rs:sign up
+./app/src/settings_view/ai_page.rs:sign-in
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:subscription
+./app/src/settings_view/ai_page.rs:upgrade
+./app/src/settings_view/ai_page.rs:upgrade
+./app/src/settings_view/ai_page.rs:upgrade
+./app/src/settings_view/ai_page.rs:upgrade
+./app/src/settings_view/ai_page.rs:upgrade
+./app/src/settings_view/ai_page.rs:upgrade
 ./app/src/settings_view/ai_page.rs:warp drive
-./app/src/settings_view/appearance_page.rs:Warp Drive
-./app/src/settings_view/appearance_page.rs:Warp Drive
+./app/src/settings_view/ai_page.rs:warp drive
+./app/src/settings_view/ai_page.rs:warp drive
+./app/src/settings_view/ai_page.rs:warp drive
+./app/src/settings_view/ai_page.rs:your account
 ./app/src/settings_view/appearance_page.rs:warp drive
 ./app/src/settings_view/appearance_page.rs:warp drive
-./app/src/settings_view/execution_profile_view.rs:Warp Drive
-./app/src/settings_view/features_page.rs:"login
-./app/src/settings_view/main_page.rs:"Log out
-./app/src/settings_view/main_page.rs:"Sign up
-./app/src/settings_view/main_page.rs:"Upgrade
-./app/src/settings_view/main_page.rs:"Upgrade
-./app/src/settings_view/main_page.rs:"Upgrade
-./app/src/settings_view/main_page.rs:"sign out
-./app/src/settings_view/main_page.rs:Compare plans
-./app/src/settings_view/main_page.rs:Compare plans
-./app/src/settings_view/main_page.rs:Compare plans
-./app/src/settings_view/main_page.rs:Manage billing
-./app/src/settings_view/main_page.rs:upgrade_url
-./app/src/settings_view/main_page.rs:upgrade_url
-./app/src/settings_view/main_page.rs:upgrade_url
-./app/src/settings_view/main_page.rs:upgrade_url
-./app/src/settings_view/mcp_servers/edit_page.rs:"Log out
-./app/src/settings_view/mcp_servers/server_card.rs:"Log out
-./app/src/settings_view/mod.rs:Warp Drive
-./app/src/settings_view/mod.rs:Warp Drive
-./app/src/settings_view/mod.rs:Warp Drive
-./app/src/settings_view/privacy_page.rs:Warp Drive
-./app/src/settings_view/warp_drive_page.rs:"Sign up
-./app/src/settings_view/warp_drive_page.rs:Warp Drive
-./app/src/settings_view/warp_drive_page.rs:Warp Drive
-./app/src/settings_view/warp_drive_page.rs:Warp Drive
-./app/src/settings_view/warp_drive_page.rs:Warp Drive
-./app/src/settings_view/warp_drive_page.rs:Warp Drive
+./app/src/settings_view/appearance_page.rs:warp drive
+./app/src/settings_view/appearance_page.rs:warp drive
+./app/src/settings_view/execution_profile_view.rs:warp drive
+./app/src/settings_view/features_page.rs:log out
+./app/src/settings_view/features_page.rs:login
+./app/src/settings_view/features_page.rs:login
+./app/src/settings_view/features_page.rs:login
+./app/src/settings_view/features_page.rs:login
+./app/src/settings_view/features_page.rs:logout
+./app/src/settings_view/main_page.rs:billing
+./app/src/settings_view/main_page.rs:billing
+./app/src/settings_view/main_page.rs:compare plans
+./app/src/settings_view/main_page.rs:compare plans
+./app/src/settings_view/main_page.rs:compare plans
+./app/src/settings_view/main_page.rs:log out
+./app/src/settings_view/main_page.rs:log out
+./app/src/settings_view/main_page.rs:logout
+./app/src/settings_view/main_page.rs:manage billing
+./app/src/settings_view/main_page.rs:sign out
+./app/src/settings_view/main_page.rs:sign up
+./app/src/settings_view/main_page.rs:sign up
+./app/src/settings_view/main_page.rs:upgrade
+./app/src/settings_view/main_page.rs:upgrade
+./app/src/settings_view/main_page.rs:upgrade
+./app/src/settings_view/mcp_servers/edit_page.rs:log out
+./app/src/settings_view/mcp_servers/server_card.rs:log out
+./app/src/settings_view/mcp_servers_page.rs:logged out
+./app/src/settings_view/mcp_servers_page.rs:logged out
+./app/src/settings_view/mod.rs:warp drive
+./app/src/settings_view/mod.rs:warp drive
+./app/src/settings_view/platform_page.rs:cloud agent
+./app/src/settings_view/update_environment_form_tests.rs:login
+./app/src/settings_view/update_environment_form_tests.rs:login
+./app/src/settings_view/warp_drive_page.rs:create an account
+./app/src/settings_view/warp_drive_page.rs:sign up
+./app/src/settings_view/warp_drive_page.rs:sign up
 ./app/src/settings_view/warp_drive_page.rs:warp drive
 ./app/src/settings_view/warp_drive_page.rs:warp drive
-./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:"Upgrade
-./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:"upgrade
-./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:"upgrade
-./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:"upgrade
-./app/src/terminal/input/models/data_source.rs:"Upgrade
-./app/src/terminal/input/models/data_source.rs:upgrade_url
-./app/src/terminal/input/models/data_source.rs:upgrade_url
-./app/src/terminal/input/models/model_spec_scores.rs:more credits
-./app/src/terminal/profile_model_selector.rs:more credits
-./app/src/terminal/shared_session/share_modal/denied_body.rs:View plans
+./app/src/settings_view/warp_drive_page.rs:warp drive
+./app/src/settings_view/warp_drive_page.rs:warp drive
+./app/src/settings_view/warp_drive_page.rs:warp drive
+./app/src/settings_view/warp_drive_page.rs:warp drive
+./app/src/settings_view/warp_drive_page.rs:warp drive
+./app/src/tab.rs:cloud agent
+./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:upgrade
+./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:upgrade
+./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:upgrade
+./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:upgrade
+./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:upgrade
+./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs:upgrade
+./app/src/terminal/cli_agent_sessions/plugin_manager/codex_tests.rs:upgrade
+./app/src/terminal/event.rs:login
+./app/src/terminal/general_settings.rs:log in
+./app/src/terminal/general_settings.rs:login
+./app/src/terminal/input.rs:cloud agent
+./app/src/terminal/input/inline_menu/view.rs:upgrade
+./app/src/terminal/input/models/data_source.rs:upgrade
+./app/src/terminal/input/models/model_spec_scores.rs:credits
+./app/src/terminal/input/models/model_spec_scores.rs:credits
+./app/src/terminal/local_tty/shell.rs:login
+./app/src/terminal/local_tty/shell.rs:login
+./app/src/terminal/model/block/interaction_mode.rs:upgrade
+./app/src/terminal/model/session/command_executor/local_command_executor.rs:login
+./app/src/terminal/model/terminal_model.rs:cloud agent
+./app/src/terminal/model/terminal_model.rs:login
+./app/src/terminal/model_events.rs:login
+./app/src/terminal/profile_model_selector.rs:credits
+./app/src/terminal/profile_model_selector.rs:credits
+./app/src/terminal/shared_session/manager.rs:upgrade
+./app/src/terminal/shared_session/manager.rs:upgrade
+./app/src/terminal/shared_session/manager.rs:upgrade
 ./app/src/terminal/shared_session/share_modal/denied_body.rs:pro plan
-./app/src/terminal/view.rs:"Upgrade
-./app/src/terminal/view.rs:AI credits
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:Warp Drive
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:Warp Drive
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:Warp Drive
-./app/src/terminal/view/docker_sandbox/mod.rs:Warp Drive
-./app/src/terminal/view/docker_sandbox/mod.rs:Warp Drive
-./app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:"Login
-./app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:"Sign Up
-./app/src/terminal/view/inline_banner/aws_bedrock_login.rs:"Log in
-./app/src/terminal/view/inline_banner/prompt_suggestions.rs:Out of credits
-./app/src/ui_components/item_highlight.rs:warp drive
-./app/src/ui_components/menu_button.rs:Warp Drive
-./app/src/ui_components/menu_button.rs:Warp Drive
-./app/src/util/git.rs:"login
-./app/src/util/git_tests.rs:"login
-./app/src/util/git_tests.rs:"login
-./app/src/util/git_tests.rs:"login
-./app/src/util/git_tests.rs:"login
-./app/src/util/git_tests.rs:"login
-./app/src/util/git_tests.rs:"login
-./app/src/wasm_nux_dialog.rs:Warp Drive
-./app/src/workflows/aliases.rs:Warp Drive
-./app/src/workflows/workflow_view.rs:"Sign in
-./app/src/workflows/workflow_view.rs:"Upgrade
-./app/src/workflows/workflow_view.rs:"Upgrade
-./app/src/workflows/workflow_view.rs:AI credits
-./app/src/workflows/workflow_view.rs:AI credits
-./app/src/workflows/workflow_view.rs:Warp Drive
-./app/src/workflows/workflow_view.rs:more credits
-./app/src/workflows/workflow_view.rs:more credits
-./app/src/workflows/workflow_view.rs:more credits
-./app/src/workspace/action.rs:Warp Drive
-./app/src/workspace/action.rs:Warp Drive
-./app/src/workspace/action.rs:Warp Drive
-./app/src/workspace/action.rs:Warp Drive
-./app/src/workspace/home.rs:Warp Drive
-./app/src/workspace/mod.rs:"Log out
-./app/src/workspace/mod.rs:Warp Drive
-./app/src/workspace/mod.rs:Warp Drive
-./app/src/workspace/mod.rs:Warp Drive
-./app/src/workspace/mod.rs:Warp Drive
-./app/src/workspace/mod.rs:Warp Drive
-./app/src/workspace/view.rs:"Log out
-./app/src/workspace/view.rs:"Sign in
-./app/src/workspace/view.rs:"Sign up
-./app/src/workspace/view.rs:"Sign up
-./app/src/workspace/view.rs:"Sign up
-./app/src/workspace/view.rs:"Upgrade
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp Drive
-./app/src/workspace/view.rs:Warp drive
-./app/src/workspace/view.rs:Warp drive
-./app/src/workspace/view.rs:out of credits
+./app/src/terminal/shared_session/share_modal/denied_body.rs:upgrade
+./app/src/terminal/shared_session/share_modal/denied_body.rs:view plans
+./app/src/terminal/ssh/util.rs:login
+./app/src/terminal/ssh/util.rs:login
+./app/src/terminal/view.rs:cloud agent
+./app/src/terminal/view.rs:cloud agent
+./app/src/terminal/view.rs:login
+./app/src/terminal/view.rs:subscribe
+./app/src/terminal/view.rs:subscribe
+./app/src/terminal/view.rs:upgrade
+./app/src/terminal/view.rs:upgrade
+./app/src/terminal/view/action.rs:login
+./app/src/terminal/view/action.rs:login
+./app/src/terminal/view/action.rs:login
+./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:warp drive
+./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs:warp drive
+./app/src/terminal/view/docker_sandbox/mod.rs:warp drive
+./app/src/terminal/view/init_environment/mod.rs:cloud agent
+./app/src/terminal/view/init_project/mod.rs:cloud agent
+./app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:create an account
+./app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:logged-out
+./app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:login
+./app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs:sign up
+./app/src/terminal/view/inline_banner/aws_bedrock_login.rs:log in
+./app/src/terminal/view/inline_banner/prompt_suggestions.rs:credits
+./app/src/terminal/view/pane_impl.rs:cloud agent
+./app/src/terminal/view/shared_session/conversation_ended_tombstone_view.rs:cloud agent
+./app/src/terminal/view/shared_session/conversation_ended_tombstone_view.rs:credits
+./app/src/terminal/view/use_agent_footer/mod_tests.rs:cloud agent
+./app/src/terminal/view/use_agent_footer/mod_tests.rs:cloud agent
+./app/src/terminal/warpify/settings_tests.rs:login
+./app/src/terminal/warpify/settings_tests.rs:subscription
+./app/src/tui/mod.rs:log out
+./app/src/tui/mod.rs:logged out
+./app/src/tui/mod.rs:logout
+./app/src/uri/mod.rs:cloud agent
+./app/src/uri/mod.rs:cloud agent
+./app/src/util/git.rs:login
+./app/src/util/git.rs:login
+./app/src/util/git.rs:login
+./app/src/util/git_tests.rs:login
+./app/src/util/git_tests.rs:login
+./app/src/util/git_tests.rs:login
+./app/src/wasm_nux_dialog.rs:warp drive
+./app/src/workflows/aliases.rs:warp drive
+./app/src/workflows/categories.rs:upgrade
+./app/src/workflows/workflow_view.rs:credits
+./app/src/workflows/workflow_view.rs:credits
+./app/src/workflows/workflow_view.rs:credits
+./app/src/workflows/workflow_view.rs:credits
+./app/src/workflows/workflow_view.rs:sign in
+./app/src/workflows/workflow_view.rs:upgrade
+./app/src/workflows/workflow_view.rs:upgrade
+./app/src/workflows/workflow_view.rs:upgrade
+./app/src/workspace/bonus_grant_notification_model.rs:credits
+./app/src/workspace/mod.rs:cloud agent
+./app/src/workspace/mod.rs:log out
+./app/src/workspace/mod.rs:login
+./app/src/workspace/mod.rs:login
+./app/src/workspace/mod.rs:login
+./app/src/workspace/mod.rs:warp drive
+./app/src/workspace/mod.rs:warp drive
+./app/src/workspace/mod.rs:warp drive
+./app/src/workspace/mod.rs:warp drive
+./app/src/workspace/mod.rs:warp drive
+./app/src/workspace/view.rs:cloud agent
+./app/src/workspace/view.rs:log out
+./app/src/workspace/view.rs:login
+./app/src/workspace/view.rs:login
+./app/src/workspace/view.rs:login
+./app/src/workspace/view.rs:login
+./app/src/workspace/view.rs:login
+./app/src/workspace/view.rs:login
+./app/src/workspace/view.rs:sign in
+./app/src/workspace/view.rs:sign in
+./app/src/workspace/view.rs:sign up
+./app/src/workspace/view.rs:sign up
+./app/src/workspace/view.rs:sign up
+./app/src/workspace/view.rs:upgrade
 ./app/src/workspace/view.rs:warp drive
 ./app/src/workspace/view.rs:warp drive
 ./app/src/workspace/view.rs:warp drive
 ./app/src/workspace/view.rs:warp drive
 ./app/src/workspace/view.rs:warp drive
-./app/src/workspace/view.rs:warp drive
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:"Upgrade
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:AI credits
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:AI credits
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:AI credits
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:AI credits
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:Business plan
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:Business plan
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:Paid plan
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:Paid plan
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:billing
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:billing
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:billing
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:business plan
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:business plan
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:cloud agent
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:cloud agent
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:cloud agent
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:cloud agent
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:cloud agent
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:credits
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:credits
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:credits
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:credits
 ./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:free trial
 ./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:free trial
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
-./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade_url
-./app/src/workspace/view/left_panel.rs:Warp Drive
-./app/src/workspace/view/vertical_tabs.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp Drive
-./app/src/workspace/view_tests.rs:Warp drive
-./app/src/workspace/view_tests.rs:Warp drive
-./app/src/workspace/view_tests.rs:Warp drive
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:paid plan
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:paid plan
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade
+./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs:upgrade
+./app/src/workspace/view/global_search/view.rs:upgrade
+./app/src/workspace/view/left_panel.rs:warp drive
 ./app/src/workspace/view_tests.rs:warp drive
 ./app/src/workspace/view_tests.rs:warp drive
 ./app/src/workspace/view_tests.rs:warp drive
 ./app/src/workspace/view_tests.rs:warp drive
 ./app/src/workspace/view_tests.rs:warp drive
-./app/src/workspaces/gql_convert.rs:Business Plan
-./app/src/workspaces/gql_convert.rs:Business plan
-./app/src/workspaces/update_manager_tests.rs:Warp Drive
-./app/src/workspaces/user_workspaces.rs:"upgrade
-./crates/ai/src/agent/citation.rs:Warp Drive
-./crates/ai/src/aws_credentials.rs:"Log in
-./crates/cloud_object_client/src/lib.rs:Warp Drive
-./crates/cloud_object_models/src/ai_execution_profile.rs:Warp Drive
-./crates/cloud_objects/src/cloud_object/mod.rs:Warp Drive
-./crates/editor/src/content/markdown.rs:Warp Drive
-./crates/graphql/src/api/mutations/purchase_addon_credits.rs:"Purchase
-./crates/graphql/src/api/object.rs:"Upgrade
-./crates/graphql/src/managed_secrets.rs:Warp Drive
-./crates/integration/src/test.rs:Warp Drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspace/view_tests.rs:warp drive
+./app/src/workspaces/team.rs:credits
+./app/src/workspaces/team.rs:subscription
+./app/src/workspaces/user_workspaces.rs:upgrade
+./app/src/workspaces/user_workspaces_tests.rs:logged-out
+./crates/ai/src/agent/citation.rs:warp drive
+./crates/ai/src/aws_credentials.rs:log in
+./crates/computer_use/src/linux/wayland/screenshot.rs:subscribe
+./crates/graphql/src/api/ai.rs:credits
+./crates/graphql/src/api/billing.rs:credits
+./crates/graphql/src/api/billing.rs:credits
+./crates/graphql/src/api/billing.rs:credits
+./crates/graphql/src/api/billing.rs:credits
+./crates/graphql/src/api/mutations/purchase_addon_credits.rs:credits
+./crates/graphql/src/api/mutations/stripe_billing_portal.rs:billing
+./crates/graphql/src/api/object.rs:upgrade
+./crates/graphql/src/api/subscriptions/get_warp_drive_updates.rs:subscription
+./crates/graphql/src/api/subscriptions/mod.rs:subscription
+./crates/graphql/src/api/subscriptions/mod.rs:subscription
+./crates/graphql/src/api/subscriptions/mod.rs:subscription
 ./crates/integration/src/test.rs:warp drive
-./crates/mcp/src/lib.rs:"log out
-./crates/mcp/src/oauth.rs:"upgrade
-./crates/onboarding/src/lib.rs:Warp Drive
-./crates/onboarding/src/lib.rs:Warp Drive
-./crates/onboarding/src/lib.rs:Warp Drive
-./crates/onboarding/src/slides/customize_slide.rs:Warp Drive
-./crates/onboarding/src/slides/intro_slide.rs:"Log in
-./crates/onboarding/src/slides/theme_picker_slide.rs:Warp Drive
-./crates/onboarding/src/telemetry.rs:"Log in
-./crates/onboarding/src/telemetry.rs:"Upgrade
-./crates/settings/src/lib.rs:Warp Drive
-./crates/settings/src/lib.rs:Warp Drive
-./crates/settings/src/macros.rs:"upgrade
-./crates/warp_cli/src/lib.rs:"login
-./crates/warp_cli/src/lib.rs:"logout
-./crates/warp_cli/src/lib_tests.rs:"login
-./crates/warp_cli/src/lib_tests.rs:"login
-./crates/warp_cli/src/lib_tests.rs:"login
-./crates/warp_cli/src/lib_tests.rs:"login
-./crates/warp_cli/src/lib_tests.rs:"logout
-./crates/warp_cli/src/local_control/mod.rs:Warp Drive
-./crates/warp_core/src/channel/config.rs:Warp Drive
-./crates/warp_core/src/paths.rs:Warp Drive
-./crates/warp_core/src/sync_queue.rs:"subscribe
-./crates/warp_core/src/sync_queue_tests.rs:"subscribe
-./crates/warp_features/src/lib.rs:Warp Drive
-./crates/warp_features/src/lib.rs:Warp Drive
-./crates/warp_features/src/lib.rs:Warp Drive
-./crates/warp_features/src/lib.rs:Warp Drive
-./crates/warp_features/src/lib.rs:Warp Drive
-./crates/warp_search_core/src/data_source.rs:Warp Drive
-./crates/warp_search_core/src/data_source.rs:Warp Drive
-./crates/warp_tui/src/agent_block.rs:Compare plans
-./crates/warp_tui/src/mcp_menu.rs:"Log out
-./crates/warp_tui/src/terminal_session_view_tests.rs:Compare plans
-./crates/warp_tui/src/terminal_session_view_tests.rs:Out of credits
-./crates/warp_tui/src/ui.rs:"Login
-./crates/warp_tui/src/ui.rs:"Sign in
-./crates/warp_util/src/sync.rs:Warp Drive
-./crates/warpui_core/src/core/app.rs:"subscribe
-./crates/warpui_core/src/core/app.rs:"subscribe
-./crates/warpui_core/src/core/mod_tests.rs:"Subscribe
-./crates/warpui_core/src/core/mod_tests.rs:"Subscribe
-./crates/warpui_core/src/core/mod_tests.rs:"Subscribe
-./crates/warpui_core/src/core/mod_tests.rs:"Subscribe
-./crates/warpui_core/src/core/transfer_view_tests.rs:"Subscribe
-./crates/warpui_core/src/core/transfer_view_tests.rs:"upgrade
-./crates/warpui_core/src/core/tui_view_tests.rs:"Subscribe
-./crates/warpui_core/src/elements/gui/clipped_scrollable.rs:warp drive
-./crates/warpui_core/src/elements/gui/new_scrollable/dual_axis_config.rs:warp drive
-./crates/warpui_core/src/elements/gui/new_scrollable/single_axis_config.rs:warp drive
+./crates/integration/src/test/ssh.rs:login
+./crates/integration/src/test/ssh.rs:login
+./crates/integration/src/test/ssh.rs:login
+./crates/integration/src/test/video_recording.rs:log in
+./crates/local_control/src/protocol_tests.rs:login
+./crates/mcp/src/lib.rs:log out
+./crates/mcp/src/oauth.rs:login
+./crates/mcp/src/oauth.rs:upgrade
+./crates/onboarding/src/lib.rs:warp drive
+./crates/onboarding/src/slides/customize_slide.rs:warp drive
+./crates/onboarding/src/slides/intro_slide.rs:log in
+./crates/onboarding/src/telemetry.rs:log in
+./crates/onboarding/src/telemetry.rs:log in
+./crates/onboarding/src/telemetry.rs:log in
+./crates/onboarding/src/telemetry.rs:login
+./crates/onboarding/src/telemetry.rs:login
+./crates/onboarding/src/telemetry.rs:upgrade
+./crates/onboarding/src/telemetry.rs:upgrade
+./crates/onboarding/src/telemetry.rs:upgrade
+./crates/onboarding/src/telemetry.rs:upgrade
+./crates/onboarding/src/telemetry.rs:upgrade
+./crates/remote_server/src/manager.rs:subscribe
+./crates/remote_server/src/setup_tests.rs:login
+./crates/repo_metadata/src/local_model.rs:subscribe
+./crates/repo_metadata/src/local_model_tests.rs:subscribe
+./crates/repo_metadata/src/local_model_tests.rs:subscribe
+./crates/repo_metadata/src/local_model_tests.rs:upgrade
+./crates/repo_metadata/src/local_model_tests.rs:upgrade
+./crates/repo_metadata/src/local_model_tests.rs:upgrade
+./crates/repo_metadata/src/local_model_tests.rs:upgrade
+./crates/repo_metadata/src/local_model_tests.rs:upgrade
+./crates/repo_metadata/src/local_model_tests.rs:upgrade
+./crates/repo_metadata/src/repository.rs:subscribe
+./crates/repo_metadata/src/watcher_tests.rs:subscribe
+./crates/repo_metadata/src/watcher_tests.rs:subscribe
+./crates/repo_metadata/src/watcher_tests.rs:subscribe
+./crates/repo_metadata/src/watcher_tests.rs:subscribe
+./crates/repo_metadata/src/watcher_tests.rs:subscribe
+./crates/repo_metadata/src/watcher_tests.rs:subscribe
+./crates/settings/src/macros.rs:upgrade
+./crates/warp_cli/src/lib.rs:login
+./crates/warp_cli/src/lib.rs:logout
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:login
+./crates/warp_cli/src/lib_tests.rs:logout
+./crates/warp_cli/src/lib_tests.rs:logout
+./crates/warp_core/src/sync_queue.rs:subscribe
+./crates/warp_core/src/sync_queue_tests.rs:subscribe
+./crates/warp_core/src/ui/icons.rs:credits
+./crates/warp_files/src/lib.rs:subscribe
+./crates/warp_files/src/lib.rs:subscribe
+./crates/warp_search_core/src/data_source.rs:warp drive
+./crates/warp_server_auth/src/auth_state.rs:login
+./crates/warp_server_auth/src/auth_state.rs:login
+./crates/warp_server_auth/src/auth_state.rs:login
+./crates/warp_server_auth/src/auth_state.rs:login
+./crates/warp_server_auth/src/auth_state.rs:login
+./crates/warp_server_auth/src/auth_state.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_auth/src/credentials.rs:login
+./crates/warp_server_client/src/auth/session.rs:login
+./crates/warp_server_client/src/auth/session.rs:login
+./crates/warp_server_client/src/auth/session.rs:login
+./crates/warp_tui/src/agent_block.rs:compare plans
+./crates/warp_tui/src/mcp_menu.rs:log out
+./crates/warp_tui/src/terminal_session_view.rs:subscribe
+./crates/warp_tui/src/terminal_session_view_tests.rs:compare plans
+./crates/warp_tui/src/terminal_session_view_tests.rs:credits
+./crates/warp_tui/src/terminal_session_view_tests.rs:credits
+./crates/warp_tui/src/terminal_session_view_tests.rs:credits
+./crates/warp_tui/src/terminal_session_view_tests.rs:credits
+./crates/warp_tui/src/ui.rs:login
+./crates/warp_tui/src/ui.rs:sign in
+./crates/warp_tui/src/usage_tests.rs:credits
+./crates/warp_tui/src/usage_tests.rs:credits
+./crates/warp_tui/src/usage_tests.rs:credits
+./crates/warp_tui/src/usage_tests.rs:credits
+./crates/warpui/src/windowing/winit/linux/zbus/suspend_resume.rs:login
+./crates/warpui/src/windowing/winit/linux/zbus/suspend_resume.rs:login
+./crates/warpui/src/windowing/winit/linux/zbus/suspend_resume.rs:login
+./crates/warpui_core/src/core/app.rs:subscribe
+./crates/warpui_core/src/core/app.rs:subscribe
+./crates/warpui_core/src/core/app.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscribe
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/mod_tests.rs:subscription
+./crates/warpui_core/src/core/model/context.rs:subscribe
+./crates/warpui_core/src/core/ref_count_tests.rs:upgrade
+./crates/warpui_core/src/core/ref_count_tests.rs:upgrade
+./crates/warpui_core/src/core/transfer_view_tests.rs:subscribe
+./crates/warpui_core/src/core/transfer_view_tests.rs:upgrade
+./crates/warpui_core/src/core/transfer_view_tests.rs:upgrade
+./crates/warpui_core/src/core/transfer_view_tests.rs:upgrade
+./crates/warpui_core/src/core/tui_view_tests.rs:subscribe
+./crates/websocket/src/proxy.rs:upgrade
+./crates/websocket/src/proxy.rs:upgrade

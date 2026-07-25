@@ -8,12 +8,14 @@
 # to `/`, found no scan roots, and exited 2 -- the expected status, for entirely the wrong
 # reason. An UNMODIFIED copy would have "passed" that test identically. It proved nothing.
 #
-# Three rules follow, and every case here obeys them:
+# Four rules follow, and every case here obeys them:
 #   1. Assert the exact status AND the expected message. Any-nonzero would let an unrelated
 #      failure pose as a working canary on a gate that is broken in some other way.
 #   2. Every negative case needs a POSITIVE CONTROL proving the harness is sound -- that the
 #      case fails for the reason claimed rather than by construction.
-#   3. Never destroy state this script did not create.
+#   3. Test what the gate actually DOES, not a proxy for it. Raising a file-count floor tests
+#      the floor; it says nothing about whether the collector reads the whole tree.
+#   4. Never create, overwrite or delete a path this script did not allocate itself.
 #
 # Mutated copies live in script/heddle/ so REPO_ROOT still resolves to the repository.
 
@@ -25,47 +27,50 @@ cd "$REPO_ROOT" || { echo "could not cd to $REPO_ROOT"; exit 2; }
 
 GATE=script/heddle/gui-surface-gate
 BASELINE=script/heddle/gui-surfaces.baseline
-CANARY=app/src/__gate_selftest_canary.rs
-MUTANT=script/heddle/.gate-selftest-mutant
-CONTROL=script/heddle/.gate-selftest-control
 
 failures=0
 backup_ready=false
-BACKUP="$(mktemp)" || { echo "mktemp failed"; exit 2; }
+BACKUP=""
+CANARY_DIR=""
+REMOTE_DIR=""
+SCRATCH=()
 
-# Refuse to clobber. These are fixed paths, so a stray file of the same name -- someone's own
-# scratch canary, an interrupted earlier run -- would be silently overwritten and then deleted
-# by the trap below. Destroying a file this script did not create is not an acceptable cost of
-# testing.
-for path in "$CANARY" "$MUTANT" "$CONTROL"; do
-  if [[ -e "$path" ]]; then
-    echo "refusing to run: $path already exists and would be overwritten and deleted."
-    echo "Move it aside first."
-    exit 2
-  fi
-done
-
-# Restore state even if an assertion aborts mid-run.
+# Restore state even if an assertion aborts mid-run, and delete ONLY what was allocated here.
 #
-# `[[ -s "$BACKUP" ]]` was wrong here: -s is false for an empty file, and an empty baseline is
-# precisely the expected END STATE of this sweep. The moment the last commercial surface is
-# deleted, this trap would silently decline to restore the baseline it had just overwritten.
-# A flag set only after a verified copy is the correct guard, and a failed restore must be
-# loud rather than followed by deleting the only backup.
+# Fixed scratch paths guarded by a preflight existence check were not good enough: creation and
+# deletion happen later, so a concurrent process creating the same name in between would have
+# its file overwritten and then removed. Every path below comes from mktemp, which allocates
+# atomically, and the trap is installed before the first allocation.
+#
+# `[[ -s "$BACKUP" ]]` was also wrong as a restore guard: -s is false for an empty file, and an
+# empty baseline is precisely the expected END STATE of this sweep. The moment the last
+# commercial surface is deleted, that guard would silently decline to restore the baseline it
+# had just overwritten. A flag set only after a verified copy is correct, and a failed restore
+# must be loud rather than followed by deleting the only backup.
 cleanup() {
-  rm -f "$CANARY" "$MUTANT" "$CONTROL"
+  [[ -n "$CANARY_DIR" ]] && rm -rf "$CANARY_DIR"
+  [[ -n "$REMOTE_DIR" ]] && rm -rf "$REMOTE_DIR"
+  local p
+  for p in "${SCRATCH[@]:-}"; do [[ -n "$p" ]] && rm -f "$p"; done
   if [[ "$backup_ready" == true ]]; then
     if ! cp "$BACKUP" "$BASELINE"; then
       echo "CRITICAL: could not restore $BASELINE from $BACKUP -- it is NOT being deleted." >&2
       exit 2
     fi
   fi
-  rm -f "$BACKUP"
+  [[ -n "$BACKUP" ]] && rm -f "$BACKUP"
 }
 trap cleanup EXIT
 
+BACKUP="$(mktemp)" || { echo "mktemp failed"; exit 2; }
 cp "$BASELINE" "$BACKUP" || { echo "could not back up the baseline"; exit 2; }
 backup_ready=true
+
+# mktemp -d because BSD mktemp cannot append a .rs suffix to a template; the directory is
+# allocated atomically and the canary file goes inside it. A stray .rs file that no mod.rs
+# references is not compiled, so this cannot break the build.
+CANARY_DIR="$(mktemp -d app/src/__gate_selftest_XXXXXX)" || { echo "mktemp -d failed"; exit 2; }
+CANARY="$CANARY_DIR/canary.rs"
 
 # expect <label> <script> <want_status> <want_text> [args...]
 expect() {
@@ -96,11 +101,17 @@ printf 'fn canary() -> &%sstatic str { "Upgrade plan" }\n' "'" > "$CANARY"
 expect "added-surface" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
 rm -f "$CANARY"
 
-echo "1b. Case and phrasing variants must be caught, not just the canonical spelling."
-# "Sign Up" and "Create an account" were live in the tree and absent from the baseline under
-# the original case-sensitive, quote-anchored pattern. This case is the regression test.
+echo "1b. Case variants must be caught, not just the canonical spelling."
+# "Sign Up" was live in the tree and absent from the baseline under a case-sensitive pattern.
 printf 'fn canary() -> &%sstatic str { "Sign Up" }\n' "'" > "$CANARY"
 expect "case-variant" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
+rm -f "$CANARY"
+
+echo "1c. MID-LITERAL copy must be caught, not just markers that open a literal."
+# The regression test for the anchoring defect. All three of these were rendered in the GUI and
+# absent from the baseline, because anchoring only ever saw the first words of a literal.
+printf 'fn canary() -> &%sstatic str { "AI features are unavailable for logged-out users. Create an account to use AI." }\n' "'" > "$CANARY"
+expect "mid-literal" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
 rm -f "$CANARY"
 
 echo "2. --update must REFUSE to baseline an addition without --allow-additions."
@@ -121,18 +132,40 @@ expect "stale-baseline" "./$GATE" 3 "baseline is now stale" --surfaces-only
 cp "$BACKUP" "$BASELINE"
 
 echo "4. A missing baseline must not let --update bless the whole tree silently."
-mv "$BASELINE" "$BACKUP.moved" || { echo "  FAIL: could not move baseline aside"; failures=$((failures+1)); }
+MOVED="$(mktemp)"; SCRATCH+=("$MOVED")
+mv "$BASELINE" "$MOVED" || { echo "  FAIL: could not move baseline aside"; failures=$((failures+1)); }
 expect "bootstrap-needs-consent" "./$GATE" 1 "would bless every surface" --update
-mv "$BACKUP.moved" "$BASELINE" || { echo "  FAIL: could not restore baseline"; failures=$((failures+1)); }
 
-echo "5. A scan that walked almost nothing must fail closed."
+echo "4b. CONTROL: with the baseline absent, an EXPLICIT bootstrap must SUCCEED."
+# Without this, case 4 would still 'pass' against an implementation that rejects bootstrapping
+# unconditionally -- refusing everything is not the same as requiring consent.
+expect "control-bootstrap" "./$GATE" 0 "Bootstrapped" --update --allow-additions
+cp "$MOVED" "$BASELINE" || { echo "  FAIL: could not restore baseline"; failures=$((failures+1)); }
+
+echo "5. The collector must read the WHOLE tree, not a familiar subset of it."
+# Raising MIN_RS_TOTAL only exercises the file-count floor, which says nothing about the
+# collector's reach: a regression that scanned just app/src would satisfy every other case
+# here, and would do so most convincingly at the empty-baseline end state this sweep is aiming
+# for. So plant a real marker in a crate far outside the directories the gate used to name, and
+# require the gate to find it.
+REMOTE_DIR="$(mktemp -d crates/warp_util/src/__gate_selftest_XXXXXX)" || {
+  echo "  FAIL [whole-tree-coverage]: could not allocate a directory outside app/src"
+  failures=$((failures + 1)); REMOTE_DIR=""; }
+if [[ -n "$REMOTE_DIR" ]]; then
+  printf 'fn canary() -> &%sstatic str { "Compare plans" }\n' "'" > "$REMOTE_DIR/canary.rs"
+  expect "whole-tree-coverage" "./$GATE" 1 "adds commercial UI surfaces" --surfaces-only
+  rm -rf "$REMOTE_DIR"; REMOTE_DIR=""
+fi
+
+echo "6. A scan that walked almost nothing must fail closed."
 # CONTROL FIRST: an unmodified copy at this same path must PASS. Without it, this case would
-# still 'succeed' if the sed silently stopped matching -- which is exactly how the original
-# version of this suite fooled itself.
+# still 'succeed' if the sed silently stopped matching -- exactly how the original version of
+# this suite fooled itself.
+CONTROL="$(mktemp script/heddle/.gate-selftest-XXXXXX)"; SCRATCH+=("$CONTROL")
 cp "$GATE" "$CONTROL" && chmod +x "$CONTROL"
 expect "control-unmodified-copy" "./$CONTROL" 0 "PASS: commercial UI surface" --surfaces-only
-rm -f "$CONTROL"
 
+MUTANT="$(mktemp script/heddle/.gate-selftest-XXXXXX)"; SCRATCH+=("$MUTANT")
 sed 's/^MIN_RS_TOTAL=2000$/MIN_RS_TOTAL=999999/' "$GATE" > "$MUTANT"
 if ! grep -q 'MIN_RS_TOTAL=999999' "$MUTANT"; then
   echo "  FAIL [truncated-scan]: the substitution did not apply; this case would be vacuous."
@@ -141,20 +174,23 @@ else
   chmod +x "$MUTANT"
   expect "truncated-scan" "./$MUTANT" 2 "expected >=" --surfaces-only
 fi
-rm -f "$MUTANT"
 
-echo "6. A missing toolchain must be infrastructure (2), not a compile failure (1)."
+echo "7. A missing toolchain must be infrastructure (2), not a compile failure (1)."
 # Not hypothetical: the gate's first run had no cargo on PATH, exited 127, and announced "the
 # GUI does not compile" while printing no errors, because there were none.
 #
 # Two controls, because the bare assertion is satisfiable by any infrastructure failure at all:
 # cargo must actually BE on the normal PATH, and must actually be ABSENT from the reduced one.
-# Otherwise this case would keep passing on a machine with no Rust installed, where it proves
-# nothing about the gate's ability to tell the two apart.
+# Otherwise this case keeps passing on a machine with no Rust installed, proving nothing about
+# the gate's ability to tell the two apart.
+#
+# The absence check runs `command` inside /bin/sh: `command` is a shell builtin, so
+# `env PATH=... command -v cargo` would look for an EXTERNAL binary named `command`, fail to
+# find one, and report cargo absent without ever having looked for cargo.
 if ! command -v cargo >/dev/null; then
   echo "  FAIL [missing-toolchain]: cargo is not on PATH, so this case cannot prove anything."
   failures=$((failures + 1))
-elif env PATH=/usr/bin:/bin command -v cargo >/dev/null; then
+elif env PATH=/usr/bin:/bin /bin/sh -c 'command -v cargo >/dev/null'; then
   echo "  FAIL [missing-toolchain]: cargo is reachable from the reduced PATH; case is vacuous."
   failures=$((failures + 1))
 else
