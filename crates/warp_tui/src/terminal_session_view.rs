@@ -1011,15 +1011,8 @@ impl TuiTerminalSessionView {
                 ctx,
             )
         });
-        ctx.subscribe_to_model(&conversation_menu, |view, _, event, ctx| match event {
+        ctx.subscribe_to_model(&conversation_menu, |_, _, event, ctx| match event {
             TuiConversationMenuEvent::Updated => ctx.notify(),
-            TuiConversationMenuEvent::CloudMetadataUnavailable => {
-                view.show_transient_hint(
-                    "Could not load cloud conversations. Showing local conversations only."
-                        .to_owned(),
-                    ctx,
-                );
-            }
         });
         let model_menu = ctx.add_model(|ctx| {
             TuiModelMenuModel::new(input_editor_model.clone(), suggestions_mode.clone(), ctx)

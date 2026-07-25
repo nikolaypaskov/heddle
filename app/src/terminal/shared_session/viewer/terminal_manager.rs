@@ -1675,16 +1675,9 @@ impl TerminalManager {
             ) {
                 return false;
             }
-            // Non-owner viewers (read-only) won't get a follow-up session;
-            // owners may handoff via `attach_execution_session` (same
-            // `TerminalManager`, same orchestrator `task_id`), so keep their
-            // model.
-            let is_owner = terminal_view.read(ctx, |terminal_view, app| {
-                terminal_view.owned_ambient_agent_task_id(app).is_some()
-            });
-            if !is_owner {
-                Self::stop_orchestration_polling(orchestration_viewer_model, ctx);
-            }
+            // Heddle (FOSS): without the cloud task cache no viewer is ever resolvable as the
+            // run's owner, so polling always stops here.
+            Self::stop_orchestration_polling(orchestration_viewer_model, ctx);
         } else {
             Self::stop_orchestration_polling(orchestration_viewer_model, ctx);
             Self::shared_session_ended(terminal_view, model, ctx);
@@ -1755,16 +1748,11 @@ impl TerminalManager {
             .clear_write_to_pty_events_for_shared_session_tx();
         if FeatureFlag::HandoffCloudCloud.is_enabled() {
             terminal_view.update(ctx, |terminal_view, ctx| {
-                // Owned ambient tasks remain editable Cloud Mode panes after their live shared
-                // session ends; non-owners are still read-only viewers of a finished session.
-                let owns_ambient_task = terminal_view.owned_ambient_agent_task_id(ctx).is_some();
+                // Heddle (FOSS): no viewer resolves as the run's owner, so an ended shared
+                // ambient session always leaves a read-only finished viewer.
                 model
                     .lock()
-                    .set_shared_session_status(if owns_ambient_task {
-                        SharedSessionStatus::NotShared
-                    } else {
-                        SharedSessionStatus::FinishedViewer
-                    });
+                    .set_shared_session_status(SharedSessionStatus::FinishedViewer);
                 terminal_view.on_ambient_agent_execution_ended(ctx);
             });
         }

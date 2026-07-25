@@ -12,10 +12,7 @@ use warp_cli::agent::Harness;
 use warpui::{AppContext, SingletonEntity};
 
 use crate::ai::agent::conversation::ConversationStatus;
-use crate::ai::agent_conversations_model::{
-    AgentConversationEntry, AgentConversationProvenance, AgentConversationsModel,
-    AgentRunDisplayStatus,
-};
+use crate::ai::agent_conversations_model::AgentConversationEntry;
 use crate::terminal::CLIAgent;
 use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::view::TerminalView;
@@ -44,15 +41,6 @@ pub(crate) fn terminal_view_agent_icon_variant(
         .selected_conversation_server_metadata(app)
         .and_then(|m| m.ambient_agent_task_id);
 
-    // Resolve the ambient task id from [`TerminalView::ambient_agent_task_id_for_details_panel`],
-    // falling back to the server metadata above. Used only to look up task data for status; the
-    // cloud-vs-local treatment is decided by `is_cloud` below.
-    let ambient_task_id = terminal_view
-        .ambient_agent_task_id_for_details_panel(app)
-        .or(server_ambient_task_id);
-    let task_data = ambient_task_id
-        .and_then(|task_id| AgentConversationsModel::as_ref(app).get_task_data(&task_id));
-
     // Local orchestration children are dispatched as server tasks (so they carry an ambient
     // task id) but execute on the user's machine, so they must not get the cloud treatment.
     let is_local_child = terminal_view.selected_conversation_is_local_child(app);
@@ -64,20 +52,6 @@ pub(crate) fn terminal_view_agent_icon_variant(
     // orchestration children always keep the local treatment.
     let is_cloud = (terminal_view.is_cloud_agent_session(app) || server_ambient_task_id.is_some())
         && !is_local_child;
-
-    // Defer to the card helper when we have task data and no CLI session takes precedence.
-    if cli_agent_session.is_none()
-        && let Some(task) = task_data.as_ref()
-    {
-        let status = AgentRunDisplayStatus::from_task(task, app).to_conversation_status();
-        let harness = task
-            .agent_config_snapshot
-            .as_ref()
-            .and_then(|config| config.harness.as_ref())
-            .map(|harness| harness.harness_type)
-            .unwrap_or(Harness::Oz);
-        return Some(agent_icon_variant_for_run(harness, status, is_cloud));
-    }
 
     let inputs = TerminalIconInputs {
         is_ambient: is_cloud,
@@ -100,9 +74,8 @@ pub(crate) fn agent_conversation_entry_icon_variant(
     entry: &AgentConversationEntry,
 ) -> IconWithStatusVariant {
     let status = entry.display.status.to_conversation_status();
-    let is_ambient = matches!(entry.provenance, AgentConversationProvenance::AmbientRun)
-        || entry.backing.has_ambient_run
-        || entry.identity.ambient_agent_task_id.is_some();
+    let is_ambient =
+        entry.backing.has_ambient_run || entry.identity.ambient_agent_task_id.is_some();
     agent_icon_variant_for_run(
         entry.display.harness.unwrap_or(Harness::Oz),
         status,

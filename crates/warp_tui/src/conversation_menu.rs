@@ -9,7 +9,7 @@ use warp::editor::{CodeEditorModel, CodeEditorModelEvent};
 use warp::tui_export::{
     AgentConversationEntryId, AgentConversationListEntryState, AgentConversationsModel,
     AgentConversationsModelEvent, AgentManagementFilters, ConversationSelectionHandle, Harness,
-    HarnessFilter, agent_conversations_cloud_metadata_load_failed, query_conversation_entries,
+    HarnessFilter, query_conversation_entries,
 };
 use warp_editor::model::CoreEditorModel;
 use warpui_core::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity, WindowId};
@@ -41,7 +41,6 @@ enum TuiConversationMenuState {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum TuiConversationMenuEvent {
     Updated,
-    CloudMetadataUnavailable,
 }
 
 /// Query, selection, and model-subscription state for `/conversations`.
@@ -51,7 +50,6 @@ pub(crate) struct TuiConversationMenuModel {
     conversation_selection: ConversationSelectionHandle,
     window_id: WindowId,
     state: TuiConversationMenuState,
-    cloud_warning_shown: bool,
 }
 
 impl TuiConversationMenuModel {
@@ -82,7 +80,6 @@ impl TuiConversationMenuModel {
             conversation_selection,
             window_id,
             state: TuiConversationMenuState::Closed,
-            cloud_warning_shown: false,
         }
     }
 
@@ -112,7 +109,6 @@ impl TuiConversationMenuModel {
         let mut list = TuiInlineMenuListState::default();
         list.set_loading(true);
         self.state = TuiConversationMenuState::Open { list };
-        self.cloud_warning_shown = false;
         let window_id = self.window_id;
         let model_id = ctx.model_id();
         AgentConversationsModel::handle(ctx).update(ctx, |model, ctx| {
@@ -230,7 +226,6 @@ impl TuiConversationMenuModel {
         };
         let conversations_model = AgentConversationsModel::as_ref(ctx);
         let is_loading = conversations_model.is_loading();
-        let cloud_metadata_load_failed = agent_conversations_cloud_metadata_load_failed(ctx);
         let rows = if is_loading {
             Vec::new()
         } else {
@@ -262,10 +257,6 @@ impl TuiConversationMenuModel {
         list.replace_rows(rows, is_loading, preferred_index, MAX_VISIBLE_ROWS, |_| {
             true
         });
-        if cloud_metadata_load_failed && !self.cloud_warning_shown {
-            self.cloud_warning_shown = true;
-            ctx.emit(TuiConversationMenuEvent::CloudMetadataUnavailable);
-        }
         ctx.emit(TuiConversationMenuEvent::Updated);
     }
 }

@@ -3629,7 +3629,7 @@ impl Input {
         // attached to a live session.
         let ai_query_routing = {
             let model = self.model.lock();
-            resolve_ai_query_routing(self.terminal_view_id, &model, ctx)
+            resolve_ai_query_routing(&model)
         };
         match ai_query_routing {
             AIQueryRouting::Local => false,
@@ -3658,19 +3658,6 @@ impl Input {
                     // and submit the prompt to the running remote VM. Or, auto close and reopen the link.
                     self.show_ephemeral_error_toast(
                         "This pane is out of date. Reopen the Oz session link in a new pane and try submitting again.",
-                        ctx,
-                    );
-                }
-                true
-            }
-            AIQueryRouting::NewCloudVm { .. } => {
-                if FeatureFlag::HandoffCloudCloud.is_enabled() {
-                    let prompt = self.editor.as_ref(ctx).buffer_text(ctx).trim().to_owned();
-                    ctx.emit(Event::SubmitCloudFollowup { prompt });
-                } else {
-                    // Cloud-to-cloud follow-up is unavailable; block rather than run locally.
-                    self.show_ephemeral_error_toast(
-                        "This cloud conversation can't continue on your local machine.",
                         ctx,
                     );
                 }
@@ -5279,8 +5266,7 @@ impl Input {
         // This is a safety net to prevent invoking skills locally when follow ups are not supposed to run locally, in case some skills are showing up in the menu.
         // Currently skills are populated by the local machine's state and are always run locally below.
         // TODO: consider populating the skills menu with skills in the remote machine, and forward to the remote machine.
-        let ai_query_routing =
-            resolve_ai_query_routing(self.terminal_view_id, &self.model.lock(), ctx);
+        let ai_query_routing = resolve_ai_query_routing(&self.model.lock());
         if !ai_query_routing.is_local() {
             let window_id = ctx.window_id();
             ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {

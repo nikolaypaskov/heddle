@@ -9,7 +9,6 @@ use super::{
     CreatedOnFilter, CreatorFilter, EnvironmentFilter, HarnessFilter, OwnerFilter, SessionStatus,
     SourceFilter, StatusFilter, artifacts_match_filter,
 };
-use crate::ai::active_agent_views_model::{ActiveAgentViewsModel, ConversationOrTaskId};
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::ambient_agents::{AgentSource, AmbientAgentTask, AmbientAgentTaskId};
@@ -24,31 +23,15 @@ use crate::workspaces::user_profiles::{UserProfileWithUID, UserProfiles};
 const SESSION_EXPIRATION_TIME: chrono::Duration = chrono::Duration::weeks(1);
 
 /// Stable projection identity used by list and navigation surfaces.
-///
-/// Task-backed rows use the ambient run ID even when they are attached to a local
-/// conversation, so task-specific affordances do not disappear when local data is present.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AgentConversationEntryId {
-    AmbientRun(AmbientAgentTaskId),
     Conversation(AIConversationId),
 }
 
 impl AgentConversationEntryId {
     pub fn as_key(&self) -> String {
         match self {
-            AgentConversationEntryId::AmbientRun(id) => format!("task_{id}"),
             AgentConversationEntryId::Conversation(id) => format!("conv_{id}"),
-        }
-    }
-}
-
-impl From<ConversationOrTaskId> for AgentConversationEntryId {
-    fn from(id: ConversationOrTaskId) -> Self {
-        match id {
-            ConversationOrTaskId::ConversationId(conversation_id) => {
-                AgentConversationEntryId::Conversation(conversation_id)
-            }
-            ConversationOrTaskId::TaskId(task_id) => AgentConversationEntryId::AmbientRun(task_id),
         }
     }
 }
@@ -141,7 +124,6 @@ pub struct AgentConversationPrincipal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AgentConversationProvenance {
     LocalInteractive,
-    AmbientRun,
     CloudSyncedConversation,
 }
 
@@ -275,27 +257,6 @@ impl AgentConversationEntry {
         )
         .is_some()
     }
-}
-
-/// Returns the local conversation ID represented by the given task, if this task and a
-/// conversation entry both point at the same underlying local run.
-///
-/// We first match using the orchestration agent ID (task ID / run ID under v2), and fall back
-/// to the server conversation token for cases where the task only carries conversation identity
-/// through `conversation_id`.
-pub(super) fn conversation_id_shadowed_by_task(
-    task: &AmbientAgentTask,
-    history_model: &BlocklistAIHistoryModel,
-) -> Option<AIConversationId> {
-    history_model
-        .conversation_id_for_agent_id(&task.run_id().to_string())
-        .or_else(|| {
-            task.conversation_id().and_then(|conversation_id| {
-                history_model.find_conversation_id_by_server_token(&ServerConversationToken::new(
-                    conversation_id.to_string(),
-                ))
-            })
-        })
 }
 
 pub(super) fn task_creator_name(task: &AmbientAgentTask, app: &AppContext) -> Option<String> {
@@ -443,104 +404,6 @@ fn conversation_creator(
         name: current_user_name(app),
         uid: current_user_uid(app),
         principal_type: Some(PrincipalType::User),
-    }
-}
-
-pub(super) fn entry_for_task(
-    task: &AmbientAgentTask,
-    history_model: &BlocklistAIHistoryModel,
-    app: &AppContext,
-) -> AgentConversationEntry {
-    let local_conversation_id = conversation_id_shadowed_by_task(task, history_model);
-    let conversation_metadata =
-        local_conversation_id.and_then(|id| history_model.get_conversation_metadata(&id));
-    let server_conversation_token = task
-        .conversation_id()
-        .map(|id| ServerConversationToken::new(id.to_string()))
-        .or_else(|| {
-            local_conversation_id.and_then(|conversation_id| {
-                server_conversation_token_for_conversation(conversation_id, None, history_model)
-            })
-        });
-    let status = AgentRunDisplayStatus::from_task(task, app);
-    let has_active_session_id = task
-        .active_execution_session_id()
-        .and_then(parse_session_id)
-        .is_some();
-    let has_open_ambient_session = ActiveAgentViewsModel::as_ref(app)
-        .get_terminal_view_id_for_ambient_task(task.task_id)
-        .is_some();
-    let can_open = has_open_ambient_session
-        || has_active_session_id
-        || local_conversation_id.is_some()
-        || server_conversation_token.is_some();
-    let can_copy_link = task.has_active_execution()
-        && task.active_run_execution().session_link.is_some()
-        || server_conversation_token.is_some();
-
-    AgentConversationEntry {
-        id: AgentConversationEntryId::AmbientRun(task.task_id),
-        identity: AgentConversationIdentity {
-            local_conversation_id,
-            ambient_agent_task_id: Some(task.task_id),
-            server_conversation_token,
-            session_id: task_session_id(task),
-        },
-        provenance: AgentConversationProvenance::AmbientRun,
-        display: AgentConversationDisplayData {
-            title: task.title.clone(),
-            initial_query: Some(task.prompt.clone()),
-            created_at: task.created_at,
-            last_updated: task.updated_at,
-            status: status.clone(),
-            creator: AgentConversationPrincipal {
-                name: task_creator_name(task, app),
-                uid: task_creator_uid(task),
-                principal_type: task
-                    .creator
-                    .as_ref()
-                    .and_then(|c| PrincipalType::parse(&c.creator_type)),
-            },
-            executor: task
-                .executor
-                .as_ref()
-                .map(|executor| AgentConversationPrincipal {
-                    name: executor.display_name.clone(),
-                    uid: Some(executor.uid.clone()),
-                    principal_type: PrincipalType::parse(&executor.creator_type),
-                }),
-            request_usage: task.credits_used(),
-            run_time: task_run_time(task),
-            session_status: Some(task_session_status(task)),
-            source: task.source.clone(),
-            working_directory: conversation_metadata
-                .and_then(|metadata| metadata.initial_working_directory.clone()),
-            environment_id: task
-                .agent_config_snapshot
-                .as_ref()
-                .and_then(|snapshot| snapshot.environment_id.clone()),
-            harness: task_harness(task),
-            artifacts: task.artifacts.clone(),
-        },
-        backing: AgentConversationBackingData {
-            has_loaded_conversation: local_conversation_id
-                .is_some_and(|id| history_model.conversation(&id).is_some()),
-            has_local_persisted_data: conversation_metadata
-                .is_some_and(|metadata| metadata.has_local_data),
-            has_cloud_data: conversation_metadata.is_some_and(|metadata| metadata.has_cloud_data)
-                || task.conversation_id().is_some(),
-            has_ambient_run: true,
-        },
-        capabilities: AgentConversationCapabilities {
-            can_open,
-            can_copy_link,
-            can_share: task.conversation_id().is_some()
-                || local_conversation_id
-                    .is_some_and(|id| history_model.can_conversation_be_shared(&id)),
-            can_delete: false,
-            can_fork_locally: local_conversation_id.is_some(),
-            can_cancel: status.is_cancellable(),
-        },
     }
 }
 

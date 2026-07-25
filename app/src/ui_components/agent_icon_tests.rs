@@ -20,11 +20,10 @@ use super::{
 use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
 use crate::ai::agent_conversations_model::entry::{
     AgentConversationBackingData, AgentConversationCapabilities, AgentConversationDisplayData,
-    AgentConversationIdentity, AgentConversationPrincipal,
+    AgentConversationIdentity, AgentConversationPrincipal, AgentConversationProvenance,
 };
 use crate::ai::agent_conversations_model::{
-    AgentConversationEntry, AgentConversationEntryId, AgentConversationProvenance,
-    AgentRunDisplayStatus,
+    AgentConversationEntry, AgentConversationEntryId, AgentRunDisplayStatus,
 };
 use crate::terminal::CLIAgent;
 use crate::ui_components::icon_with_status::IconWithStatusVariant;

@@ -336,7 +336,8 @@ impl ConversationListView {
                 active_views_model.get_all_open_conversation_ids(ctx)
             }
             .into_iter()
-            .map(AgentConversationEntryId::from)
+            .filter_map(|id| id.conversation_id())
+            .map(AgentConversationEntryId::Conversation)
             .collect();
 
         let focused_new_conversation =
@@ -489,7 +490,8 @@ impl ConversationListView {
         let focused_conversation =
             ActiveAgentViewsModel::as_ref(ctx).get_focused_conversation(ctx.window_id());
         self.selected_index = focused_conversation
-            .map(AgentConversationEntryId::from)
+            .and_then(|id| id.conversation_id())
+            .map(AgentConversationEntryId::Conversation)
             .and_then(|id| self.get_index_of_conversation_id(id));
 
         if let Some(index) = self.selected_index {
@@ -620,15 +622,6 @@ impl ConversationListView {
                 send_telemetry_from_ctx!(
                     AgentManagementTelemetryEvent::ConversationOpened {
                         conversation_id: conversation_id.to_string(),
-                        opened_from: OpenedFrom::ConversationList,
-                    },
-                    ctx
-                );
-            }
-            AgentConversationEntryId::AmbientRun(task_id) => {
-                send_telemetry_from_ctx!(
-                    AgentManagementTelemetryEvent::CloudRunOpened {
-                        task_id: task_id.to_string(),
                         opened_from: OpenedFrom::ConversationList,
                     },
                     ctx
@@ -1326,7 +1319,8 @@ impl View for ConversationListView {
             let overflow_menu_state = self.overflow_menu_state;
             let focused_conversation = ActiveAgentViewsModel::as_ref(app)
                 .get_focused_conversation(self.window_id)
-                .map(AgentConversationEntryId::from);
+                .and_then(|id| id.conversation_id())
+                .map(AgentConversationEntryId::Conversation);
             let sharing_dialog = self.sharing_dialog.clone();
             let rename_editor = self.rename_editor.clone();
             let renaming_conversation_id = self.renaming_conversation_id;

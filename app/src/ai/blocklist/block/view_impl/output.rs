@@ -67,8 +67,6 @@ use crate::ai::agent::{
     SubagentCall, SubagentType, SuggestNewConversationResult, SummarizationType, TodoOperation,
     UploadArtifactResult,
 };
-use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::blocklist::action_model::AIActionStatus;
 use crate::ai::blocklist::block::model::{AIBlockModel, AIBlockModelHelper, AIBlockOutputStatus};
 use crate::ai::blocklist::block::view_impl::common::{
@@ -1052,18 +1050,7 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                                 })
                                 .or_else(|| {
                                     let target_id = agent_run_id.as_ref()?;
-                                    let title = target_id
-                                        .parse::<AmbientAgentTaskId>()
-                                        .ok()
-                                        .and_then(|task_id| {
-                                            AgentConversationsModel::as_ref(app)
-                                                .get_task_data(&task_id)
-                                        })
-                                        .map(|task| truncate_from_end(&task.title, 40));
-                                    Some((
-                                        "agent run",
-                                        title.unwrap_or_else(|| truncate_from_end(target_id, 40)),
-                                    ))
+                                    Some(("agent run", truncate_from_end(target_id, 40)))
                                 });
 
                             let done = is_finished || is_cancelled;

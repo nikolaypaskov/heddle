@@ -212,9 +212,43 @@ sub-state the model never reaches (e.g. `is_in_setup()` — the model starts in
   `pane_group/ambient_pane_restoration.rs`, `pane_group/mod.rs` alias +
   `PaneKind::AmbientAgent`; `terminal/view.rs` owner methods (7904-7967,
   `handle_ambient_agent_event`); `input.rs:2380`; delete `ambient_agent/` module.
-- **Slice 7 — cloud back-half of `AgentConversationsModel`.** Remove `tasks`/
-  `list_ambient_agent_tasks` half (`:909,981,1216,1793,1975`), preserve
-  conversations/local-history half. Risk MEDIUM.
+- **Slice 7 — cloud back-half of `AgentConversationsModel`.** DONE. Turned out
+  to be much larger than "remove the `tasks` map", because the map was the only
+  data source for several whole surfaces. Actual scope, all of it provably
+  unreachable once the cache is gone:
+  - the model's task storage, fetching, polling, RTC refresh, and the
+    `NewTasksReceived`/`TasksUpdated` events;
+  - the task half of the entry layer — `entry_for_task`,
+    `conversation_id_shadowed_by_task`, `AgentConversationEntryId::AmbientRun`,
+    `AgentConversationProvenance::AmbientRun`;
+  - the cloud-followup continuation surface: `cloud_conversation_continuation.rs`
+    + its 909-line test file, the tombstone "Continue in cloud" CTA, and
+    `maybe_insert_tombstone_for_non_running_shared_ambient_task`;
+  - `PanelMode::Task` in the conversation details panel, which left `PanelMode`
+    a one-variant enum — dissolved to a plain struct per the slice-4b lesson;
+  - `WorkspaceAction::OpenConversationTranscriptViewer.ambient_agent_task_id`
+    and the `load_*_transcript_viewer` chain that threaded it (the receiving end
+    already had a `.or_else(cloud_conversation-derived)` fallback, so dropping an
+    always-`None` argument is behaviour-preserving);
+  - `InitialConversationLoadState` collapsed to `LoadingLocal | Loaded`, which
+    retires `cloud_conversation_metadata_load_failed` and the TUI's
+    "Could not load cloud conversations" hint.
+
+  **Rescued, NOT deleted:** `AIQueryRouting` + `resolve_ai_query_routing` lived in
+  the deleted `cloud_conversation_continuation.rs` but serve shared **local**
+  session viewers (Codex validated this in slice 4c+5 — it must not collapse to
+  `Local`). They were relocated verbatim-in-behaviour to a new focused
+  `shared_session/ai_query_routing.rs`, minus the `NewCloudVm` variant, whose only
+  producer was the deleted resolver.
+
+  **Judgment calls to re-check in review.** Two predicates had a "task not yet
+  fetched → permissive `true`" branch; with no cache the permissive branch is now
+  the only branch, so `active_conversation_is_cloud_oz` and
+  `conversation_is_cloud_oz_for_slash_command` reduce to
+  `conversation.task_id().is_some()`. That is behaviour-preserving in Heddle
+  (the cache was already always empty), but note `task_id` IS set for LOCAL
+  orchestration children (`pane_group/pane/terminal_pane.rs`), so the reduction
+  must not be "simplified" further to `false`.
 - **Slice 8 — agent_sdk cloud paths + orchestration + server methods.** Remove
   `ai/agent_sdk/ambient.rs`, ambient calls in `mod.rs`/`harness_support.rs`,
   `orchestration_viewer_model.rs:271`, then the 4 `ServerApi` methods

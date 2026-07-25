@@ -120,10 +120,7 @@ use session_sharing_protocol::sharer::{
     RoleUpdateReason, SessionEndedReason, SessionRetentionReason,
 };
 use settings::{Setting, ToggleableSetting};
-use shared_session::cloud_conversation_continuation::CloudConversationContinuationUiState;
-pub(crate) use shared_session::cloud_conversation_continuation::{
-    AIQueryRouting, resolve_ai_query_routing,
-};
+pub(crate) use shared_session::ai_query_routing::{AIQueryRouting, resolve_ai_query_routing};
 use shared_session::{SharedSessionAdapter, Viewer};
 use ssh_file_upload::{FileUpload, FileUploadEvent};
 use sum_tree::SeekBias;
@@ -215,7 +212,6 @@ use crate::ai::agent::{
 };
 #[cfg(feature = "local_fs")]
 use crate::ai::agent::{CurrentHead, DiffBase};
-use crate::ai::agent_conversations_model::{AgentConversationsModel, AgentConversationsModelEvent};
 use crate::ai::ambient_agents::{
     AmbientAgentTaskId, AmbientConversationStatus, conversation_output_status_from_conversation,
 };
@@ -2797,8 +2793,6 @@ pub struct TerminalView {
     is_orchestration_split_off: bool,
     is_using_conversation_for_pane_header_title: bool,
 
-    pending_cloud_followup_task_id: Option<AmbientAgentTaskId>,
-
     /// Conversation details panel (side panel showing conversation/task metadata).
     /// Available for cloud Oz runs and for any active local AI conversation.
     conversation_details_panel:
@@ -3604,30 +3598,6 @@ impl TerminalView {
             }
         });
 
-        // Subscribe to agent conversations model for task status updates
-        ctx.subscribe_to_model(
-            &AgentConversationsModel::handle(ctx),
-            |me, _, event, ctx| {
-                let is_task_update = matches!(
-                    event,
-                    AgentConversationsModelEvent::TasksUpdated
-                        | AgentConversationsModelEvent::NewTasksReceived
-                );
-                if is_task_update {
-                    me.maybe_insert_tombstone_for_non_running_shared_ambient_task(ctx);
-                }
-                let should_refresh_details_panel = matches!(
-                    event,
-                    AgentConversationsModelEvent::TasksUpdated
-                        | AgentConversationsModelEvent::NewTasksReceived
-                        | AgentConversationsModelEvent::ConversationUpdated { .. }
-                        | AgentConversationsModelEvent::ConversationArtifactsUpdated { .. }
-                );
-                // Only refresh panel if it's currently open (avoids unnecessary work)
-                let _ = should_refresh_details_panel;
-            },
-        );
-
         let _ = ctx.spawn_stream_local(
             throttle(WAKEUP_THROTTLE_PERIOD, wakeups_rx),
             Self::handle_terminal_wakeup,
@@ -4320,7 +4290,6 @@ impl TerminalView {
             is_conversation_details_panel_open: false,
             has_auto_opened_conversation_details_panel: false,
             conversation_details_panel_auto_open_policy: Default::default(),
-            pending_cloud_followup_task_id: None,
             #[cfg(not(target_arch = "wasm32"))]
             conversation_details_panel_toggle_mouse_state: Default::default(),
             ambient_agent_cancel_mouse_state: Default::default(),
@@ -5910,13 +5879,6 @@ impl TerminalView {
         {
             self.fetch_and_update_conversation_details_panel(ctx);
         }
-        if matches!(
-            event,
-            BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. }
-                | BlocklistAIHistoryEvent::ConversationServerTokenAssigned { .. }
-        ) {
-            self.maybe_insert_tombstone_for_non_running_shared_ambient_task(ctx);
-        }
         match event {
             BlocklistAIHistoryEvent::AppendedExchange {
                 exchange_id,
@@ -6297,7 +6259,7 @@ impl TerminalView {
                     && !conversation.status().is_in_progress()
                     && conversation_output_status_from_conversation(conversation).is_some()
                 {
-                    self.insert_conversation_ended_tombstone_with_cta(None, ctx);
+                    self.insert_conversation_ended_tombstone(ctx);
                 }
             }
             BlocklistAIHistoryEvent::UpdatedConversationTitle { .. } => {
@@ -7783,40 +7745,15 @@ impl TerminalView {
         self.ambient_agent_task_id_for_details_panel_from_model(&model, app)
     }
 
-    /// Fetches task data and updates the conversation details panel.
+    /// Populates the conversation details panel from the active local `AIConversation`.
     ///
-    /// Prefers cloud `AmbientAgentTask` data when this terminal view has an
-    /// associated task ID. Otherwise falls back to populating the panel from
-    /// the active local `AIConversation`, so the same panel can surface
-    /// conversation metadata for non-cloud Warp Agent runs (APP-3595).
+    /// Heddle (FOSS): the cloud task cache is gone, so the panel is always backed by local
+    /// conversation metadata (the fallback path that already served non-cloud Warp Agent
+    /// runs, APP-3595).
     pub(in crate::terminal::view) fn fetch_and_update_conversation_details_panel(
         &mut self,
         ctx: &mut ViewContext<Self>,
     ) {
-        if let Some(task_id) = self.ambient_agent_task_id_for_details_panel(ctx) {
-            let conversations_handle =
-                crate::ai::agent_conversations_model::AgentConversationsModel::handle(ctx);
-            let task = conversations_handle.update(ctx, |model, ctx| {
-                model.get_or_async_fetch_task_data(&task_id, ctx)
-            });
-
-            let data = task
-                .as_ref()
-                .map(|task| ConversationDetailsData::from_task(task, None, None, ctx))
-                .unwrap_or_else(|| {
-                    let fetch_error = conversations_handle
-                        .as_ref(ctx)
-                        .task_fetch_error(&task_id)
-                        .cloned();
-                    ConversationDetailsData::from_task_id(task_id, fetch_error)
-                });
-            self.conversation_details_panel.update(ctx, |panel, ctx| {
-                panel.set_conversation_details(data, ctx);
-            });
-            return;
-        }
-
-        // No backing cloud task — populate from the active local conversation, if any.
         let view_id = self.id();
         let history_model = BlocklistAIHistoryModel::handle(ctx);
         let data = history_model
@@ -7894,74 +7831,6 @@ impl TerminalView {
     pub(crate) fn suppress_initial_conversation_details_panel_auto_open(&mut self) {
         self.conversation_details_panel_auto_open_policy =
             ConversationDetailsPanelAutoOpenPolicy::DefaultClosed;
-    }
-
-    fn maybe_insert_tombstone_for_non_running_shared_ambient_task(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if !FeatureFlag::CloudModeSetupV2.is_enabled() {
-            return;
-        }
-
-        let (task_id, is_active_shared_session, is_finished_viewer) = {
-            let model = self.model.lock();
-            if model.is_receiving_agent_conversation_replay() {
-                return;
-            }
-
-            let status = model.shared_session_status();
-            // This method also handles restored cloud-mode panes that rendered
-            // a conservative tombstone before task data arrived. When the task
-            // cache updates, either the existing tombstone or FinishedViewer
-            // status tells us to re-resolve the CTA/input state.
-            let should_update = model.is_shared_ambient_agent_session()
-                || self.conversation_ended_tombstone_view_id.is_some()
-                || status.is_finished_viewer();
-            if !should_update {
-                return;
-            }
-
-            (
-                self.ambient_agent_task_id_for_details_panel_from_model(&model, ctx),
-                status.is_active_viewer() || status.is_active_sharer(),
-                status.is_finished_viewer(),
-            )
-        };
-
-        let Some(task_id) = task_id else {
-            return;
-        };
-        let Some(task) = AgentConversationsModel::as_ref(ctx).get_task_data(&task_id) else {
-            return;
-        };
-
-        if !task.is_no_longer_running() || self.pending_cloud_followup_task_id.is_some() {
-            return;
-        }
-
-        if FeatureFlag::HandoffCloudCloud.is_enabled() {
-            if is_active_shared_session {
-                return;
-            }
-            let Some(state) = self.cloud_conversation_continuation_ui_state(ctx) else {
-                return;
-            };
-            match state {
-                CloudConversationContinuationUiState::Tombstone { cta } => {
-                    self.insert_conversation_ended_tombstone_with_cta(cta, ctx);
-                }
-                CloudConversationContinuationUiState::FollowupInput => {
-                    if self.conversation_ended_tombstone_view_id.is_some() || is_finished_viewer {
-                        self.insert_conversation_ended_tombstone_with_resolved_cta(ctx);
-                    } else {
-                        self.enable_cloud_followup_input(task_id, ctx);
-                    }
-                }
-            }
-        } else {
-            self.insert_conversation_ended_tombstone_with_cta(None, ctx);
-        }
     }
 
     pub fn active_session(&self) -> &ModelHandle<ActiveSession> {
@@ -8119,9 +7988,6 @@ impl TerminalView {
             return false;
         }
         if self.conversation_ended_tombstone_view_id.is_some() {
-            return false;
-        }
-        if self.blocks_cloud_followups_for_ambient_agent_session_from_model(model, app) {
             return false;
         }
         if self.has_active_cli_agent_input_session(app) {

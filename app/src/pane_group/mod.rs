@@ -3426,7 +3426,6 @@ impl PaneGroup {
     pub fn load_data_into_conversation_transcript_viewer(
         &mut self,
         conversation: CloudConversationData,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
         ctx: &mut ViewContext<Self>,
     ) {
         // Get the active terminal view
@@ -3434,12 +3433,7 @@ impl PaneGroup {
             report_error!("No active terminal view to load conversation into");
             return;
         };
-        self.load_data_into_transcript_viewer(
-            terminal_view,
-            conversation,
-            ambient_agent_task_id,
-            ctx,
-        );
+        self.load_data_into_transcript_viewer(terminal_view, conversation, ctx);
     }
 
     /// Load conversation data into a specific transcript viewer terminal view.
@@ -3447,7 +3441,6 @@ impl PaneGroup {
         &mut self,
         terminal_view: ViewHandle<TerminalView>,
         cloud_conversation: CloudConversationData,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
         ctx: &mut ViewContext<Self>,
     ) {
         let terminal_manager = self
@@ -3456,8 +3449,7 @@ impl PaneGroup {
             .and_then(|tpid| self.terminal_session_by_id(tpid))
             .map(|session| session.terminal_manager(ctx));
 
-        let ambient_agent_task_id =
-            ambient_agent_task_id.or_else(|| Self::ambient_agent_task_id(&cloud_conversation));
+        let ambient_agent_task_id = Self::ambient_agent_task_id(&cloud_conversation);
 
         BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, _ctx| {
             history_model
@@ -3534,7 +3526,7 @@ impl PaneGroup {
         // Insert the conversation ended tombstone (includes Open in Warp button on WASM).
         if terminal_manager.is_some() {
             terminal_view.update(ctx, |view, ctx| {
-                view.insert_conversation_ended_tombstone_with_resolved_cta(ctx);
+                view.insert_conversation_ended_tombstone(ctx);
             });
         }
 
@@ -5650,7 +5642,7 @@ impl PaneGroup {
 
         // Insert the conversation ended tombstone (includes Open in Warp button on WASM)
         terminal_view.update(ctx, |view, ctx| {
-            view.insert_conversation_ended_tombstone_with_resolved_cta(ctx);
+            view.insert_conversation_ended_tombstone(ctx);
         });
 
         BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, _ctx| {

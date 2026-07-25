@@ -12,8 +12,6 @@ pub use cloud_mode_v2_view::{CloudModeV2SlashCommandView, Section as CloudModeV2
 pub use data_source::*;
 pub use mixer::{SlashCommandMixer, build_slash_command_mixer, slash_command_query};
 pub use view::{CloseReason, InlineSlashCommandView, SlashCommandsEvent};
-#[cfg(not(target_family = "wasm"))]
-use warp_cli::agent::Harness;
 use warp_core::features::FeatureFlag;
 use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::appearance::Appearance;
@@ -26,8 +24,6 @@ use warpui::{AppContext, SingletonEntity, ViewContext};
 
 use crate::TelemetryEvent;
 use crate::ai::agent::conversation::AIConversationId;
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::agent_conversations_model::AgentConversationsModel;
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::agent_management::telemetry::AgentManagementTelemetryEvent;
 use crate::ai::blocklist::agent_view::{
@@ -1477,24 +1473,10 @@ pub(crate) fn conversation_is_cloud_oz_for_slash_command(
     let Some(conversation) = history.conversation(&conversation_id) else {
         return false;
     };
-    let Some(task_id) = conversation.task_id() else {
-        return false;
-    };
-
-    let Some(task) = AgentConversationsModel::as_ref(ctx).get_task_data(&task_id) else {
-        // Permissive: not yet fetched. Matches the data-source default so the command isn't
-        // wrongly blocked while the task fetch is in flight.
-        return true;
-    };
-
-    match task
-        .agent_config_snapshot
-        .as_ref()
-        .and_then(|s| s.harness.as_ref())
-    {
-        Some(config) => config.harness_type == Harness::Oz,
-        None => true,
-    }
+    // Heddle (FOSS): there is no cloud task cache to read a harness from, so this keeps the
+    // permissive default the cache-miss path always took — a conversation that carries a task
+    // id is treated as Oz.
+    conversation.task_id().is_some()
 }
 
 /// Tooltip and slash command name for the fork button, returned as a unit so

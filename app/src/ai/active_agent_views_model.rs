@@ -54,7 +54,6 @@ impl From<AgentConversationEntryId> for ConversationOrTaskId {
             AgentConversationEntryId::Conversation(conversation_id) => {
                 ConversationOrTaskId::ConversationId(conversation_id)
             }
-            AgentConversationEntryId::AmbientRun(task_id) => ConversationOrTaskId::TaskId(task_id),
         }
     }
 }

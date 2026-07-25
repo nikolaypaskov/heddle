@@ -783,7 +783,6 @@ pub enum WorkspaceAction {
     /// Used when CloudConversations is enabled and the sandbox is not running.
     OpenConversationTranscriptViewer {
         conversation_id: ServerConversationToken,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
     },
     /// Toggle the conversation transcript details panel (WASM-only).
     #[cfg(target_family = "wasm")]

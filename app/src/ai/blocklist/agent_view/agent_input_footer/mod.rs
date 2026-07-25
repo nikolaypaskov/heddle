@@ -120,7 +120,6 @@ const START_REMOTE_CONTROL_TOOLTIP: &str = "Start remote control";
 const START_REMOTE_CONTROL_LOGIN_REQUIRED_TOOLTIP: &str = "Log in to use /remote-control";
 
 const LIVE_REMOTE_VM_INDICATOR_TOOLTIP: &str = "Connected to a live cloud agent session. Your next prompt continues on the running remote machine.";
-const NEW_CLOUD_VM_INDICATOR_TOOLTIP: &str = "Not connected to cloud agent. Your next prompt starts a new cloud machine to continue this conversation.";
 
 /// Voice input state for the CLI agent footer. Unlike the editor-based voice
 /// flow (which goes through Input → EditorView), this state is self-contained
@@ -199,7 +198,6 @@ pub struct AgentInputFooter {
     /// remote VM, one when the next follow-up will start a new cloud VM. See
     /// [`AIQueryRouting`].
     live_session_indicator: ViewHandle<ActionButton>,
-    new_cloud_vm_indicator: ViewHandle<ActionButton>,
     model_selector: ViewHandle<ProfileModelSelector>,
     handoff_environment_selector: ViewHandle<EnvironmentSelector>,
     prompt_alert: ViewHandle<PromptAlertView>,
@@ -618,14 +616,6 @@ impl AgentInputFooter {
                 .with_size(button_size)
                 .with_tooltip_alignment(TooltipAlignment::Left)
         });
-        let new_cloud_vm_indicator = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new("", AgentInputButtonTheme)
-                .with_icon(Icon::CloudOffline)
-                .with_icon_ansi_color(AnsiColorIdentifier::Yellow)
-                .with_tooltip(NEW_CLOUD_VM_INDICATOR_TOOLTIP)
-                .with_size(button_size)
-                .with_tooltip_alignment(TooltipAlignment::Left)
-        });
 
         let profile_model_selector_full = ctx.add_typed_action_view(|ctx| {
             let mut selector = ProfileModelSelector::new(
@@ -804,7 +794,6 @@ impl AgentInputFooter {
             plugin_chip_ready: false,
             context_window_button,
             live_session_indicator,
-            new_cloud_vm_indicator,
             model_selector: profile_model_selector_full,
             handoff_environment_selector,
             prompt_alert,
@@ -2084,17 +2073,13 @@ impl View for AgentInputFooter {
         let is_conversation_transcript_context =
             is_conversation_transcript_context(self.terminal_view_id, &terminal_model, app);
 
-        // Indicate whether the next follow-up continues on the live remote VM or starts a new one.
-        // The new-cloud-VM chip uses a yellow icon; the live-session chip uses the default color.
-        match resolve_ai_query_routing(self.terminal_view_id, &terminal_model, app) {
+        // Indicate whether the next follow-up continues on a live remote VM.
+        match resolve_ai_query_routing(&terminal_model) {
             AIQueryRouting::LiveRemoteVm {
                 ambient_agent_task_id: Some(_),
                 ..
             } => {
                 left_buttons.add_child(ChildView::new(&self.live_session_indicator).finish());
-            }
-            AIQueryRouting::NewCloudVm { .. } => {
-                left_buttons.add_child(ChildView::new(&self.new_cloud_vm_indicator).finish());
             }
             // Shared *local* session viewers (no ambient task) and non-live panes show no indicator.
             AIQueryRouting::LiveRemoteVm {

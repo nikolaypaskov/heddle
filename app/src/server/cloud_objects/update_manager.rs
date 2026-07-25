@@ -13,7 +13,6 @@ use futures::stream::AbortHandle;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
-use warp_core::features::FeatureFlag;
 use warp_errors::report_error;
 use warp_graphql::mcp_gallery_template::MCPGalleryTemplate;
 use warp_graphql::object_permissions::AccessLevel;
@@ -26,9 +25,7 @@ use warpui::{
 };
 
 use super::listener::ObjectUpdateMessage;
-use crate::channel::ChannelState;
 use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::ambient_agents::scheduled::{
     CloudScheduledAmbientAgentModel, ScheduledAmbientAgent,
 };
@@ -41,6 +38,7 @@ use crate::ai::facts::{AIFact, CloudAIFactModel};
 use crate::ai::mcp::templatable::{CloudTemplatableMCPServerModel, TemplatableMCPServer};
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
+use crate::channel::ChannelState;
 use crate::cloud_object::model::actions::{
     ObjectAction, ObjectActionHistory, ObjectActionType, ObjectActions,
 };
@@ -138,19 +136,9 @@ pub struct ObjectOperationResult {
 
 #[derive(Debug)]
 pub enum UpdateManagerEvent {
-    ObjectOperationComplete {
-        result: ObjectOperationResult,
-    },
-    CloudPreferencesUpdated {
-        updated: Vec<Preference>,
-    },
-    MCPGalleryUpdated {
-        templates: Vec<MCPGalleryTemplate>,
-    },
-    AmbientTaskUpdated {
-        task_id: AmbientAgentTaskId,
-        timestamp: DateTime<Utc>,
-    },
+    ObjectOperationComplete { result: ObjectOperationResult },
+    CloudPreferencesUpdated { updated: Vec<Preference> },
+    MCPGalleryUpdated { templates: Vec<MCPGalleryTemplate> },
 }
 
 /// An enum for choosing the behavior of the fetch_single_cloud_object function.
@@ -1116,24 +1104,6 @@ impl UpdateManager {
         self.refresh_updated_objects(ctx);
     }
 
-    fn handle_ambient_task_changed(
-        &mut self,
-        task_id: String,
-        timestamp: DateTime<Utc>,
-        ctx: &mut ModelContext<UpdateManager>,
-    ) {
-        let task_id = match task_id.parse::<AmbientAgentTaskId>() {
-            Ok(task_id) => task_id,
-            Err(err) => {
-                report_error!(anyhow::Error::from(err).context(format!(
-                    "AmbientTaskUpdated has unparseable task_id: {task_id}"
-                )));
-                return;
-            }
-        };
-        ctx.emit(UpdateManagerEvent::AmbientTaskUpdated { task_id, timestamp });
-    }
-
     /// Fetches environment "last used" timestamps from the server and merges them
     /// into the in-memory environment objects.
     fn fetch_and_merge_environment_timestamps(&mut self, ctx: &mut ModelContext<UpdateManager>) {
@@ -1289,10 +1259,9 @@ impl UpdateManager {
             ObjectUpdateMessage::TeamMembershipsChanged => {
                 self.handle_team_memberships_changed(ctx);
             }
-            ObjectUpdateMessage::AmbientTaskUpdated { task_id, timestamp } => {
-                if FeatureFlag::AmbientAgentsRTC.is_enabled() {
-                    self.handle_ambient_task_changed(task_id, timestamp, ctx);
-                }
+            ObjectUpdateMessage::AmbientTaskUpdated { .. } => {
+                // Heddle (FOSS): the ambient cloud-agent runtime is removed, so there is
+                // nothing to refresh when the server reports a run changed.
             }
         }
     }

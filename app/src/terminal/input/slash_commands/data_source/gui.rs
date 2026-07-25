@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[cfg(not(target_family = "wasm"))]
-use warp_cli::agent::Harness;
 use warp_core::features::FeatureFlag;
 use warpui::{AppContext, Entity, EntityId, ModelContext, ModelHandle, SingletonEntity};
 
@@ -12,8 +10,6 @@ use super::{
 };
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::agent::conversation::AIConversationId;
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::agent_conversations_model::AgentConversationsModel;
 #[cfg(not(target_family = "wasm"))]
 use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewControllerEvent};
@@ -255,23 +251,10 @@ impl GuiSlashCommandDataSource {
         let Some(conversation) = history.conversation(&conversation_id) else {
             return false;
         };
-        let Some(task_id) = conversation.task_id() else {
-            return false;
-        };
-        let Some(task) = AgentConversationsModel::as_ref(ctx).get_task_data(&task_id) else {
-            // Task data not yet fetched. Permissive default: assume Oz so the command
-            // is reachable while the fetch is in flight; once the fetch resolves,
-            // `TasksUpdated` triggers a recompute and a non-Oz task hides the command.
-            return true;
-        };
-        match task
-            .agent_config_snapshot
-            .as_ref()
-            .and_then(|s| s.harness.as_ref())
-        {
-            Some(config) => config.harness_type == Harness::Oz,
-            None => true,
-        }
+        // Heddle (FOSS): there is no cloud task cache to read a harness from, so this keeps
+        // the permissive default the cache-miss path always took — a conversation that carries
+        // a task id is treated as Oz.
+        conversation.task_id().is_some()
     }
 }
 

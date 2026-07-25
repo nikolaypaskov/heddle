@@ -4105,7 +4105,7 @@ impl Workspace {
         let history = BlocklistAIHistoryModel::as_ref(ctx);
         let Some(conversation_id) = history.find_conversation_id_by_server_token(&server_token)
         else {
-            self.load_cloud_conversation_into_new_transcript_viewer(server_token, None, ctx);
+            self.load_cloud_conversation_into_new_transcript_viewer(server_token, ctx);
             return;
         };
 
@@ -4126,7 +4126,7 @@ impl Workspace {
         };
 
         if !conversation_is_owned_by_current_user {
-            self.load_cloud_conversation_into_new_transcript_viewer(server_token, None, ctx);
+            self.load_cloud_conversation_into_new_transcript_viewer(server_token, ctx);
             return;
         }
 
@@ -4139,7 +4139,7 @@ impl Workspace {
                 ctx.dispatch_typed_action_deferred(action);
             }
             _ => {
-                self.load_cloud_conversation_into_new_transcript_viewer(server_token, None, ctx);
+                self.load_cloud_conversation_into_new_transcript_viewer(server_token, ctx);
             }
         }
     }
@@ -4148,7 +4148,6 @@ impl Workspace {
     pub fn load_cloud_conversation_into_new_transcript_viewer(
         &mut self,
         conversation_id: ServerConversationToken,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
         ctx: &mut ViewContext<Self>,
     ) {
         // Create the tab immediately with a loading state
@@ -4198,11 +4197,8 @@ impl Workspace {
 
                 // Update the pane group with the loaded conversation
                 new_pane_group.update(ctx, |pane_group, ctx| {
-                    pane_group.load_data_into_conversation_transcript_viewer(
-                        cloud_conversation,
-                        ambient_agent_task_id,
-                        ctx,
-                    );
+                    pane_group
+                        .load_data_into_conversation_transcript_viewer(cloud_conversation, ctx);
                 });
 
                 // Open the transcript details panel by default on WASM (unless on mobile)
@@ -23856,21 +23852,9 @@ impl TypedActionView for Workspace {
                     self.add_tab_for_joining_shared_session(*session_id, true, ctx);
                 }
             }
-            OpenConversationTranscriptViewer {
-                conversation_id,
-                ambient_agent_task_id,
-            } => {
-                // Check if there's already a terminal viewing this conversation's task.
-                if let Some(task_id) = ambient_agent_task_id
-                    && let Some((_, locator)) =
-                        self.find_pane_with_ambient_agent_conversation(*task_id, ctx)
-                {
-                    self.focus_pane(locator, ctx);
-                    return;
-                }
+            OpenConversationTranscriptViewer { conversation_id } => {
                 self.load_cloud_conversation_into_new_transcript_viewer(
                     conversation_id.clone(),
-                    *ambient_agent_task_id,
                     ctx,
                 );
             }
