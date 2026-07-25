@@ -4,17 +4,88 @@ use chrono::{Local, Utc};
 use persistence::model::{AgentConversationData, ConversationUsageMetadata};
 use warp_cli::agent::Harness;
 use warp_multi_agent_api as api;
-use warpui::App;
+use warpui::{App, EntityId, SingletonEntity};
 
-use super::ConversationDetailsData;
+use super::{ConversationDetailsData, PanelMode};
 use crate::ai::agent::api::ServerConversationToken;
 use crate::ai::agent::conversation::{
     AIAgentHarness, AIConversation, AIConversationId, ServerAIConversationMetadata,
 };
+use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::auth::UserUid;
 use crate::cloud_object::{Revision, ServerMetadata, ServerPermissions};
 use crate::server::ids::ServerId;
 use crate::workspaces::user_profiles::UserProfileWithUID;
+
+#[test]
+fn test_from_conversation_populates_local_conversation_fields() {
+    // Locks in that `ConversationDetailsData::from_conversation` surfaces the
+    // conversation-derived fields the details panel renders for local Warp Agent runs
+    // (APP-3595).
+    //
+    // REGRESSION GUARD: `ai_conversation_id` used to be `None` here, because only the
+    // cloud `PanelMode::Task` arm carried an id. Removing that arm made the panel's
+    // "Continue locally" action unreachable, so `from_conversation` now populates it —
+    // this is the sole source. An earlier version of this test asserted `is_none()` and
+    // was deleted wholesale during the ambient slices instead of being updated.
+    App::test((), |mut app| async move {
+        let history_model =
+            app.add_singleton_model(|_| BlocklistAIHistoryModel::new(vec![], vec![], &[]));
+
+        let conversation_id = AIConversationId::new();
+        let directory = "/tmp/local-conversation-directory";
+        let conversation = create_restored_conversation(
+            conversation_id,
+            "root-task",
+            directory,
+            AgentConversationData {
+                server_conversation_token: None,
+                conversation_usage_metadata: None,
+                reverted_action_ids: None,
+                forked_from_server_conversation_token: None,
+                artifacts_json: None,
+                parent_agent_id: None,
+                agent_name: None,
+                orchestration_harness_type: None,
+                parent_conversation_id: None,
+                run_id: None,
+                autoexecute_override: None,
+                last_event_sequence: None,
+                is_remote_child: false,
+                root_task_is_optimistic: None,
+                pinned: false,
+            },
+        );
+
+        history_model.update(&mut app, |model, ctx| {
+            model.restore_conversations(EntityId::new(), vec![conversation], ctx);
+        });
+
+        app.update(|ctx| {
+            let conversation = BlocklistAIHistoryModel::as_ref(ctx)
+                .conversation(&conversation_id)
+                .expect("conversation should be present");
+            let data = ConversationDetailsData::from_conversation(conversation, ctx);
+
+            let PanelMode {
+                directory: panel_directory,
+                server_conversation_id,
+                ai_conversation_id,
+                status,
+            } = &data.mode;
+            assert_eq!(panel_directory.as_deref(), Some(directory));
+            // Restored without a server token, so there is no server-side id.
+            assert!(server_conversation_id.is_none());
+            // Must be populated, or "Continue locally" is unreachable.
+            assert_eq!(*ai_conversation_id, Some(conversation_id));
+            assert!(status.is_some());
+
+            assert_eq!(data.title, "test query");
+            assert_eq!(data.source_prompt.as_deref(), Some("test query"));
+            assert!(data.credits.is_some());
+        });
+    });
+}
 
 #[test]
 fn test_from_conversation_prefers_server_creator_profile() {

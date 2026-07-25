@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use parking_lot::Mutex;
 use persistence::model::ConversationUsageMetadata;
 use warp_cli::agent::Harness;
@@ -11,10 +11,11 @@ use warpui::{App, EntityId, ModelHandle, SingletonEntity};
 use super::entry::{
     AgentConversationEntryId, AgentConversationNavigationSubject, AgentConversationProvenance,
 };
+use super::query::{DEFAULT_RESULT_COUNT, MAX_SEARCH_RESULTS};
 use super::{
     AgentConversationsModel, AgentConversationsModelEvent, AgentManagementFilters, ArtifactFilter,
     ConversationMetadata, ConversationUpdateKind, HarnessFilter, InitialConversationLoadState,
-    OwnerFilter, StatusFilter,
+    OwnerFilter, StatusFilter, query_conversation_entries,
 };
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 use crate::ai::agent::api::ServerConversationToken;
@@ -94,6 +95,243 @@ fn create_server_conversation_metadata(
         server_conversation_token: ServerConversationToken::new(server_token.to_string()),
         artifacts: Vec::new(),
     }
+}
+
+fn create_test_conversation_metadata_at(
+    conversation_id: AIConversationId,
+    title: &str,
+    last_updated: chrono::DateTime<chrono::Local>,
+) -> ConversationMetadata {
+    let mut metadata = create_test_conversation_metadata(conversation_id, title);
+    metadata.nav_data.last_updated = last_updated;
+    metadata
+}
+
+#[test]
+fn harness_filter_matches_local_conversations_as_warp_agent() {
+    // A local conversation with no server metadata defaults to `Harness::Oz`, so it must
+    // appear under the Warp Agent filter and vanish under any third-party one. This is what
+    // the TUI conversation menu's harness filter relies on. The original test covered this
+    // alongside cloud-task harnesses and was deleted with them during the ambient slices,
+    // even though the local half is live.
+    App::test((), |mut app| async move {
+        add_entry_projection_test_models(&mut app);
+
+        let mut model = create_test_model();
+        let conv_id = AIConversationId::new();
+        model.conversations.insert(
+            conv_id,
+            create_test_conversation_metadata(conv_id, "Local conv"),
+        );
+
+        app.update(|ctx| {
+            let titles_for = |filter: HarnessFilter| -> Vec<String> {
+                model
+                    .get_entries(
+                        &AgentManagementFilters {
+                            owners: OwnerFilter::All,
+                            harness: filter,
+                            ..Default::default()
+                        },
+                        ctx,
+                    )
+                    .into_iter()
+                    .map(|entry| entry.display.title)
+                    .collect()
+            };
+
+            assert_eq!(
+                titles_for(HarnessFilter::All),
+                vec!["Local conv".to_owned()]
+            );
+            assert_eq!(
+                titles_for(HarnessFilter::Specific(Harness::Oz)),
+                vec!["Local conv".to_owned()],
+                "a local conversation must match the Warp Agent filter"
+            );
+            assert!(
+                titles_for(HarnessFilter::Specific(Harness::Claude)).is_empty(),
+                "a local Warp Agent conversation must not match a third-party harness filter"
+            );
+            assert!(titles_for(HarnessFilter::Specific(Harness::Gemini)).is_empty());
+        });
+    });
+}
+
+#[test]
+fn conversation_query_caps_recent_entries_and_places_newest_last() {
+    // Local conversation search: the unfiltered (zero-state) list is capped at
+    // DEFAULT_RESULT_COUNT and ordered oldest-first, so the newest sits LAST -- the menu
+    // renders bottom-up. Previously covered with cloud-task fixtures and deleted with them
+    // during the ambient slices, though `query_conversation_entries` is a live local path.
+    App::test((), |mut app| async move {
+        add_entry_projection_test_models(&mut app);
+        let now = chrono::Local::now();
+        let mut model = create_test_model();
+        for index in 0..55 {
+            let conversation_id = AIConversationId::new();
+            model.conversations.insert(
+                conversation_id,
+                create_test_conversation_metadata_at(
+                    conversation_id,
+                    &format!("Conversation {index}"),
+                    now - Duration::seconds(index as i64),
+                ),
+            );
+        }
+
+        app.update(|ctx| {
+            let entries = model.get_entries(&all_owner_filters(), ctx);
+            let results = query_conversation_entries(entries, "");
+
+            assert_eq!(results.len(), DEFAULT_RESULT_COUNT);
+            assert_eq!(
+                results
+                    .first()
+                    .map(|result| result.entry.display.title.as_str()),
+                Some("Conversation 49")
+            );
+            assert_eq!(
+                results
+                    .last()
+                    .map(|result| result.entry.display.title.as_str()),
+                Some("Conversation 0")
+            );
+            // The 5 oldest fall off the cap entirely.
+            assert!(
+                !results
+                    .iter()
+                    .any(|result| result.entry.display.title == "Conversation 50")
+            );
+        });
+    });
+}
+
+#[test]
+fn conversation_query_filters_titles_and_caps_best_fuzzy_results() {
+    // A non-empty query fuzzy-matches titles, drops non-matches, caps at
+    // MAX_SEARCH_RESULTS, and orders worst-score-first.
+    App::test((), |mut app| async move {
+        add_entry_projection_test_models(&mut app);
+        let now = chrono::Local::now();
+        let mut model = create_test_model();
+        for index in 0..=MAX_SEARCH_RESULTS + 2 {
+            let conversation_id = AIConversationId::new();
+            let title = if index == 1 {
+                "Fix unit tests".to_owned()
+            } else {
+                format!("Deploy service {index}")
+            };
+            model.conversations.insert(
+                conversation_id,
+                create_test_conversation_metadata_at(
+                    conversation_id,
+                    &title,
+                    now - Duration::seconds(index as i64),
+                ),
+            );
+        }
+
+        app.update(|ctx| {
+            let entries = model.get_entries(&all_owner_filters(), ctx);
+            let results = query_conversation_entries(entries, "deploy");
+
+            assert_eq!(results.len(), MAX_SEARCH_RESULTS);
+            assert!(
+                results
+                    .iter()
+                    .all(|result| result.entry.display.title.contains("Deploy"))
+            );
+            assert!(results.windows(2).all(|window| {
+                window[0].title_match.as_ref().unwrap().score
+                    <= window[1].title_match.as_ref().unwrap().score
+            }));
+        });
+    });
+}
+
+#[test]
+fn conversation_query_orders_equal_fuzzy_scores_by_recency() {
+    // Identical titles score identically, so recency is the tie-break: oldest first.
+    App::test((), |mut app| async move {
+        add_entry_projection_test_models(&mut app);
+        let now = chrono::Local::now();
+        let mut model = create_test_model();
+        for index in [0, 2, 1] {
+            let conversation_id = AIConversationId::new();
+            model.conversations.insert(
+                conversation_id,
+                create_test_conversation_metadata_at(
+                    conversation_id,
+                    "Deploy service",
+                    now - Duration::seconds(index as i64),
+                ),
+            );
+        }
+
+        app.update(|ctx| {
+            let entries = model.get_entries(&all_owner_filters(), ctx);
+            let results = query_conversation_entries(entries, "deploy");
+
+            assert_eq!(results.len(), 3);
+            assert!(results.windows(2).all(|window| {
+                window[0].entry.display.last_updated <= window[1].entry.display.last_updated
+            }));
+        });
+    });
+}
+
+#[test]
+fn local_conversation_sync_finishes_the_initial_load() {
+    // REGRESSION: this test existed before the ambient slices and asserted `!is_loading()`
+    // against the old `LoadingLocal -> WaitingForCloud` transition. Collapsing the state
+    // machine renamed `WaitingForCloud` to `LoadingLocal`, which turned that transition
+    // into a self-assignment, and the test was pruned because it mentioned the removed
+    // variant. `is_loading()` then stayed true forever and the TUI conversation menu
+    // rendered "Loading conversations..." with zero rows. Local sync IS the whole load
+    // now, so it must land on `Loaded`.
+    App::test((), |mut app| async move {
+        let _interactive_management_guard =
+            FeatureFlag::InteractiveConversationManagementView.override_enabled(true);
+        add_entry_projection_test_models(&mut app);
+        let model = app.add_singleton_model(|_| create_test_model());
+
+        model.read(&app, |model, _| assert!(model.is_loading()));
+
+        model.update(&mut app, |model, ctx| model.sync_conversations(ctx));
+
+        model.read(&app, |model, _| {
+            assert!(!model.is_loading());
+            assert_eq!(
+                model.initial_load_state,
+                InitialConversationLoadState::Loaded
+            );
+        });
+    });
+}
+
+#[test]
+fn reset_leaves_the_model_loaded_not_loading() {
+    // `reset()` empties the model on logout. Nothing is fetched afterwards, so it must not
+    // read as loading -- upstream parked this in `WaitingForCloud`, which `is_loading()`
+    // also treated as done. Parking it in `LoadingLocal` would strand the list again.
+    App::test((), |mut app| async move {
+        let _interactive_management_guard =
+            FeatureFlag::InteractiveConversationManagementView.override_enabled(true);
+        add_entry_projection_test_models(&mut app);
+        let model = app.add_singleton_model(|_| create_test_model());
+
+        model.update(&mut app, |model, ctx| model.sync_conversations(ctx));
+        model.update(&mut app, |model, _| model.reset());
+
+        model.read(&app, |model, _| {
+            assert!(!model.is_loading());
+            assert_eq!(
+                model.initial_load_state,
+                InitialConversationLoadState::Loaded
+            );
+        });
+    });
 }
 
 #[test]
