@@ -2437,7 +2437,7 @@ impl TuiTerminalSessionView {
     }
 
     /// The session's working directory. The cwd only arrives once shell
-    /// metadata flows (warpified sessions); until then fall back to the
+    /// metadata flows (heddlified sessions); until then fall back to the
     /// process cwd the TUI's shell was spawned with.
     fn current_working_directory(&self, ctx: &AppContext) -> Option<String> {
         self.active_session

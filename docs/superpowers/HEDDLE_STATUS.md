@@ -129,7 +129,7 @@ selector no longer render. No local terminal / Agent Mode / BYOK / CLI-agent /
 workflow / notebook / MCP capability is affected.
 
 Left enabled (verified local, not Warp-cloud): CrossRepoContext, RemoteCodeReview,
-WarpifyFooter, McpServer, SendTelemetryToFile (local file; telemetry_config is
+HeddlifyFooter, McpServer, SendTelemetryToFile (local file; telemetry_config is
 None so nothing ships).
 
 ### Physical deletion of the now-dormant code (in progress)
