@@ -1161,7 +1161,6 @@ pub enum LoginEventSource {
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TelemetryQueuedQueryOrigin {
-    InitialCloudMode,
     QueueSlashCommand,
     AutoQueueToggle,
     LrcAutoQueue,

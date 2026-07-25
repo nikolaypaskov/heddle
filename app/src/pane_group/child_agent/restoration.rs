@@ -233,16 +233,12 @@ impl PaneGroup {
             return;
         }
 
+        // Heddle (FOSS): a remote child ran on Warp's cloud. With the ambient runtime
+        // removed there is nothing to re-attach to, so the pane is not restored.
         if child_conversation.is_remote_child() {
-            let Some(task_id) = child_conversation.task_id() else {
-                log::warn!(
-                    "Cannot restore remote child conversation {child_id:?} without a task ID"
-                );
-                return;
-            };
-            // Heddle (FOSS): task-backed (cloud) hidden child hydration is removed
-            // with the ambient runtime.
-            let _ = (child_conversation, parent_pane_id, task_id);
+            log::warn!(
+                "Not restoring remote child conversation {child_id:?}: cloud runs are removed"
+            );
             return;
         }
         let child_task_context =

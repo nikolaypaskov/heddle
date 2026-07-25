@@ -578,7 +578,7 @@ impl TerminalViewMetadata {
         };
         let view = terminal_view.as_ref(app);
         Self {
-            is_ambient: view.is_ambient_agent_session(app),
+            is_ambient: view.is_ambient_agent_session(),
             branch: view.current_git_branch(app),
         }
     }

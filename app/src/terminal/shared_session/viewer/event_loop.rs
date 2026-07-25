@@ -253,12 +253,7 @@ impl EventLoop {
                         // follow-up.
                         if should_clear_input && let Some(view) = self.terminal_view.upgrade(ctx) {
                             view.update(ctx, |view, ctx| {
-                                // Skip during cloud setup: clearing on every setup command would
-                                // wipe a follow-up the viewer is composing. Mirrors the
-                                // `InputUpdated` guard.
-                                let skip_clear_during_setup = false;
-                                if skip_clear_during_setup || view.has_queued_command_in_flight(ctx)
-                                {
+                                if view.has_queued_command_in_flight(ctx) {
                                     return;
                                 }
                                 view.input().update(ctx, |input, ctx| {

@@ -1065,7 +1065,7 @@ fn summary_conversation_status_for_terminal(
         return Some(session.status.to_conversation_status());
     }
 
-    let is_ambient = terminal_view.is_ambient_agent_session(app);
+    let is_ambient = terminal_view.is_ambient_agent_session();
     let has_conversation = terminal_view
         .selected_conversation_display_title(app)
         .is_some();
@@ -1455,7 +1455,7 @@ fn render_detail_kind_badge_icon(
                 return icon.to_warpui_icon(color).finish();
             }
 
-            let icon = if terminal_view.is_ambient_agent_session(app) {
+            let icon = if terminal_view.is_ambient_agent_session() {
                 WarpIcon::OzCloud
             } else if terminal_view
                 .selected_conversation_display_title(app)
@@ -4128,7 +4128,7 @@ fn preferred_agent_tab_titles(
 fn terminal_agent_text(terminal_view: &TerminalView, app: &AppContext) -> TerminalAgentText {
     let cli_agent_session = CLIAgentSessionsModel::as_ref(app).session(terminal_view.id());
     let is_plugin_backed = cli_agent_session.is_some_and(|session| session.listener.is_some());
-    let is_ambient_agent = terminal_view.is_ambient_agent_session(app);
+    let is_ambient_agent = terminal_view.is_ambient_agent_session();
 
     let mut agent_text = TerminalAgentText {
         is_oz_agent: is_ambient_agent,
@@ -4246,30 +4246,17 @@ pub(super) fn pane_summary_kind(
     Some(typed.summary_pane_kind(title, app))
 }
 
-/// Returns the best available working-directory string for a terminal pane,
-/// incorporating cloud environment name and setup status for ambient agent sessions.
+/// Returns the best available working-directory string for a terminal pane.
+///
+/// Heddle (FOSS): upstream layered a cloud environment name and setup status on top of
+/// this for ambient agent panes; with the ambient runtime removed there is no such pane.
 fn resolved_terminal_working_directory(
     terminal_view: &TerminalView,
     app: &AppContext,
 ) -> Option<String> {
-    let working_directory = terminal_view
+    terminal_view
         .display_working_directory(app)
-        .filter(|wd| !wd.trim().is_empty());
-    cloud_agent_working_directory_and_env(terminal_view, working_directory.as_deref(), app)
-        .or(working_directory)
-}
-
-/// For cloud agent panes, builds a composite string from the environment name,
-/// setup status, and/or working directory. Returns `None` for non-cloud sessions.
-fn cloud_agent_working_directory_and_env(
-    terminal_view: &TerminalView,
-    working_directory: Option<&str>,
-    app: &AppContext,
-) -> Option<String> {
-    // Heddle (FOSS): the ambient cloud-agent runtime is removed, so a pane is never a
-    // cloud-agent session and has no environment/setup status to show.
-    let _ = (terminal_view, working_directory, app);
-    None
+        .filter(|wd| !wd.trim().is_empty())
 }
 
 fn render_terminal_row_content(

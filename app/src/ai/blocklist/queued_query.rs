@@ -117,8 +117,8 @@ impl QueuedQuery {
 
     /// Returns true if this row is locked from user mutation, reorder, and auto-fire.
     /// Locked rows cannot be edited, deleted, reordered, pushed manually, or auto-fired by
-    /// the drain mechanism. The initial Cloud Mode row is locked permanently; PendingLrcAutoQueue
-    /// rows are locked only until the action snapshot fires.
+    /// the drain mechanism. `PendingLrcAutoQueue` rows are locked until the action snapshot
+    /// fires, at which point they become `LrcAutoQueue` and unlock.
     pub fn is_locked(&self) -> bool {
         matches!(self.origin, QueuedQueryOrigin::PendingLrcAutoQueue)
     }

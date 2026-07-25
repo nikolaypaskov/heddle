@@ -50,7 +50,7 @@ pub(crate) fn terminal_view_agent_icon_variant(
     // NOT the mere presence of an orchestrator task id — a manually shared *local* (`User`)
     // session carries a `source_task_id` sidecar but is not cloud (see QUALITY-726). Local
     // orchestration children always keep the local treatment.
-    let is_cloud = (terminal_view.is_cloud_agent_session(app) || server_ambient_task_id.is_some())
+    let is_cloud = (terminal_view.is_cloud_agent_session() || server_ambient_task_id.is_some())
         && !is_local_child;
 
     let inputs = TerminalIconInputs {

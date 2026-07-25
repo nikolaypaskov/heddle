@@ -12695,7 +12695,7 @@ impl Input {
             .is_some_and(|panel| panel.as_ref(ctx).enter_sends_queued_prompt(ctx))
         {
             // An empty-buffer Enter sends the top queued row, mirroring its send-now button.
-            // The locked initial cloud-mode head row is not sendable, so Enter does nothing
+            // A locked head row is not sendable, so Enter does nothing
             // while it sits at the head of the queue.
             let conversation_id =
                 BlocklistAIHistoryModel::as_ref(ctx).active_conversation_id(self.terminal_view_id);

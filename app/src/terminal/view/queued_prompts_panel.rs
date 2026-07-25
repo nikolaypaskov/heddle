@@ -297,7 +297,7 @@ impl QueuedPromptsPanelView {
     }
 
     /// Whether the header shows the "⏎ to send" hint: Enter would send, no row is in inline
-    /// edit mode, and the head row is sendable (not the locked initial cloud-mode prompt).
+    /// edit mode, and the head row is sendable (i.e. not locked).
     fn should_show_enter_hint(&self, ctx: &AppContext) -> bool {
         let Some(conv_id) = self.active_conversation_id else {
             return false;
@@ -366,12 +366,11 @@ impl QueuedPromptsPanelView {
         self.update_send_now_availability(ctx);
     }
 
-    /// Updates each row's "send now" button: disabled, with a tooltip explaining the wait, for the
-    /// locked initial cloud-mode prompt and for every row while that locked row sits at the head of
-    /// the queue — i.e. while the cloud environment is still setting up, with no live agent yet to
-    /// receive an immediate submission. When a long-running-command subagent (the "full terminal
-    /// use agent") is in control, the enabled tooltip explains that send-now targets that subagent.
-    /// Otherwise it is enabled with the default "Send now" tooltip.
+    /// Updates each row's "send now" button: disabled, with a tooltip explaining the wait, for a
+    /// `PendingLrcAutoQueue` row whose action snapshot has not fired yet. When a
+    /// long-running-command subagent (the "full terminal use agent") is in control, the enabled
+    /// tooltip explains that send-now targets that subagent. Otherwise it is enabled with the
+    /// default "Send now" tooltip.
     fn update_send_now_availability(&mut self, ctx: &mut ViewContext<Self>) {
         let Some(conv_id) = self.active_conversation_id else {
             return;

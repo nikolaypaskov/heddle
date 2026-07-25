@@ -23910,7 +23910,7 @@ impl TypedActionView for Workspace {
 
                             #[cfg(not(target_family = "wasm"))]
                             let command_name = {
-                                let is_cloud_agent_context = terminal.is_ambient_agent_session(ctx)
+                                let is_cloud_agent_context = terminal.is_ambient_agent_session()
                                     || terminal
                                         .input()
                                         .as_ref(ctx)

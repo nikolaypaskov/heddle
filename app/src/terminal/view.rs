@@ -2811,8 +2811,6 @@ pub struct TerminalView {
     /// Only available on non-WASM platforms (WASM uses a per-window button instead).
     #[cfg(not(target_arch = "wasm32"))]
     conversation_details_panel_toggle_mouse_state: warpui::elements::MouseStateHandle,
-    /// Mouse state handle for the ambient agent cancel button in the pane header.
-    ambient_agent_cancel_mouse_state: warpui::elements::MouseStateHandle,
 
     /// Environment setup mode selector modal for /create-environment command.
     environment_setup_mode_selector: ViewHandle<EnvironmentSetupModeSelector>,
@@ -2913,7 +2911,7 @@ impl TerminalView {
     }
 
     fn is_nested_cloud_mode(&self, app: &AppContext) -> bool {
-        if !self.is_ambient_agent_session(app) {
+        if !self.is_ambient_agent_session() {
             return false;
         }
 
@@ -4292,7 +4290,6 @@ impl TerminalView {
             conversation_details_panel_auto_open_policy: Default::default(),
             #[cfg(not(target_arch = "wasm32"))]
             conversation_details_panel_toggle_mouse_state: Default::default(),
-            ambient_agent_cancel_mouse_state: Default::default(),
             active_init_project_model: None,
             is_pending_aws_login: false,
             manual_pty_shutdown_requested: false,
@@ -4726,7 +4723,7 @@ impl TerminalView {
         // For nested ambient agent sessions (cloud mode), pop from pane stack.
         // Root cloud-mode panes have no parent terminal to return to, so escape
         // is a no-op to avoid leaving the app in a borked state.
-        if self.is_ambient_agent_session(ctx) {
+        if self.is_ambient_agent_session() {
             if let Some(pane_stack) = self
                 .pane_stack
                 .as_ref()
@@ -5914,7 +5911,7 @@ impl TerminalView {
                     }
                 }
 
-                if self.is_ambient_agent_session(ctx)
+                if self.is_ambient_agent_session()
                     && self
                         .model
                         .lock()
@@ -6187,7 +6184,7 @@ impl TerminalView {
                 }
 
                 if FeatureFlag::QueuedPromptsV2.is_enabled()
-                    && self.is_ambient_agent_session(ctx)
+                    && self.is_ambient_agent_session()
                     && previous_status.is_some_and(|status| {
                         status.is_in_progress()
                             || status.is_transient_error()
@@ -6213,7 +6210,7 @@ impl TerminalView {
 
                 // Show AI credits modal for cloud-mode out-of-credits failures.
                 if FeatureFlag::CloudMode.is_enabled()
-                    && self.is_ambient_agent_session(ctx)
+                    && self.is_ambient_agent_session()
                     && !self.model.lock().is_shared_ambient_agent_session()
                     && let Some(conversation) =
                         BlocklistAIHistoryModel::as_ref(ctx).conversation(conversation_id)
@@ -8000,13 +7997,7 @@ impl TerminalView {
             return false;
         }
 
-        if model.shared_session_status().is_view_pending() && !self.is_ambient_agent_session(app) {
-            return false;
-        }
-
-        // In cloud agent conversations, once the shared session is ready but before the first
-        // agent exchange arrives, we hide the interactive input view.
-        if false {
+        if model.shared_session_status().is_view_pending() && !self.is_ambient_agent_session() {
             return false;
         }
 
@@ -13850,7 +13841,7 @@ impl TerminalView {
         // directly to the environment management pane
         if FeatureFlag::AgentView.is_enabled()
             && self.agent_view_controller.as_ref(ctx).is_active()
-            && self.is_ambient_agent_session(ctx)
+            && self.is_ambient_agent_session()
         {
             self.open_environment_management_pane(ctx);
             return;
@@ -18418,7 +18409,7 @@ impl TerminalView {
     fn clear_buffer(&mut self, ctx: &mut ViewContext<Self>) {
         let agent_view_state = self.agent_view_controller.as_ref(ctx).agent_view_state();
         let is_fullscreen_agent_view = agent_view_state.is_fullscreen();
-        let is_ambient_agent = self.is_ambient_agent_session(ctx);
+        let is_ambient_agent = self.is_ambient_agent_session();
 
         // When in the modal agent view, "clear buffer" has special semantics.
         // Try to clear it specially, but if it wasn't successful, then clear normally.
@@ -19893,7 +19884,7 @@ impl TerminalView {
 
                 #[cfg(not(target_family = "wasm"))]
                 let command_name = {
-                    let is_cloud_agent_context = self.is_ambient_agent_session(ctx)
+                    let is_cloud_agent_context = self.is_ambient_agent_session()
                         || self.input.as_ref(ctx).is_cloud_mode_input_v2_composing();
                     let conversation_id = self
                         .agent_view_controller
@@ -20934,7 +20925,7 @@ impl TerminalView {
                         .block_list()
                         .active_block()
                         .is_active_and_long_running();
-                    if is_long_running && self.is_ambient_agent_session(ctx) {
+                    if is_long_running && self.is_ambient_agent_session() {
                         self.exit_agent_view(ctx);
                     } else if !is_long_running {
                         // During first-time setup, exit directly without a confirmation dialog.
@@ -25716,7 +25707,6 @@ impl TypedActionView for TerminalView {
             | EnterCloudAgentView
             | StartNewAgentConversation { .. }
             | ToggleConversationDetailsPanel
-            | CancelAmbientAgentTask
             | OpenInlineHistoryMenu
             | OpenModelSelector
             | ResolvePromptSuggestion(..)
@@ -26800,9 +26790,6 @@ impl TypedActionView for TerminalView {
                 }
                 ctx.notify();
             }
-            CancelAmbientAgentTask => {
-                ctx.notify();
-            }
             ToggleUsageFooter => {
                 self.toggle_usage_footer(ctx);
             }
@@ -26957,7 +26944,7 @@ impl View for TerminalView {
                         .with_child(column.finish())
                 } else {
                     let is_view_pending_clause = model.shared_session_status().is_view_pending()
-                        && !self.is_ambient_agent_session(app);
+                        && !self.is_ambient_agent_session();
                     let is_loading_transcript = model.is_loading_conversation_transcript();
                     let should_show_loading = is_view_pending_clause || is_loading_transcript;
                     let output_area = if should_show_loading {
@@ -27512,7 +27499,7 @@ impl View for TerminalView {
             }
         }
 
-        if self.is_ambient_agent_session(app) && !self.is_nested_cloud_mode(app) {
+        if self.is_ambient_agent_session() && !self.is_nested_cloud_mode(app) {
             context.set.insert(init::ROOT_CLOUD_MODE_PANE_KEY);
         }
 

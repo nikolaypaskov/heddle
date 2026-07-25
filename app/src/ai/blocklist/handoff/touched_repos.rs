@@ -1,21 +1,14 @@
-//! Touched-workspace derivation for local-to-cloud handoff (REMOTE-1486).
+//! Repo-aware environment selection, left over from local-to-cloud handoff (REMOTE-1486).
 //!
-//! Given an [`AIConversation`] (or the flat list of paths extracted from one) and
-//! the user's currently-known cloud agent environments, this module produces:
+//! Heddle (FOSS): conversation path-extraction and the snapshot pipeline it fed are
+//! gone with the cloud handoff. What remains is used by the environment selector in
+//! `terminal/input.rs`:
 //!
-//! 1. The flat set of filesystem paths an agent run has touched, walked off the
-//!    conversation's action history and the per-exchange `working_directory`
-//!    (see [`extract_paths_from_conversation`]).
-//! 2. A [`TouchedWorkspace`] enumerating the distinct git repos and orphan files the
-//!    local agent has touched. Each repo carries a parsed `repo_id` (`<owner>/<repo>`)
-//!    derived from its `origin` remote URL, fetched via an async `git` invocation so
-//!    derivation never blocks the UI thread.
-//! 3. A repo-aware default environment selection that layers on top of the existing
-//!    cloud-agent setup recency-sort.
-//!
-//! Path extraction is sync and pure (no I/O), and the workspace derivation is async
-//! (one `git remote get-url origin` per unique repo). Callers run them in sequence
-//! off the main thread; see `app/src/workspace/view.rs::start_local_to_cloud_handoff`.
+//! 1. [`resolve_repo_for_path`] resolves a directory to its enclosing git repo and
+//!    parses `<owner>/<repo>` from the `origin` remote, via an async `git` invocation
+//!    so it never blocks the UI thread.
+//! 2. [`pick_handoff_overlap_env`] picks the environment with the most overlap against
+//!    those repos, breaking ties by recency.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

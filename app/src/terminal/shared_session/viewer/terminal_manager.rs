@@ -332,13 +332,10 @@ impl TerminalManager {
     /// Create a new terminal manager for viewing a shared session. See
     /// [`Self::enable_orchestration_polling`] for the meaning of the flag.
     ///
-    /// `is_ambient_agent` controls whether the resulting `TerminalView` is
-    /// constructed with an `ambient_agent_view_model` up front. Pass `true` when
-    /// the pane is known to be an ambient (cloud) run at construction time
-    /// (compose panes, restore, and attach-to-running). Shared-session viewers
-    /// that only discover the session is ambient at `JoinedSuccessfully` (e.g. a
-    /// raw `shared_session` link) pass `false` and get the model created lazily
-    /// then via `TerminalView::begin_viewing_ambient_session`.
+    /// `is_ambient_agent` selects the terminal model flavour: `true` builds a
+    /// cloud-mode shared-session viewer model, `false` builds the regular
+    /// shared-session viewer model. Pass `true` only when the caller already
+    /// knows the session is an ambient (cloud) run.
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         session_id: SessionId,
