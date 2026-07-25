@@ -33,7 +33,6 @@ pub(crate) enum AutoCloudHandoffSkipReason {
     AlreadyAttempted,
     NoFocusedConversation,
     TerminalNotFound { terminal_view_id: EntityId },
-    CloudPane,
     LongRunningCommand,
     ConversationNotLoaded { conversation_id: AIConversationId },
 }
@@ -165,25 +164,6 @@ impl AutoCloudHandoffController {
         }
     }
 
-    /// Marks the attempt as succeeded and surfaces the success toast:
-    /// immediately when the system is awake (e.g. the fork RPC resolved after
-    /// wake), otherwise deferred until `CpuWasAwakened` so the ephemeral
-    /// toast's dismissal timeout doesn't elapse while the user is away.
-    #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-    pub(crate) fn record_handoff_succeeded(
-        &mut self,
-        conversation_id: AIConversationId,
-        window_id: WindowId,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.attempted_conversation_ids.insert(conversation_id);
-
-        if self.is_system_sleeping {
-            self.pending_success_toast_window = Some(window_id);
-        } else {
-            Self::show_success_toast(window_id, ctx);
-        }
-    }
     #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
     pub(crate) fn record_handoff_failed(&mut self, conversation_id: AIConversationId) {
         self.attempted_conversation_ids.remove(&conversation_id);
@@ -316,14 +296,6 @@ impl AutoCloudHandoffController {
         else {
             return Err(AutoCloudHandoffSkipReason::TerminalNotFound { terminal_view_id });
         };
-
-        if terminal_view
-            .as_ref(ctx)
-            .ambient_agent_view_model()
-            .is_some()
-        {
-            return Err(AutoCloudHandoffSkipReason::CloudPane);
-        }
 
         if terminal_view.as_ref(ctx).has_active_long_running_command() {
             return Err(AutoCloudHandoffSkipReason::LongRunningCommand);

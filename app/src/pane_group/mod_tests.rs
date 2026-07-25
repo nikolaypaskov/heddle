@@ -2,14 +2,11 @@ use std::collections::HashMap;
 
 use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
 use ai::project_context::model::ProjectContextModel;
-use chrono::Utc;
 use pathfinder_geometry::rect::RectF;
-use persistence::model::ConversationUsageMetadata;
 #[cfg(feature = "local_fs")]
 use repo_metadata::RepoMetadataModel;
 use repo_metadata::repositories::DetectedRepositories;
 use repo_metadata::watcher::DirectoryWatcher;
-use session_sharing_protocol::common::SessionId;
 use shared_session::permissions_manager::SessionPermissionsManager;
 use uuid::Uuid;
 use warp_core::features::FeatureFlag;
@@ -20,9 +17,6 @@ use warpui::windowing::state::ApplicationStage;
 use warpui::{App, ModelHandle};
 use watcher::HomeDirectoryWatcher;
 
-use super::child_agent::hydration::{
-    RemoteChildHydrationAction, decide_remote_child_hydration_action,
-};
 use super::child_agent::{
     HiddenChildAgentConversationRequest, HiddenChildAgentTaskContext,
     create_hidden_child_agent_conversation,
@@ -30,19 +24,11 @@ use super::child_agent::{
 use super::*;
 use crate::ai::AIRequestUsageModel;
 use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
-use crate::ai::agent::api::ServerConversationToken;
-use crate::ai::agent::conversation::{
-    AIAgentHarness, AIConversation, AIConversationId, ServerAIConversationMetadata,
-};
+use crate::ai::agent::conversation::{AIConversation, AIConversationId};
 use crate::ai::agent_conversations_model::AgentConversationsModel;
+use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
-use crate::ai::ambient_agents::task::TaskPrincipalInfo;
-use crate::ai::ambient_agents::{
-    AgentSource, AmbientAgentLiveSessionState, AmbientAgentTask, AmbientAgentTaskId,
-    AmbientAgentTaskState,
-};
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
-use crate::ai::blocklist::history_model::CloudConversationData;
 use crate::ai::blocklist::local_agent_task_sync_model::LocalAgentTaskSyncModel;
 use crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer;
 use crate::ai::blocklist::orchestration_events::OrchestrationEventService;
@@ -59,10 +45,8 @@ use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::ai::restored_conversations::RestoredAgentConversations;
 use crate::ai::skills::SkillManager;
 use crate::auth::auth_manager::AuthManager;
-use crate::auth::user::TEST_USER_UID;
 use crate::changelog_model::ChangelogModel;
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::cloud_object::{Owner, Revision, ServerMetadata, ServerPermissions};
 use crate::context_chips::prompt::Prompt;
 use crate::network::NetworkStatus;
 use crate::notebooks::editor::keys::NotebookKeybindings;
@@ -73,7 +57,6 @@ use crate::resource_center::TipsCompleted;
 use crate::search::files::model::FileSearchModel;
 use crate::server::cloud_objects::listener::Listener;
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::ServerId;
 use crate::server::server_api::ServerApiProvider;
 use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
@@ -87,7 +70,6 @@ use crate::terminal::history::History;
 use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::local_tty::TerminalManager;
 use crate::terminal::local_tty::spawner::PtySpawner;
-use crate::terminal::model::terminal_model::ConversationTranscriptViewerStatus;
 use crate::terminal::resizable_data::ResizableData;
 use crate::terminal::shared_session::{
     IsSharedSessionCreator, SharedSessionActionSource, SharedSessionScrollbackType,
@@ -279,94 +261,6 @@ fn new_notebook(ctx: &mut ViewContext<PaneGroup>) -> ViewHandle<NotebookView> {
 
 fn new_ambient_agent_task_id() -> AmbientAgentTaskId {
     Uuid::new_v4().to_string().parse().unwrap()
-}
-
-fn ambient_agent_task_for_current_user(task_id: AmbientAgentTaskId) -> AmbientAgentTask {
-    let now = Utc::now();
-    AmbientAgentTask {
-        task_id,
-        parent_run_id: None,
-        title: "Owned task".to_string(),
-        state: AmbientAgentTaskState::Succeeded,
-        prompt: "test".to_string(),
-        created_at: now,
-        started_at: Some(now),
-        updated_at: now,
-        run_time: Some("PT1S".parse().unwrap()),
-        status_message: None,
-        source: Some(AgentSource::CloudMode),
-        session_id: None,
-        session_link: None,
-        executor: None,
-        creator: Some(TaskPrincipalInfo {
-            creator_type: "USER".to_string(),
-            uid: TEST_USER_UID.to_string(),
-            display_name: None,
-        }),
-        conversation_id: None,
-        request_usage: None,
-        is_sandbox_running: false,
-        agent_config_snapshot: None,
-        artifacts: vec![],
-        last_event_sequence: None,
-        children: vec![],
-    }
-}
-
-fn mock_server_metadata() -> ServerMetadata {
-    ServerMetadata {
-        uid: ServerId::default(),
-        revision: Revision::now(),
-        metadata_last_updated_ts: Utc::now().into(),
-        trashed_ts: None,
-        folder_id: None,
-        is_welcome_object: false,
-        creator_uid: None,
-        last_editor_uid: None,
-        current_editor_uid: None,
-    }
-}
-
-fn mock_server_permissions() -> ServerPermissions {
-    ServerPermissions {
-        space: Owner::mock_current_user(),
-        guests: Vec::new(),
-        anyone_link_sharing: None,
-        permissions_last_updated_ts: Utc::now().into(),
-    }
-}
-
-fn test_server_conversation_metadata(
-    task_id: Option<AmbientAgentTaskId>,
-) -> ServerAIConversationMetadata {
-    ServerAIConversationMetadata {
-        title: "Restored cloud conversation".to_string(),
-        working_directory: None,
-        harness: AIAgentHarness::Oz,
-        usage: ConversationUsageMetadata {
-            was_summarized: false,
-            context_window_usage: 0.0,
-            credits_spent: 0.0,
-            platform_credits_spent: 0.0,
-            credits_spent_for_last_block: None,
-            token_usage: vec![],
-            tool_usage_metadata: Default::default(),
-            context_window_segments: Vec::new(),
-        },
-        metadata: mock_server_metadata(),
-        creator: None,
-        permissions: mock_server_permissions(),
-        ambient_agent_task_id: task_id,
-        server_conversation_token: ServerConversationToken::new("test-server-token".to_string()),
-        artifacts: Vec::new(),
-    }
-}
-
-fn cloud_conversation_with_ambient_task(task_id: AmbientAgentTaskId) -> CloudConversationData {
-    let mut conversation = AIConversation::new(false, false);
-    conversation.set_task_id(task_id);
-    conversation.set_server_metadata(test_server_conversation_metadata(Some(task_id)));
-    CloudConversationData::Oz(Box::new(conversation))
 }
 
 fn start_parent_conversation(
@@ -758,30 +652,6 @@ fn test_swapping_to_child_agent_from_maximized_pane_keeps_maximized_state() {
     });
 }
 #[test]
-fn test_insert_hidden_ambient_child_agent_pane_suppresses_details_auto_open() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let parent_pane_id = get_newly_created_pane_id(panes, &[]);
-            let child_pane_id =
-                panes.insert_ambient_agent_pane_hidden_for_child_agent(parent_pane_id, ctx);
-
-            let terminal_view = panes
-                .terminal_view_from_pane_id(child_pane_id, ctx)
-                .expect("hidden ambient child pane should have a terminal view");
-            assert!(
-                terminal_view
-                    .as_ref(ctx)
-                    .is_initial_conversation_details_panel_auto_open_suppressed_for_test(),
-                "hidden ambient child panes opened from the parent orchestration UI should not \
-                 auto-open details during environment setup or session readiness"
-            );
-        });
-    });
-}
-#[test]
 fn test_hidden_child_creation_applies_ambient_task_id_to_controller() {
     App::test((), |mut app| async move {
         initialize_app(&mut app);
@@ -1031,74 +901,6 @@ fn test_pane_group_restore_loop_keeps_orchestration_topology_and_materializes_ch
             assert!(
                 !panes.panes.is_pane_in_tree(child_pane_id),
                 "materialized child pane must remain off-tree (hidden)",
-            );
-        });
-    });
-}
-
-#[test]
-fn test_ambient_transcript_restore_uses_generic_viewer_when_handoff_disabled() {
-    let _handoff = FeatureFlag::HandoffCloudCloud.override_enabled(false);
-    let _setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-        let task_id = new_ambient_agent_task_id();
-
-        pane_group.update(&mut app, |panes, ctx| {
-            panes.load_data_into_conversation_transcript_viewer(
-                cloud_conversation_with_ambient_task(task_id),
-                Some(task_id),
-                ctx,
-            );
-        });
-
-        pane_group.read(&app, |panes, ctx| {
-            let terminal_view = panes
-                .active_session_view(ctx)
-                .expect("fallback viewer should have an active terminal view");
-            let view = terminal_view.as_ref(ctx);
-            assert!(view.ambient_agent_view_model().is_none());
-
-            let model = view.model.lock();
-            assert!(model.is_conversation_transcript_viewer());
-            assert!(model.is_read_only());
-            assert_eq!(
-                model.conversation_transcript_viewer_status(),
-                Some(&ConversationTranscriptViewerStatus::ViewingAmbientConversation(task_id))
-            );
-        });
-    });
-}
-
-/// Pins the existing behavior of the non-cloud-mode branch so callers that
-/// rely on it (e.g. `new_for_shared_session_viewer`, the per-child viewer
-/// path) keep getting a `TerminalView` without an `ambient_agent_view_model`.
-/// Future changes that would flip this default are loud.
-#[test]
-fn create_shared_session_viewer_without_cloud_mode_does_not_populate_ambient_agent_view_model() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-        let pane_group = mock_pane_group(&mut app, Default::default());
-
-        pane_group.update(&mut app, |panes, ctx| {
-            let resources = TerminalViewResources {
-                tips_completed: panes.tips_completed.clone(),
-                server_api: panes.server_api.clone(),
-                model_event_sender: panes.model_event_sender.clone(),
-            };
-            let (terminal_view, _terminal_manager) = PaneGroup::create_shared_session_viewer(
-                SessionId::new(),
-                resources,
-                Vector2F::new(800., 600.),
-                false, // enable_orchestration_polling
-                false, // is_cloud_mode
-                ctx,
-            );
-            assert!(
-                terminal_view.as_ref(ctx).ambient_agent_view_model().is_none(),
-                "non-cloud-mode shared-session viewer must not construct an ambient_agent_view_model; existing callers depend on this",
             );
         });
     });
@@ -2653,178 +2455,4 @@ fn test_focused_pane_is_synchronized_with_application_focus() {
             ctx.emit(Event::OpenPromptEditor);
         });
     });
-}
-
-/// Builds an [`AmbientAgentTask`] tailored for unit-testing
-/// [`decide_remote_child_hydration_action`].
-///
-/// `state`, `is_sandbox_running`, and `session_id` combine to determine the
-/// task's [`AmbientAgentLiveSessionState`]:
-/// - `state == InProgress`, `is_sandbox_running == true`, and a parseable
-///   UUID-shaped `session_id` resolve to
-///   [`AmbientAgentLiveSessionState::Attachable`].
-/// - `state == InProgress`, `is_sandbox_running == true`, and an
-///   unparseable `session_id` resolve to
-///   [`AmbientAgentLiveSessionState::ActiveUnattachable`].
-/// - Any other shape resolves to [`AmbientAgentLiveSessionState::Inactive`].
-///
-/// `conversation_id` populates the server conversation token used by the
-/// `LoadTranscript` branch; pass `None` to exercise `Fallback`.
-///
-/// Note: `session_link` is unconditionally set to `None` in this helper.
-/// `AmbientAgentTask::active_live_session_state` falls back to parsing the
-/// session id out of `session_link` when `session_id` is absent, so a test
-/// that exercises that branch would need a different helper.
-fn hydration_decision_task(
-    state: AmbientAgentTaskState,
-    is_sandbox_running: bool,
-    session_id: Option<&str>,
-    conversation_id: Option<&str>,
-) -> AmbientAgentTask {
-    let mut task = ambient_agent_task_for_current_user(new_ambient_agent_task_id());
-    task.state = state;
-    task.is_sandbox_running = is_sandbox_running;
-    task.session_id = session_id.map(str::to_string);
-    task.session_link = None;
-    task.conversation_id = conversation_id.map(str::to_string);
-    task
-}
-
-#[test]
-fn decide_remote_child_hydration_attachable_live_session_chooses_live_attach() {
-    // InProgress + sandbox running + parseable session id -> Attachable.
-    let task = hydration_decision_task(
-        AmbientAgentTaskState::InProgress,
-        true,
-        Some("11111111-1111-1111-1111-111111111111"),
-        Some("server-token-irrelevant-for-attach"),
-    );
-    assert_eq!(
-        task.active_live_session_state(),
-        AmbientAgentLiveSessionState::Attachable {
-            session_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
-        },
-    );
-
-    assert_eq!(
-        decide_remote_child_hydration_action(&task),
-        RemoteChildHydrationAction::LiveAttach,
-    );
-}
-
-#[test]
-fn decide_remote_child_hydration_inactive_with_token_loads_transcript() {
-    // Terminal state -> Inactive, server token present -> LoadTranscript.
-    let task = hydration_decision_task(
-        AmbientAgentTaskState::Succeeded,
-        false,
-        None,
-        Some("my-server-token"),
-    );
-    assert_eq!(
-        task.active_live_session_state(),
-        AmbientAgentLiveSessionState::Inactive,
-    );
-
-    assert_eq!(
-        decide_remote_child_hydration_action(&task),
-        RemoteChildHydrationAction::LoadTranscript {
-            server_token: ServerConversationToken::new("my-server-token".to_string()),
-            task_is_terminal: true,
-        },
-    );
-}
-
-#[test]
-fn decide_remote_child_hydration_active_unattachable_with_token_loads_transcript() {
-    // InProgress + sandbox running + unparseable session id ->
-    // ActiveUnattachable. With a server token we still prefer LoadTranscript
-    // over Fallback so the user sees the merged transcript instead of a bare
-    // tombstone.
-    let task = hydration_decision_task(
-        AmbientAgentTaskState::InProgress,
-        true,
-        Some("not-a-valid-uuid"),
-        Some("unattachable-server-token"),
-    );
-    assert_eq!(
-        task.active_live_session_state(),
-        AmbientAgentLiveSessionState::ActiveUnattachable,
-    );
-
-    assert_eq!(
-        decide_remote_child_hydration_action(&task),
-        RemoteChildHydrationAction::LoadTranscript {
-            server_token: ServerConversationToken::new("unattachable-server-token".to_string()),
-            task_is_terminal: false,
-        },
-    );
-}
-
-#[test]
-fn decide_remote_child_hydration_inactive_without_token_falls_back() {
-    // Terminal state, no server token -> nothing to attach to and nothing to
-    // load. Terminal => tombstone is appropriate.
-    let task = hydration_decision_task(AmbientAgentTaskState::Succeeded, false, None, None);
-    assert_eq!(
-        task.active_live_session_state(),
-        AmbientAgentLiveSessionState::Inactive,
-    );
-
-    assert_eq!(
-        decide_remote_child_hydration_action(&task),
-        RemoteChildHydrationAction::Fallback {
-            task_is_terminal: true,
-        },
-    );
-}
-
-/// `ActiveUnattachable` + no server token: the run is still in progress but
-/// the client can't attach and has nothing to load. Fallback must carry
-/// `task_is_terminal: false` so the dispatch arm skips the
-/// conversation-ended tombstone.
-#[test]
-fn decide_remote_child_hydration_active_unattachable_without_token_falls_back_non_terminal() {
-    let task = hydration_decision_task(
-        AmbientAgentTaskState::InProgress,
-        true,
-        Some("not-a-valid-uuid"),
-        None,
-    );
-    assert_eq!(
-        task.active_live_session_state(),
-        AmbientAgentLiveSessionState::ActiveUnattachable,
-    );
-
-    assert_eq!(
-        decide_remote_child_hydration_action(&task),
-        RemoteChildHydrationAction::Fallback {
-            task_is_terminal: false,
-        },
-    );
-}
-
-/// An `AmbientAgentTask` whose `conversation_id` is `Some("")` (or
-/// whitespace-only) is treated the same as `None`: the dispatch must not
-/// route to a no-op cloud fetch wrapped in a misleading tombstone. The
-/// `Fallback` arm handles "nothing to attach to, nothing to load"
-/// correctly. Terminal here => tombstone is appropriate.
-#[test]
-fn decide_remote_child_hydration_empty_token_falls_back() {
-    for empty_token in [Some(""), Some("   "), Some("\t\n")] {
-        let task =
-            hydration_decision_task(AmbientAgentTaskState::Succeeded, false, None, empty_token);
-        assert_eq!(
-            task.active_live_session_state(),
-            AmbientAgentLiveSessionState::Inactive,
-            "empty/whitespace token={empty_token:?} should still resolve to Inactive",
-        );
-        assert_eq!(
-            decide_remote_child_hydration_action(&task),
-            RemoteChildHydrationAction::Fallback {
-                task_is_terminal: true,
-            },
-            "empty/whitespace token={empty_token:?} must fall through to Fallback",
-        );
-    }
 }

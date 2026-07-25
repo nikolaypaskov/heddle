@@ -131,11 +131,7 @@ impl TerminalView {
             }
 
             let is_cloud_conversation_selection = model.is_shared_ambient_agent_session()
-                || model.is_conversation_transcript_viewer()
-                || self
-                    .ambient_agent_view_model
-                    .as_ref()
-                    .is_some_and(|model| model.as_ref(ctx).is_ambient_agent());
+                || model.is_conversation_transcript_viewer();
             if !is_cloud_conversation_selection {
                 return None;
             }
@@ -162,14 +158,6 @@ impl TerminalView {
         model: &TerminalModel,
         ctx: &AppContext,
     ) -> bool {
-        if self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(ctx).blocks_cloud_followups())
-        {
-            return true;
-        }
-
         let Some(task_id) = self.ambient_agent_task_id_for_details_panel_from_model(model, ctx)
         else {
             return false;
@@ -794,13 +782,8 @@ impl TerminalView {
         self.update_shared_session_pane_header(ctx);
         // Shared ambient agent sessions should auto-open the details panel once, except for
         // local-to-cloud handoff panes where the user stays in the moved conversation by default.
-        let is_local_to_cloud_handoff = self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(ctx).is_local_to_cloud_handoff());
         if FeatureFlag::CloudMode.is_enabled()
             && matches!(source_type, SessionSourceType::AmbientAgent { .. })
-            && !is_local_to_cloud_handoff
         {
             self.maybe_auto_open_conversation_details_panel(ctx);
         }
@@ -953,17 +936,10 @@ impl TerminalView {
             return;
         }
 
-        let Some(ambient_agent_view_model) = self.ambient_agent_view_model.as_ref() else {
-            self.show_error_toast("Couldn't continue this cloud task.".to_string(), ctx);
-            return;
-        };
-
-        if ambient_agent_view_model.as_ref(ctx).task_id() != Some(task_id) {
-            self.show_error_toast("Couldn't continue this cloud task.".to_string(), ctx);
-            return;
-        }
-        self.enable_cloud_followup_input_after_conversation_end(task_id, ctx);
-        self.focus_input_box(ctx);
+        // Heddle (FOSS): the ambient cloud-agent runtime is removed; there is no cloud
+        // task to continue.
+        let _ = task_id;
+        self.show_error_toast("Couldn't continue this cloud task.".to_string(), ctx);
         ctx.notify();
     }
 
@@ -2003,21 +1979,6 @@ impl TerminalView {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn restore_pty_to_sharer_size(&mut self, ctx: &mut ViewContext<Self>) {
         self.active_viewer_driven_size = None;
-        self.refresh_size(ctx);
-    }
-
-    /// Forces a fresh viewer-size report to the sharer by clearing the dedup cache and
-    /// refreshing size. No-op when not an active viewer or when viewer-driven sizing is
-    /// not eligible. Used when a new process (e.g. the harness CLI starting for a non-oz
-    /// Cloud Mode run) needs the sharer to resize its PTY so the new process picks up
-    /// correct terminal dimensions at startup.
-    pub(in crate::terminal::view) fn force_report_viewer_terminal_size(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if let Some(viewer) = self.shared_session_viewer_mut() {
-            viewer.last_reported_natural_size = None;
-        }
         self.refresh_size(ctx);
     }
 

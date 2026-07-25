@@ -7,10 +7,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use warpui::platform::WindowStyle;
-use warpui::{App, SingletonEntity, TypedActionView, ViewContext, ViewHandle};
+use warpui::{App, SingletonEntity, TypedActionView, ViewHandle};
 
-use super::TerminalView;
 use super::queued_prompts_panel::{
     QueuedPromptsPanelAction, QueuedPromptsPanelEvent, QueuedPromptsPanelView,
 };
@@ -25,8 +23,6 @@ use crate::ai::blocklist::{
 use crate::features::FeatureFlag;
 use crate::search::slash_command_menu::static_commands::commands;
 use crate::terminal::input::{Event as InputEvent, Input};
-use crate::terminal::shared_session::SharedSessionStatus;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModelEvent;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::test_util::terminal::{add_window_with_terminal, initialize_app_for_terminal_view};
 
@@ -75,51 +71,6 @@ fn drain_one(
     })
 }
 
-fn add_window_with_cloud_mode_terminal(app: &mut App) -> ViewHandle<TerminalView> {
-    let tips_model = app.add_model(|_| Default::default());
-    let (_, terminal) = app.add_window(WindowStyle::NotStealFocus, |ctx| {
-        TerminalView::new_for_test_with_cloud_mode(tips_model, None, true, ctx)
-    });
-    terminal.update(app, |view, _| {
-        view.model.lock().set_is_dummy_cloud_mode_session(true);
-    });
-    terminal
-}
-
-fn enter_cloud_setup_with_conversation(
-    view: &mut TerminalView,
-    ctx: &mut ViewContext<TerminalView>,
-) -> AIConversationId {
-    view.model
-        .lock()
-        .set_shared_session_status(SharedSessionStatus::ViewPending);
-    view.enter_ambient_agent_setup(None, ctx);
-    view.ai_context_model
-        .as_ref(ctx)
-        .selected_conversation_id(ctx)
-        .expect("cloud setup should select a conversation")
-}
-
-/// Returns the queue rows for `view`'s active conversation, looked up against the
-/// `QueuedQueryModel` singleton. Empty when no conversation is selected.
-fn queue_texts(
-    view: &TerminalView,
-    ctx: &ViewContext<TerminalView>,
-) -> Vec<(String, QueuedQueryOrigin)> {
-    let Some(conversation_id) = view
-        .ai_context_model
-        .as_ref(ctx)
-        .selected_conversation_id(ctx)
-    else {
-        return Vec::new();
-    };
-    QueuedQueryModel::as_ref(ctx)
-        .queue(conversation_id)
-        .iter()
-        .map(|query| (query.text().to_owned(), query.origin()))
-        .collect()
-}
-
 fn with_singleton<F>(test: F)
 where
     F: FnOnce(App, warpui::ModelHandle<QueuedQueryModel>, AIConversationId) + 'static,
@@ -151,37 +102,6 @@ fn complete_drain_pops_head_and_returns_submit_action() {
         model.read(&app, |m, _| {
             assert_eq!(m.queue(conv).len(), 1);
             assert_eq!(m.queue(conv)[0].text(), "second");
-        });
-    });
-}
-
-#[test]
-fn failed_event_keeps_locked_queue_row_under_cloud_mode_setup_v2() {
-    // Under CloudModeSetupV2, `Failed` keeps the legacy pending-user-query block in place
-    // (alongside the failure tombstone). The V2 queue-row removal is gated on the same
-    // condition, so the locked initial row stays so the user can review or retry.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-        let _cloud_mode_setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-        let _queued_prompts_v2 = FeatureFlag::QueuedPromptsV2.override_enabled(true);
-
-        let terminal = add_window_with_cloud_mode_terminal(&mut app);
-        terminal.update(&mut app, |view, ctx| {
-            enter_cloud_setup_with_conversation(view, ctx);
-            view.enqueue_initial_cloud_mode_prompt("initial".to_owned(), ctx)
-                .expect("active conversation should accept cloud queue rows");
-            view.handle_ambient_agent_event(
-                &AmbientAgentViewModelEvent::Failed {
-                    error_message: "failed setup".to_owned(),
-                },
-                ctx,
-            );
-            assert_eq!(
-                queue_texts(view, ctx),
-                vec![("initial".to_owned(), QueuedQueryOrigin::InitialCloudMode)]
-            );
         });
     });
 }
@@ -625,143 +545,6 @@ fn error_or_cancel_drain_leaves_queue_intact_when_input_is_non_empty() {
 }
 
 #[test]
-fn enqueue_followup_prompt_appends_compact_and_row_when_v2_is_enabled() {
-    // /compact-and follow-ups land in the queue with the CompactAndSlashCommand origin under V2.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-        let _cloud_mode_setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-        let _queued_prompts_v2 = FeatureFlag::QueuedPromptsV2.override_enabled(true);
-
-        let terminal = add_window_with_cloud_mode_terminal(&mut app);
-        terminal.update(&mut app, |view, ctx| {
-            let conversation_id = enter_cloud_setup_with_conversation(view, ctx);
-
-            view.enqueue_followup_prompt(
-                "follow up after summarize".to_owned(),
-                QueuedQueryOrigin::CompactAndSlashCommand,
-                conversation_id,
-                ctx,
-            );
-
-            assert_eq!(
-                queue_texts(view, ctx),
-                vec![(
-                    "follow up after summarize".to_owned(),
-                    QueuedQueryOrigin::CompactAndSlashCommand
-                )]
-            );
-            assert!(view.pending_user_query_view_id.is_none());
-        });
-    });
-}
-
-#[test]
-fn enqueue_followup_prompt_appends_fork_and_compact_row_when_v2_is_enabled() {
-    // /fork-and-compact follow-ups land in the queue with the ForkAndCompactSlashCommand origin.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-        let _cloud_mode_setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-        let _queued_prompts_v2 = FeatureFlag::QueuedPromptsV2.override_enabled(true);
-
-        let terminal = add_window_with_cloud_mode_terminal(&mut app);
-        terminal.update(&mut app, |view, ctx| {
-            let conversation_id = enter_cloud_setup_with_conversation(view, ctx);
-
-            view.enqueue_followup_prompt(
-                "work on the forked branch".to_owned(),
-                QueuedQueryOrigin::ForkAndCompactSlashCommand,
-                conversation_id,
-                ctx,
-            );
-
-            assert_eq!(
-                queue_texts(view, ctx),
-                vec![(
-                    "work on the forked branch".to_owned(),
-                    QueuedQueryOrigin::ForkAndCompactSlashCommand
-                )]
-            );
-        });
-    });
-}
-
-#[test]
-fn enqueue_followup_prompt_uses_supplied_conversation_id_when_v2_is_enabled() {
-    // /fork-and-compact passes the newly forked conversation id directly, which can differ from
-    // the currently selected conversation. The helper must respect that explicit id.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-        let _cloud_mode_setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-        let _queued_prompts_v2 = FeatureFlag::QueuedPromptsV2.override_enabled(true);
-
-        let terminal = add_window_with_cloud_mode_terminal(&mut app);
-        terminal.update(&mut app, |view, ctx| {
-            let selected_conversation_id = enter_cloud_setup_with_conversation(view, ctx);
-            let other_conversation_id = AIConversationId::new();
-            assert_ne!(selected_conversation_id, other_conversation_id);
-
-            view.enqueue_followup_prompt(
-                "goes to the forked id".to_owned(),
-                QueuedQueryOrigin::ForkAndCompactSlashCommand,
-                other_conversation_id,
-                ctx,
-            );
-
-            assert!(queue_texts(view, ctx).is_empty());
-            let other_queue = QueuedQueryModel::as_ref(ctx).queue(other_conversation_id);
-            assert_eq!(other_queue.len(), 1);
-            assert_eq!(other_queue[0].text(), "goes to the forked id");
-            assert_eq!(
-                other_queue[0].origin(),
-                QueuedQueryOrigin::ForkAndCompactSlashCommand
-            );
-        });
-    });
-}
-
-#[test]
-fn enqueue_followup_prompt_falls_back_to_pending_block_when_v2_is_disabled() {
-    // With V2 off, the helper must call into the legacy send_user_query_after_next_conversation_finished
-    // path: no row gets appended to the queue model, and the queued_prompt_callback is armed so the
-    // pending-user-query block lifecycle continues to handle the follow-up exactly as today.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        let _agent_view = FeatureFlag::AgentView.override_enabled(true);
-        let _cloud_mode = FeatureFlag::CloudMode.override_enabled(true);
-        let _cloud_mode_setup_v2 = FeatureFlag::CloudModeSetupV2.override_enabled(true);
-        let _queued_prompts_v2 = FeatureFlag::QueuedPromptsV2.override_enabled(false);
-        let _pending_user_query_indicator =
-            FeatureFlag::PendingUserQueryIndicator.override_enabled(true);
-
-        let terminal = add_window_with_cloud_mode_terminal(&mut app);
-        terminal.update(&mut app, |view, ctx| {
-            let conversation_id = enter_cloud_setup_with_conversation(view, ctx);
-
-            view.enqueue_followup_prompt(
-                "legacy follow up".to_owned(),
-                QueuedQueryOrigin::CompactAndSlashCommand,
-                conversation_id,
-                ctx,
-            );
-
-            assert!(
-                QueuedQueryModel::as_ref(ctx)
-                    .queue(conversation_id)
-                    .is_empty()
-            );
-            assert!(view.queued_prompt_callback.is_some());
-            assert!(view.pending_user_query_view_id.is_some());
-        });
-    });
-}
-
-#[test]
 fn complete_drain_after_error_drain_continues_with_next_row() {
     // After an Error/Cancelled drain pops one row and the user later submits successfully, the
     // *next* Complete drain pops the following row.
@@ -888,98 +671,6 @@ fn send_now_action_emits_row_kind_and_leaves_rows_for_host_to_fire() {
     });
 }
 
-#[test]
-fn send_now_disabled_for_all_rows_while_initial_cloud_mode_row_is_present() {
-    // While the locked initial cloud-mode prompt sits at the head (cloud environment setup),
-    // every queued row's "send now" is disabled — there is no live agent to receive it yet. Once
-    // that row is removed (the agent picked up the prompt), the remaining follow-up rows are
-    // re-enabled.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-
-        let (panel, conversation_id, _) = build_panel_with_active_conversation(&mut app);
-
-        // The locked initial cloud-mode prompt, plus a follow-up queued during setup.
-        let (initial_id, followup_id) =
-            QueuedQueryModel::handle(&app).update(&mut app, |model, ctx| {
-                let initial_id = model.append(
-                    conversation_id,
-                    QueuedQuery::new("initial".to_owned(), QueuedQueryOrigin::InitialCloudMode),
-                    ctx,
-                );
-                let followup_id = model.append(conversation_id, user_query("follow up"), ctx);
-                (initial_id, followup_id)
-            });
-
-        // During setup, both rows' "send now" is disabled.
-        panel.read(&app, |panel, ctx| {
-            assert_eq!(
-                panel.send_now_button_disabled_for_test(initial_id, ctx),
-                Some(true)
-            );
-            assert_eq!(
-                panel.send_now_button_disabled_for_test(followup_id, ctx),
-                Some(true)
-            );
-        });
-
-        // The agent picks up the prompt — the locked initial row is removed.
-        QueuedQueryModel::handle(&app).update(&mut app, |model, ctx| {
-            model.remove_initial_cloud_mode_row(conversation_id, ctx);
-        });
-
-        // The remaining follow-up row's "send now" is re-enabled.
-        panel.read(&app, |panel, ctx| {
-            assert_eq!(
-                panel.send_now_button_disabled_for_test(followup_id, ctx),
-                Some(false)
-            );
-        });
-    });
-}
-
-#[test]
-fn copying_locked_initial_cloud_mode_prompt_copies_full_prompt_to_clipboard() {
-    // The locked initial cloud-mode prompt can't be edited or deleted, so its row offers a Copy
-    // action instead. Firing it (the same action the Copy button dispatches) puts the full,
-    // untruncated prompt — long, multiline content included — on the clipboard and leaves the row
-    // in the queue.
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-
-        let (panel, conversation_id, _) = build_panel_with_active_conversation(&mut app);
-
-        let long_prompt = format!("line one\nline two\n{}", "x".repeat(1000));
-        let long_prompt_for_assert = long_prompt.clone();
-        let initial_id = QueuedQueryModel::handle(&app).update(&mut app, |model, ctx| {
-            model.append(
-                conversation_id,
-                QueuedQuery::new(long_prompt, QueuedQueryOrigin::InitialCloudMode),
-                ctx,
-            )
-        });
-
-        panel.update(&mut app, |panel, ctx| {
-            panel.handle_action(&QueuedPromptsPanelAction::CopyRow(initial_id), ctx);
-        });
-
-        app.update(|ctx| {
-            assert_eq!(ctx.clipboard().read().plain_text, long_prompt_for_assert);
-        });
-        QueuedQueryModel::handle(&app).read(&app, |model, _| {
-            assert_eq!(model.queue(conversation_id).len(), 1);
-        });
-    });
-}
-
-/// Builds a panel keyed to a fresh terminal view with an active conversation, mirroring the
-/// construction the host `Input` performs. Returns the panel, the conversation id, and the
-/// host input.
-///
-/// When the QueueSlashCommand flag is on, the host input already owns a panel for this
-/// terminal view, and that panel is returned instead of constructing a second one: two panels
-/// on the same terminal view both react to `EditEntered` and fight over edit-editor focus, and
-/// the loser's `Blurred` handler commits the edit on the shared model out from under the test.
 fn build_panel_with_active_conversation(
     app: &mut App,
 ) -> (
@@ -1158,12 +849,12 @@ fn enter_hint_hidden_during_inline_edit_and_for_locked_head() {
             assert!(panel.enter_hint_shown_for_test(ctx));
         });
 
-        // A locked initial cloud-mode head row hides the hint.
+        // A locked head row hides the hint.
         QueuedQueryModel::handle(&app).update(&mut app, |model, ctx| {
             model.remove_by_id(conversation_id, row_id, ctx);
             model.append(
                 conversation_id,
-                QueuedQuery::new("initial".to_owned(), QueuedQueryOrigin::InitialCloudMode),
+                QueuedQuery::new("initial".to_owned(), QueuedQueryOrigin::PendingLrcAutoQueue),
                 ctx,
             );
         });

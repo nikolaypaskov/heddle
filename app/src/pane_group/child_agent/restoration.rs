@@ -11,9 +11,7 @@ use crate::ai::agent::conversation::{AIConversation, AIConversationId};
 use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
 use crate::ai::restored_conversations::RestoredAgentConversations;
-use crate::pane_group::{
-    AmbientAgentViewModelHandleExt, PaneGroup, PaneId, TerminalPane, TerminalViewResources,
-};
+use crate::pane_group::{PaneGroup, PaneId, TerminalPane, TerminalViewResources};
 use crate::terminal::shared_session::IsSharedSessionCreator;
 use crate::terminal::view::load_ai_conversation::{
     RestoreConversationEntryBehavior, RestoredAIConversation,
@@ -242,12 +240,9 @@ impl PaneGroup {
                 );
                 return;
             };
-            self.hydrate_task_backed_hidden_child_pane(
-                child_conversation,
-                parent_pane_id,
-                task_id,
-                ctx,
-            );
+            // Heddle (FOSS): task-backed (cloud) hidden child hydration is removed
+            // with the ambient runtime.
+            let _ = (child_conversation, parent_pane_id, task_id);
             return;
         }
         let child_task_context =
@@ -343,7 +338,6 @@ impl PaneGroup {
             );
             return;
         };
-        let child_task_id = child_conversation.task_id();
 
         let resources = TerminalViewResources {
             tips_completed: self.tips_completed.clone(),
@@ -396,22 +390,6 @@ impl PaneGroup {
                 AgentViewEntryOrigin::SharedSessionSelection,
                 ctx,
             );
-            // Shared-session viewer is `is_cloud_mode=false`, so
-            // `ambient_agent_view_model()` is typically `None`. Update
-            // opportunistically; the network's `JoinedSuccessfully` is the
-            // authoritative source for ambient agent state.
-            if let Some(ambient_agent_view_model) = terminal_view
-                .ambient_agent_view_model()
-                .into_optional_handle()
-                .cloned()
-            {
-                ambient_agent_view_model.update(ctx, |model, ctx| {
-                    model.set_conversation_id(Some(child_conversation_id));
-                    if let Some(task_id) = child_task_id {
-                        model.enter_viewing_existing_session(task_id, ctx);
-                    }
-                });
-            }
         });
 
         self.child_agent_panes

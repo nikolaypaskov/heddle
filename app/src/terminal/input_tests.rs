@@ -111,8 +111,7 @@ use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{
-    AgentNotificationsModel, GlobalResourceHandles, GlobalResourceHandlesProvider,
-    experiments,
+    AgentNotificationsModel, GlobalResourceHandles, GlobalResourceHandlesProvider, experiments,
 };
 
 #[test]
@@ -1852,7 +1851,7 @@ fn enter_with_nonempty_buffer_does_not_send_queued_row() {
 /// The locked initial cloud-mode head row never fires on Enter, and the locked head blocks the
 /// rows behind it (only the head row is Enter-sendable).
 #[test]
-fn empty_buffer_enter_skips_locked_initial_cloud_mode_head() {
+fn empty_buffer_enter_skips_locked_head() {
     App::test((), |mut app| async move {
         let _queue_flag = FeatureFlag::QueueSlashCommand.override_enabled(true);
         initialize_app(&mut app);
@@ -1865,7 +1864,7 @@ fn empty_buffer_enter_skips_locked_initial_cloud_mode_head() {
         QueuedQueryModel::handle(&app).update(&mut app, |model, ctx| {
             model.append(
                 conversation_id,
-                QueuedQuery::new("initial".to_owned(), QueuedQueryOrigin::InitialCloudMode),
+                QueuedQuery::new("initial".to_owned(), QueuedQueryOrigin::PendingLrcAutoQueue),
                 ctx,
             );
             model.append(

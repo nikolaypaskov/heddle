@@ -80,7 +80,6 @@ impl MockTerminalManager {
                 // into the web view.
                 conversation_restoration,
                 None, // inactive_pty_reads_rx
-                false,
                 ctx,
             )
         });

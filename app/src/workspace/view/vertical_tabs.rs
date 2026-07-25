@@ -38,11 +38,8 @@ use warpui::{AppContext, EntityId, SingletonEntity, ViewHandle, WindowId};
 use super::{render_group_member_icon_collage, select_unique_pane_kinds};
 use crate::ai::agent::conversation::{ConversationStatus, StatusColorStyle};
 use crate::ai::agent_management::AgentNotificationsModel;
-use crate::ai::cloud_environments::CloudAmbientAgentEnvironment;
 use crate::ai::conversation_status_ui::render_status_element;
 use crate::appearance::Appearance;
-use crate::cloud_object::CloudObjectLookup as _;
-use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::code::editor::{add_color, remove_color};
 use crate::code::icon_from_file_path;
 use crate::context_chips::display_chip::GitLineChanges;
@@ -4269,25 +4266,10 @@ fn cloud_agent_working_directory_and_env(
     working_directory: Option<&str>,
     app: &AppContext,
 ) -> Option<String> {
-    if !terminal_view.is_ambient_agent_session(app) {
-        return None;
-    }
-    let model_ref = terminal_view.ambient_agent_view_model()?.as_ref(app);
-
-    let env_name = model_ref
-        .selected_environment_id()
-        .and_then(|id| CloudAmbientAgentEnvironment::get_by_id(id, app))
-        .map(|env| env.model().string_model.display_name());
-
-    let setup_status: Option<&str> = model_ref.agent_progress().map(|p| p.setup_status_text());
-
-    match (env_name, setup_status, working_directory) {
-        (Some(env), Some(status), _) => Some(format!("{env} · {status}")),
-        (Some(env), None, Some(wd)) => Some(format!("{env} · {wd}")),
-        (Some(env), None, None) => Some(env),
-        (None, Some(status), _) => Some(status.to_string()),
-        (None, None, _) => None,
-    }
+    // Heddle (FOSS): the ambient cloud-agent runtime is removed, so a pane is never a
+    // cloud-agent session and has no environment/setup status to show.
+    let _ = (terminal_view, working_directory, app);
+    None
 }
 
 fn render_terminal_row_content(

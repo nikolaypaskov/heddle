@@ -108,7 +108,6 @@ mod snapshot;
 pub(crate) mod terminal;
 
 use environment::PrepareEnvironmentError;
-pub(crate) use snapshot::upload_snapshot_for_handoff;
 use terminal::TerminalDriverEvent;
 
 /// Races `run_future` against optional background credential refresh loops,

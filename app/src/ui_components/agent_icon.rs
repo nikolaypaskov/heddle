@@ -87,9 +87,7 @@ pub(crate) fn terminal_view_agent_icon_variant(
             status: session.status.to_conversation_status(),
             supports_rich_status: session.supports_rich_status(),
         }),
-        selected_third_party_cli_agent: terminal_view
-            .ambient_agent_view_model()
-            .and_then(|model| model.as_ref(app).selected_third_party_cli_agent()),
+        selected_third_party_cli_agent: None,
         selected_conversation_status: terminal_view.selected_conversation_status_for_display(app),
         has_selected_conversation: terminal_view
             .selected_conversation_display_title(app)

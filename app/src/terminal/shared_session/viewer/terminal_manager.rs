@@ -62,7 +62,6 @@ use crate::terminal::shared_session::shared_handlers::{
 };
 use crate::terminal::terminal_manager::{BlockSpacing, compute_block_size, terminal_colors_list};
 use crate::terminal::view::ExecuteCommandEvent;
-use crate::terminal::view::ambient_agent::is_cloud_agent_pre_first_exchange;
 use crate::terminal::{
     Event as TerminalViewEvent, PTY_READS_BROADCAST_CHANNEL_SIZE, TerminalModel, TerminalView,
 };
@@ -291,7 +290,6 @@ impl TerminalManager {
                 None, // initial_input_config - not used for viewer
                 None, // no conversation restoration for shared session viewer
                 Some(inactive_pty_reads_rx.clone()),
-                is_ambient_agent,
                 ctx,
             )
         });
@@ -372,59 +370,6 @@ impl TerminalManager {
         TerminalManagerInit {
             manager: terminal_manager,
             view: terminal_view,
-        }
-    }
-
-    /// Create a new terminal manager for eventually viewing a cloud mode
-    /// shared session that is not yet available. See
-    /// [`Self::enable_orchestration_polling`] for the meaning of the flag.
-    pub fn new_deferred(
-        resources: TerminalViewResources,
-        initial_size: Vector2F,
-        window_id: WindowId,
-        enable_orchestration_polling: bool,
-        ctx: &mut AppContext,
-    ) -> TerminalManagerInit {
-        Self::new_internal(
-            resources,
-            initial_size,
-            window_id,
-            enable_orchestration_polling,
-            true, // is_ambient_agent
-            ctx,
-        )
-    }
-
-    /// Connects a deferred terminal manager to a shared session.
-    /// This can only be called on a TerminalManager created with `new_deferred`.
-    /// Returns `true` if the connection was initiated, `false` if already connected.
-    ///
-    /// `append_followup_scrollback` controls whether the initial join uses
-    /// `AppendFollowupScrollback` mode instead of `ReplaceFromSessionScrollback`.
-    /// Local-to-cloud handoff panes set this to `true` so the pre-populated
-    /// forked conversation is not replaced by the cloud session's replay
-    /// scrollback.
-    pub fn connect_to_session(
-        &mut self,
-        session_id: SessionId,
-        append_followup_scrollback: bool,
-        ctx: &mut AppContext,
-    ) -> bool {
-        let load_mode = if append_followup_scrollback {
-            SharedSessionInitialLoadMode::AppendFollowupScrollback
-        } else {
-            SharedSessionInitialLoadMode::ReplaceFromSessionScrollback
-        };
-        match self.network_state {
-            NetworkState::Idle => {
-                self.connect_session(session_id, load_mode, ctx);
-                true
-            }
-            NetworkState::Connecting => {
-                log::warn!("connect_to_session called while already connecting to shared session");
-                false
-            }
-            NetworkState::Active(_) => false,
         }
     }
 
@@ -867,19 +812,8 @@ impl TerminalManager {
                 });
 
                 view.update(ctx, |terminal_view, ctx| {
-                    if let Some(task_id) = ambient_task_id {
-                        let had_model = terminal_view.ambient_agent_view_model().is_some();
-                        // Begin viewing the ambient run. For top-level ambient viewers
-                        // (`enable_orchestration_polling`) that joined without a model — e.g.
-                        // a raw `shared_session` link that turns out to be a cloud run — this
-                        // creates and wires the model now that the source is known to be
-                        // ambient. Hidden orchestration child viewers intentionally have no
-                        // model, so we only initialize an already-present one for them.
-                        if enable_orchestration_polling || had_model {
-                            terminal_view
-                                .begin_viewing_ambient_session(task_id, session_id, ctx);
-                        }
-                    }
+                    // Heddle (FOSS): ambient (cloud) run viewing is removed.
+                    let _ = ambient_task_id;
 
                     terminal_view.on_session_share_joined(
                         viewer_id.clone(),
@@ -1168,15 +1102,7 @@ impl TerminalManager {
                     // In cloud-mode startup (before the first exchange), shared-session input
                     // sync reflects environment setup commands. Skip applying remote edits so
                     // the visible input isn't populated with setup-command text.
-                    let skip_during_setup = FeatureFlag::CloudModeSetupV2.is_enabled() && {
-                        let model = view.model.lock();
-                        is_cloud_agent_pre_first_exchange(
-                            view.ambient_agent_view_model(),
-                            view.agent_view_controller(),
-                            &model,
-                            ctx,
-                        )
-                    };
+                    let skip_during_setup = false;
                     if skip_during_setup {
                         return;
                     }
@@ -1479,16 +1405,7 @@ impl TerminalManager {
         };
         // During cloud startup (pre-first-exchange), keep local input mode stable
         // and ignore remote shell/ai mode toggles from session-sharing context sync.
-        let is_pre_first_exchange = FeatureFlag::CloudModeSetupV2.is_enabled() && {
-            let view_ref = view.as_ref(ctx);
-            let model = view_ref.model.lock();
-            is_cloud_agent_pre_first_exchange(
-                view_ref.ambient_agent_view_model(),
-                view_ref.agent_view_controller(),
-                &model,
-                ctx,
-            )
-        };
+        let is_pre_first_exchange = false;
         let suppress_input_mode_update =
             view.as_ref(ctx).is_shared_ambient_agent_session() || is_pre_first_exchange;
         if suppress_input_mode_update {
@@ -1848,13 +1765,6 @@ impl TerminalManager {
                     } else {
                         SharedSessionStatus::FinishedViewer
                     });
-                if let Some(ambient_agent_view_model) =
-                    terminal_view.ambient_agent_view_model().cloned()
-                {
-                    ambient_agent_view_model.update(ctx, |model, ctx| {
-                        model.record_ambient_execution_ended(ended_session_id, ctx);
-                    });
-                }
                 terminal_view.on_ambient_agent_execution_ended(ctx);
             });
         }

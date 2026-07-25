@@ -1091,9 +1091,6 @@ impl Action {
                     None => None,
                 };
                 if terminal_view_id.is_none() {
-                    terminal_view_id = find_cloud_mode_terminal_view_id(primary_window_id, ctx);
-                }
-                if terminal_view_id.is_none() {
                     terminal_view_id = active_agent_views.get_last_focused_terminal_id();
                 }
                 if terminal_view_id.is_none() {
@@ -1509,74 +1506,6 @@ fn active_terminal_view_id_in_window(window_id: WindowId, ctx: &AppContext) -> O
                     .map(|view| view.id())
             })
     })
-}
-
-fn find_cloud_mode_terminal_view_id(
-    primary_window_id: Option<WindowId>,
-    ctx: &AppContext,
-) -> Option<EntityId> {
-    let mut window_ids = Vec::new();
-    if let Some(primary_window_id) = primary_window_id {
-        window_ids.push(primary_window_id);
-    }
-    window_ids.extend(
-        ctx.window_ids()
-            .filter(|window_id| Some(*window_id) != primary_window_id),
-    );
-
-    for window_id in window_ids {
-        let Some(workspaces) = ctx.views_of_type::<Workspace>(window_id) else {
-            continue;
-        };
-        for workspace in workspaces {
-            if let Some(terminal_view_id) = workspace.read(ctx, |workspace, w_ctx| {
-                find_cloud_mode_terminal_in_workspace(workspace, w_ctx)
-            }) {
-                return Some(terminal_view_id);
-            }
-        }
-    }
-
-    None
-}
-
-fn find_cloud_mode_terminal_in_workspace(
-    workspace: &Workspace,
-    ctx: &AppContext,
-) -> Option<EntityId> {
-    let mut fallback_ambient_terminal_id = None;
-
-    for pane_group_handle in workspace.tab_views() {
-        let pane_group = pane_group_handle.as_ref(ctx);
-        let ambient_terminal_id =
-            pane_group
-                .terminal_views(ctx)
-                .into_iter()
-                .find_map(|terminal_view| {
-                    terminal_view
-                        .as_ref(ctx)
-                        .ambient_agent_view_model()
-                        .is_some()
-                        .then_some(terminal_view.id())
-                });
-
-        let Some(ambient_terminal_id) = ambient_terminal_id else {
-            continue;
-        };
-
-        let has_environment_management_pane = pane_group
-            .pane_ids()
-            .any(|pane_id| pane_id.is_environment_management_pane());
-        if has_environment_management_pane {
-            return Some(ambient_terminal_id);
-        }
-
-        if fallback_ambient_terminal_id.is_none() {
-            fallback_ambient_terminal_id = Some(ambient_terminal_id);
-        }
-    }
-
-    fallback_ambient_terminal_id
 }
 /// Helper function to dispatch an action to an existing window
 /// or create new window if none exist.

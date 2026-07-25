@@ -1,6 +1,5 @@
 mod action;
 mod agent_view;
-pub mod ambient_agent;
 pub mod auth_secret_ftux;
 mod block_banner;
 pub mod block_onboarding;
@@ -144,8 +143,8 @@ use warp_util::path::LineAndColumnArg;
 use warp_util::path::ShellFamily;
 use warpui::accessibility::{AccessibilityContent, ActionAccessibilityContent, WarpA11yRole};
 use warpui::assets::asset_cache::{AssetCache, AssetCacheEvent};
+use warpui::r#async::Timer;
 use warpui::r#async::executor::Background;
-use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::clipboard::ClipboardContent;
 use warpui::clipboard_utils::get_image_filepaths_from_paths;
 use warpui::elements::new_scrollable::{
@@ -225,10 +224,9 @@ use crate::ai::blocklist::agent_view::{
     AgentViewController, AgentViewControllerEvent, AgentViewConversationSelection,
     AgentViewDisplayMode, AgentViewEntryBlockParams, AgentViewEntryOrigin,
     AgentViewHeaderDisabledTheme, AgentViewHeaderTheme, AgentViewZeroStateBlock,
-    AgentViewZeroStateEvent, ENTER_OR_EXIT_CONFIRMATION_WINDOW, EphemeralMessageModel,
-    ExitConfirmationTrigger, GuiInputModePolicy, InlineAgentViewHeader, OrchestrationPillBar,
-    fork_from_last_known_good_state_exchange_id, get_agent_view_entry_block_position_id,
-    is_in_cloud_context,
+    AgentViewZeroStateEvent, EphemeralMessageModel, ExitConfirmationTrigger, GuiInputModePolicy,
+    InlineAgentViewHeader, OrchestrationPillBar, fork_from_last_known_good_state_exchange_id,
+    get_agent_view_entry_block_position_id, is_in_cloud_context,
 };
 use crate::ai::blocklist::block::cli::{CLISubagentView, CLISubagentViewEvent};
 use crate::ai::blocklist::block::cli_controller::{
@@ -2017,14 +2015,6 @@ pub enum Event {
     KillAgentConversation {
         conversation_id: AIConversationId,
     },
-    /// Emitted when this pane's [`ambient_agent::AmbientAgentViewModel`] is lazily
-    /// created — e.g. a raw `shared_session` link-join viewer that only discovers the
-    /// joined session is an ambient (cloud) run at `SessionJoined`. Lets
-    /// `PaneGroup::create_shared_session_viewer` wire the viewer `TerminalManager` to the
-    /// model's session lifecycle events (via
-    /// [`ambient_agent::wire_ambient_agent_session_events`]) so follow-up runs after the
-    /// previous VM ends re-attach the viewer to the new execution session.
-    AmbientAgentViewModelCreated,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2807,7 +2797,6 @@ pub struct TerminalView {
     is_orchestration_split_off: bool,
     is_using_conversation_for_pane_header_title: bool,
 
-    ambient_agent_view_model: Option<ModelHandle<ambient_agent::AmbientAgentViewModel>>,
     pending_cloud_followup_task_id: Option<AmbientAgentTaskId>,
 
     /// Conversation details panel (side panel showing conversation/task metadata).
@@ -2839,12 +2828,6 @@ pub struct TerminalView {
 
     /// Weak handle to the [`PaneStack`] this view is part of, allowing push/pop operations.
     pane_stack: Option<WeakModelHandle<crate::pane_group::pane::PaneStack<Self>>>,
-
-    /// If set, indicates a cloud mode entry is waiting for the fullscreen agent view to be exited.
-    /// This is used to ensure rich content inserted for cloud mode is scoped to the top-level
-    /// terminal view (not a specific agent view conversation).
-    pending_cloud_mode_start_callback: Option<TerminalViewCallback>,
-    pending_cloud_mode_start_abort_handle: Option<SpawnedFutureHandle>,
 
     /// Active /init flow model, if any. Cleared when cancelled or completed.
     active_init_project_model: Option<ModelHandle<InitProjectModel>>,
@@ -3074,25 +3057,12 @@ impl TerminalView {
         initial_input_config: Option<InputConfig>,
         conversation_restoration: Option<ConversationRestorationInNewPaneType>,
         inactive_pty_reads_rx: Option<async_broadcast::InactiveReceiver<Arc<Vec<u8>>>>,
-        _is_ambient_agent: bool,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let terminal_view_id = ctx.view_id();
         let active_session = ctx.add_model(|ctx| {
             ActiveSession::new(sessions.clone(), model_events_handle.clone(), ctx)
         });
-        // Heddle (FOSS): the ambient cloud-agent runtime is removed, so a pane is
-        // never backed by an `AmbientAgentViewModel` at construction. Every consumer's
-        // `Option<ModelHandle<AmbientAgentViewModel>>` is therefore `None`, and a
-        // would-be "cloud" pane (a `NewCloudAgentConversation` deeplink, a `type="cloud"`
-        // tab config, or `EnterCloudAgentView`) degrades gracefully to a normal local
-        // pane. The `_is_ambient_agent` flag is retained on the signature only until the
-        // pane/tab creators are deleted (see the ambient-runtime-removal plan). The lazy
-        // shared-session viewer path (`ensure_ambient_agent_view_model`) needs a live
-        // Warp backend and so is unreachable here.
-        let ambient_agent_view_model: Option<ModelHandle<ambient_agent::AmbientAgentViewModel>> =
-            None;
-
         let ephemeral_message_model = ctx.add_model(|_| EphemeralMessageModel::new());
 
         let agent_view_controller = ctx.add_model(|_| {
@@ -3167,7 +3137,6 @@ impl TerminalView {
                                         origin.clone(),
                                         me.agent_view_controller.clone(),
                                         &me.sessions,
-                                        me.ambient_agent_view_model.as_ref(),
                                         me.model.clone(),
                                         &me.model_events_handle,
                                         should_show_init_callout,
@@ -3388,7 +3357,6 @@ impl TerminalView {
                     if !should_keep_pending_user_query {
                         me.remove_pending_user_query_block(ctx);
                     }
-                    me.maybe_run_pending_cloud_mode_start_callback(ctx);
 
                     ctx.notify();
                 }
@@ -3656,16 +3624,7 @@ impl TerminalView {
                         | AgentConversationsModelEvent::ConversationArtifactsUpdated { .. }
                 );
                 // Only refresh panel if it's currently open (avoids unnecessary work)
-                if should_refresh_details_panel
-                    && me.is_conversation_details_panel_open
-                    && me
-                        .ambient_agent_view_model
-                        .as_ref()
-                        .is_some_and(|model| model.as_ref(ctx).is_ambient_agent())
-                {
-                    me.fetch_and_update_conversation_details_panel(ctx);
-                    ctx.notify();
-                }
+                let _ = should_refresh_details_panel;
             },
         );
 
@@ -4357,8 +4316,6 @@ impl TerminalView {
             orchestration_pill_bar,
             is_orchestration_split_off: false,
             is_using_conversation_for_pane_header_title: false,
-            // Wired after construction via `wire_ambient_agent_view_model`.
-            ambient_agent_view_model: None,
             conversation_details_panel,
             is_conversation_details_panel_open: false,
             has_auto_opened_conversation_details_panel: false,
@@ -4373,8 +4330,6 @@ impl TerminalView {
             environment_setup_mode_selector,
             is_environment_setup_mode_selector_open: false,
             pane_stack: None,
-            pending_cloud_mode_start_callback: None,
-            pending_cloud_mode_start_abort_handle: None,
             ephemeral_message_model,
             pty_recorder: ctx
                 .add_model(|ctx| PtyRecorder::new(inactive_pty_reads_rx, window_id, ctx)),
@@ -4385,9 +4340,6 @@ impl TerminalView {
         // cannot drift. `Input::new` already self-wired its own subtree from the model passed
         // above, so the `input.attach` reached here is an idempotent no-op on this path; it does
         // the real work only on the lazy viewer path, where the input was built without a model.
-        if let Some(ambient_agent_view_model) = ambient_agent_view_model {
-            terminal_view.wire_ambient_agent_view_model(ambient_agent_view_model, ctx);
-        }
         terminal_view.register_subscriptions_for_use_agent_footer(ctx);
 
         // Forward RemoteServerManager setup events into the terminal event stream
@@ -4755,45 +4707,6 @@ impl TerminalView {
         F: FnOnce(&mut Self, &mut ViewContext<Self>) + 'static,
     {
         self.block_completed_callbacks.push(Box::new(callback));
-    }
-
-    fn set_pending_cloud_mode_start_callback(
-        &mut self,
-        callback: TerminalViewCallback,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.clear_pending_cloud_mode_start_callback();
-        self.pending_cloud_mode_start_callback = Some(callback);
-
-        self.pending_cloud_mode_start_abort_handle = Some(ctx.spawn_abortable(
-            // Reuse the same timeout as agent-view confirmation prompts so a pending cloud-mode
-            // start cannot outlive the user-visible confirmation window semantics.
-            Timer::after(ENTER_OR_EXIT_CONFIRMATION_WINDOW),
-            |me, _, _ctx| {
-                me.pending_cloud_mode_start_callback = None;
-                me.pending_cloud_mode_start_abort_handle = None;
-            },
-            |_, _| (),
-        ));
-    }
-
-    fn clear_pending_cloud_mode_start_callback(&mut self) {
-        if let Some(handle) = self.pending_cloud_mode_start_abort_handle.take() {
-            handle.abort();
-        }
-        self.pending_cloud_mode_start_callback = None;
-    }
-
-    fn maybe_run_pending_cloud_mode_start_callback(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(callback) = self.pending_cloud_mode_start_callback.take() else {
-            return;
-        };
-
-        if let Some(handle) = self.pending_cloud_mode_start_abort_handle.take() {
-            handle.abort();
-        }
-
-        callback(self, ctx);
     }
 
     /// If the active conversation is a child agent, navigate to the parent
@@ -5372,14 +5285,6 @@ impl TerminalView {
         Some(id)
     }
 
-    pub fn enqueue_initial_cloud_mode_prompt(
-        &mut self,
-        prompt: String,
-        ctx: &mut ViewContext<Self>,
-    ) -> Option<QueuedQueryId> {
-        self.enqueue_prompt(prompt, QueuedQueryOrigin::InitialCloudMode, ctx)
-    }
-
     /// Files a follow-up prompt that will run after the next conversation finishes on
     /// `conversation_id`. Used by `/compact-and` (targets the active conversation) and
     /// `/fork-and-compact` (targets the newly forked conversation, which may differ from the
@@ -5598,33 +5503,6 @@ impl TerminalView {
                 model.remove_fired_row(conversation_id, query_id, ctx);
             });
         }
-    }
-
-    /// Drains one queued prompt when the cloud setup phase completes for a promptless handoff run
-    /// (a prompt will not be auto-sent by the worker so there's no normal event to initiate a queued prompt sending).
-    pub(crate) fn maybe_drain_queue_after_promptless_setup(&mut self, ctx: &mut ViewContext<Self>) {
-        let is_promptless_run = self
-            .ambient_agent_view_model()
-            .and_then(|model| {
-                model
-                    .as_ref(ctx)
-                    .request()
-                    .map(|request| request.prompt.is_none())
-            })
-            .unwrap_or(false);
-        if !is_promptless_run {
-            return;
-        }
-
-        let Some(conversation_id) = self
-            .ai_context_model
-            .as_ref(ctx)
-            .selected_conversation_id(ctx)
-        else {
-            return;
-        };
-
-        self.drain_queued_prompts(conversation_id, FinishReason::Complete, ctx);
     }
 
     fn handle_legacy_passive_suggestions_event(
@@ -5943,12 +5821,10 @@ impl TerminalView {
             return;
         }
         // Pending-user-query block removal stays scoped to the legacy CloudMode kind so we
-        // don't tear down /queue or other PendingUserQueryKind blocks under V2. The V2
-        // queue-row removal is independent and is a no-op when no InitialCloudMode row exists.
+        // don't tear down /queue or other PendingUserQueryKind blocks under V2.
         if kind_is_cloud_mode {
             self.remove_pending_user_query_block(ctx);
         }
-        self.remove_cloud_mode_queue_row(ctx);
     }
     fn render_owner_for_ai_history_event(
         &self,
@@ -6092,14 +5968,6 @@ impl TerminalView {
                 // For an oz local-to-cloud handoff, the first `AppendedExchange` is the
                 // analogue of `HarnessCommandStarted` for non-oz harnesses: the moment we
                 // tear down the queued-prompt block in favor of the live agent UI.
-                if self
-                    .ambient_agent_view_model
-                    .as_ref()
-                    .is_some_and(|model| model.as_ref(ctx).is_local_to_cloud_handoff())
-                {
-                    self.remove_pending_user_query_block(ctx);
-                    self.remove_cloud_mode_queue_row(ctx);
-                }
 
                 let should_add_ai_block = history_model
                     .as_ref(ctx)
@@ -6393,9 +6261,7 @@ impl TerminalView {
                             error: RenderableAIError::QuotaLimit { .. }
                         })
                     )
-                {
-                    self.show_out_of_credits_modal(ctx);
-                }
+                {}
 
                 // For conversation transcript viewers (on WASM) and shared ambient sessions on
                 // non-CloudModeSetupV2 paths, insert a conversation-ended tombstone when the
@@ -7888,84 +7754,17 @@ impl TerminalView {
         history.conversation(&conversation_id)?.task_id()
     }
 
-    pub fn ambient_agent_view_model(
-        &self,
-    ) -> Option<&ModelHandle<ambient_agent::AmbientAgentViewModel>> {
-        self.ambient_agent_view_model.as_ref()
-    }
-
-    /// Ensures this pane has an [`ambient_agent::AmbientAgentViewModel`], creating and wiring
-    /// it into the input if absent. Idempotent: returns the existing model when already
-    /// present (the upfront cloud-mode construction path). Used by both the upfront and
-    /// `SessionJoined` paths so a shared-session viewer that only discovers it is viewing an
-    /// ambient run at join time (e.g. a raw `shared_session` link) still gets a fully wired
-    /// model.
-    fn ensure_ambient_agent_view_model(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) -> ModelHandle<ambient_agent::AmbientAgentViewModel> {
-        if let Some(existing) = self.ambient_agent_view_model.clone() {
-            return existing;
-        }
-        let terminal_view_id = self.view_id;
-        let model =
-            ctx.add_model(|ctx| ambient_agent::AmbientAgentViewModel::new(terminal_view_id, ctx));
-        self.wire_ambient_agent_view_model(model.clone(), ctx);
-        // Notify observers (e.g. `PaneGroup::create_shared_session_viewer`) that the model
-        // now exists so they can wire the viewer `TerminalManager` to its session events.
-        ctx.emit(Event::AmbientAgentViewModelCreated);
-        model
-    }
-
-    /// Wires an ambient agent view model into this terminal view: stores it and routes its
-    /// events to [`Self::handle_ambient_agent_event`]. Reachable only via the lazy
-    /// `SessionJoined` shared-session viewer path (`ensure_ambient_agent_view_model`), which
-    /// needs a live backend; the input no longer holds ambient state (Heddle removed it).
-    fn wire_ambient_agent_view_model(
-        &mut self,
-        model: ModelHandle<ambient_agent::AmbientAgentViewModel>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.ambient_agent_view_model = Some(model.clone());
-        ctx.subscribe_to_model(&model, |me, _, event, ctx| {
-            me.handle_ambient_agent_event(event, ctx);
-        });
-    }
-
-    /// Begins viewing an existing ambient (cloud) run in this shared-session viewer pane.
-    /// Shared entry point for the upfront and `SessionJoined` paths: ensures the
-    /// [`ambient_agent::AmbientAgentViewModel`] exists, initializes it for viewing `task_id`,
-    /// and records the live `session_id` so `is_ready_for_cloud_followup_prompt` stays false
-    /// while the session is live and flips to the resumable follow-up state when it ends.
-    pub fn begin_viewing_ambient_session(
-        &mut self,
-        task_id: AmbientAgentTaskId,
-        session_id: session_sharing_protocol::common::SessionId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let model = self.ensure_ambient_agent_view_model(ctx);
-        model.update(ctx, |model, ctx| {
-            model.enter_viewing_existing_session(task_id, ctx);
-            model.set_live_execution_session(session_id);
-        });
-    }
-
     /// Tear down the Cloud Mode Setup V2 UI in response to a
     /// setup-phase-ended signal: clear the BlockList
     /// executing-startup-commands flag AND finish/collapse the active
     /// ambient setup command group. Owns both pieces of state so callers
     /// (the shared-session viewer arm, legacy fallbacks) don't have to
     /// orchestrate two unrelated mutations. Idempotent across both.
-    pub(crate) fn tear_down_cloud_mode_setup_phase(&mut self, ctx: &mut ViewContext<Self>) {
+    pub(crate) fn tear_down_cloud_mode_setup_phase(&mut self, _ctx: &mut ViewContext<Self>) {
         self.model
             .lock()
             .block_list_mut()
             .set_is_executing_oz_environment_startup_commands(false);
-        if let Some(ambient_model) = self.ambient_agent_view_model.clone() {
-            ambient_model.update(ctx, |model, ctx| {
-                model.tear_down_active_setup_command_group(ctx);
-            });
-        }
     }
 
     fn ambient_agent_task_id_for_details_panel_from_model(
@@ -7973,10 +7772,8 @@ impl TerminalView {
         model: &TerminalModel,
         app: &AppContext,
     ) -> Option<AmbientAgentTaskId> {
-        self.ambient_agent_view_model
-            .as_ref()
-            .and_then(|model| model.as_ref(app).task_id())
-            .or_else(|| model.ambient_agent_task_id())
+        let _ = app;
+        model.ambient_agent_task_id()
     }
     pub fn ambient_agent_task_id_for_details_panel(
         &self,
@@ -8097,16 +7894,6 @@ impl TerminalView {
     pub(crate) fn suppress_initial_conversation_details_panel_auto_open(&mut self) {
         self.conversation_details_panel_auto_open_policy =
             ConversationDetailsPanelAutoOpenPolicy::DefaultClosed;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn is_initial_conversation_details_panel_auto_open_suppressed_for_test(
-        &self,
-    ) -> bool {
-        matches!(
-            self.conversation_details_panel_auto_open_policy,
-            ConversationDetailsPanelAutoOpenPolicy::DefaultClosed
-        )
     }
 
     fn maybe_insert_tombstone_for_non_running_shared_ambient_task(
@@ -8243,12 +8030,8 @@ impl TerminalView {
     }
 
     fn should_suppress_ambient_setup_input_sync(&self, app: &AppContext) -> bool {
-        FeatureFlag::CloudModeSetupV2.is_enabled()
-            && self.ambient_agent_view_model.as_ref().is_some_and(|model| {
-                let model = model.as_ref(app);
-                let setup_state = model.setup_command_state();
-                setup_state.should_suppress_input_sync_for_current_group()
-            })
+        let _ = app;
+        false
     }
 
     pub fn ssh_file_upload(&self) -> &ViewHandle<FileUpload> {
@@ -8357,15 +8140,7 @@ impl TerminalView {
 
         // In cloud agent conversations, once the shared session is ready but before the first
         // agent exchange arrives, we hide the interactive input view.
-        if !FeatureFlag::CloudModeSetupV2.is_enabled()
-            && !FeatureFlag::HandoffCloudCloud.is_enabled()
-            && ambient_agent::is_cloud_agent_pre_first_exchange(
-                self.ambient_agent_view_model.as_ref(),
-                &self.agent_view_controller,
-                model,
-                app,
-            )
-        {
+        if false {
             return false;
         }
 
@@ -11880,7 +11655,7 @@ impl TerminalView {
             ModelEvent::AfterBlockStarted {
                 command,
                 is_for_in_band_command,
-                block_id,
+                block_id: _,
                 ..
             } => {
                 let did_any_session_contains_remote_blocks =
@@ -12072,8 +11847,6 @@ impl TerminalView {
                             );
                         }
                     }
-
-                    self.maybe_insert_setup_command_blocks(block_id, ctx);
 
                     self.set_current_state(TerminalViewState::LongRunning, ctx);
                     ctx.emit(Event::BlockStarted {
@@ -16401,18 +16174,6 @@ impl TerminalView {
                     .write(ClipboardContent::plain_text(selected_text));
                 return;
             }
-        }
-
-        // Then check if there's selected text in the cloud mode error screen
-        let error_selected_text = self
-            .ambient_agent_view_model
-            .as_ref()
-            .map(|model| model.as_ref(ctx).ui_state.error_selected_text.clone());
-        if let Some(error_selected_text) = error_selected_text
-            && let Some(text) = error_selected_text.read().clone().filter(|t| !t.is_empty())
-        {
-            ctx.clipboard().write(ClipboardContent::plain_text(text));
-            return;
         }
 
         let semantic_selection = SemanticSelection::as_ref(ctx);
@@ -21091,81 +20852,6 @@ impl TerminalView {
         }
     }
 
-    fn restore_followup_prompt_after_failed_submission(
-        &mut self,
-        prompt: &str,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.pending_cloud_followup_task_id = None;
-        self.input.update(ctx, |input, ctx| {
-            input.reset_after_cloud_followup_submission(ctx);
-            input.replace_buffer_content(prompt, ctx);
-            input.set_input_mode_agent(true, ctx);
-        });
-        self.update_pane_configuration(ctx);
-        self.focus_input_box(ctx);
-        ctx.notify();
-    }
-
-    fn try_submit_pending_cloud_followup(
-        &mut self,
-        prompt: String,
-        ctx: &mut ViewContext<Self>,
-    ) -> bool {
-        if !FeatureFlag::HandoffCloudCloud.is_enabled() {
-            return false;
-        }
-        let blocks_cloud_followups = {
-            let model = self.model.lock();
-            self.blocks_cloud_followups_for_ambient_agent_session_from_model(&model, ctx)
-        };
-        if blocks_cloud_followups {
-            self.pending_cloud_followup_task_id = None;
-            return false;
-        }
-        let Some(task_id) = self
-            .pending_cloud_followup_task_id
-            .or_else(|| self.owned_ambient_agent_task_id(ctx))
-        else {
-            return false;
-        };
-
-        if prompt.trim().is_empty() {
-            self.input.update(ctx, |input, ctx| {
-                input.reset_after_cloud_followup_submission(ctx);
-                input.set_input_mode_agent(true, ctx);
-            });
-            self.update_pane_configuration(ctx);
-            self.focus_input_box(ctx);
-            ctx.notify();
-            return true;
-        }
-
-        let Some(ambient_agent_view_model) = self.ambient_agent_view_model.clone() else {
-            self.restore_followup_prompt_after_failed_submission(&prompt, ctx);
-            self.show_error_toast("Couldn't continue this cloud task.".to_string(), ctx);
-            return true;
-        };
-
-        if ambient_agent_view_model.as_ref(ctx).task_id() != Some(task_id) {
-            self.restore_followup_prompt_after_failed_submission(&prompt, ctx);
-            self.show_error_toast("Couldn't continue this cloud task.".to_string(), ctx);
-            return true;
-        }
-
-        ambient_agent_view_model.update(ctx, |model, ctx| {
-            model.submit_cloud_followup(prompt, ctx);
-        });
-
-        self.input.update(ctx, |input, ctx| {
-            input.reset_after_cloud_followup_submission(ctx);
-            input.set_input_mode_agent(true, ctx);
-        });
-        self.update_pane_configuration(ctx);
-        ctx.notify();
-        true
-    }
-
     fn handle_input_event(&mut self, event: &InputEvent, ctx: &mut ViewContext<Self>) {
         match event {
             InputEvent::Enter => self.clear_prompt_suggestions(ctx),
@@ -21226,11 +20912,7 @@ impl TerminalView {
                 });
             }
             InputEvent::SubmitCloudFollowup { prompt } => {
-                if FeatureFlag::HandoffCloudCloud.is_enabled()
-                    && self.try_submit_pending_cloud_followup(prompt.clone(), ctx)
-                {
-                    return;
-                }
+                let _ = prompt;
                 self.show_error_toast("Couldn't continue this cloud task.".to_string(), ctx);
             }
             InputEvent::CancelSharedSessionConversation {
@@ -21303,7 +20985,9 @@ impl TerminalView {
                 }
             },
             InputEvent::EnterCloudAgentView { initial_prompt } => {
-                self.enter_cloud_agent_view(initial_prompt.clone(), ctx);
+                // Heddle (FOSS): the ambient cloud-agent runtime is removed.
+                let _ = initial_prompt;
+                log::warn!("cloud agent view is not supported in this build");
             }
             InputEvent::CreateDockerSandbox => {
                 if !FeatureFlag::LocalDockerSandbox.is_enabled() {
@@ -21388,11 +21072,7 @@ impl TerminalView {
                         self.exit_agent_view(ctx);
                     } else if !is_long_running {
                         // During first-time setup, exit directly without a confirmation dialog.
-                        let is_in_setup = self
-                            .ambient_agent_view_model
-                            .as_ref()
-                            .is_some_and(|model| model.as_ref(ctx).is_in_setup());
-                        if !is_in_setup && !self.input.as_ref(ctx).buffer_text(ctx).is_empty() {
+                        if !self.input.as_ref(ctx).buffer_text(ctx).is_empty() {
                             self.agent_view_controller.update(ctx, |session, ctx| {
                                 session.exit_agent_view_with_required_confirmation(
                                     ExitConfirmationTrigger::Escape,
@@ -21682,29 +21362,6 @@ impl TerminalView {
                 self.run_find(options, ctx)
             }
         }
-    }
-
-    pub(crate) fn enter_ambient_agent_setup(
-        &mut self,
-        initial_prompt: Option<String>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if !FeatureFlag::CloudMode.is_enabled()
-            || !self.model.lock().shared_session_status().is_view_pending()
-        {
-            // Ambient agent setup can only be done inside a shared session viewer; otherwise the backing terminal manager is incorrect.
-            return;
-        }
-
-        // Don't pass an initial prompt, which auto-sends the request.
-        self.enter_agent_view_for_new_conversation(None, AgentViewEntryOrigin::CloudAgent, ctx);
-
-        if let Some(prompt) = initial_prompt {
-            self.input.update(ctx, |input, ctx| {
-                input.replace_buffer_content(&prompt, ctx);
-            });
-        }
-        self.focus_input_box(ctx);
     }
 
     fn last_visible_item_is_agent_view_block_for_conversation(
@@ -27237,10 +26894,8 @@ impl TypedActionView for TerminalView {
                 }
             }
             EnterCloudAgentView => {
-                let mut draft_text = self.input.as_ref(ctx).buffer_text(ctx);
-                draft_text.truncate(draft_text.trim_end().len());
-                let initial_prompt = (!draft_text.trim().is_empty()).then_some(draft_text);
-                self.enter_cloud_agent_view(initial_prompt, ctx);
+                // Heddle (FOSS): the ambient cloud-agent runtime is removed.
+                log::warn!("cloud agent view is not supported in this build");
             }
             StartNewAgentConversation { origin } => {
                 self.input.update(ctx, |input, ctx| {
@@ -27280,11 +26935,6 @@ impl TypedActionView for TerminalView {
                 ctx.notify();
             }
             CancelAmbientAgentTask => {
-                if let Some(ambient_agent_view_model) = self.ambient_agent_view_model.as_ref() {
-                    ambient_agent_view_model.update(ctx, |model, ctx| {
-                        model.cancel_task(ctx);
-                    });
-                }
                 ctx.notify();
             }
             ToggleUsageFooter => {

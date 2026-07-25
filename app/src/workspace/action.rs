@@ -866,10 +866,7 @@ impl From<&WorkspaceAction> for LoginGatedFeature {
 impl WorkspaceAction {
     pub fn blocked_for_anonymous_user(&self) -> bool {
         use WorkspaceAction::*;
-        matches!(
-            self,
-            ImportToTeamDrive | OpenShareSessionModal(_)
-        )
+        matches!(self, ImportToTeamDrive | OpenShareSessionModal(_))
     }
 
     /// Matches what actions require the app state to be saved, and which don't. We match all
@@ -1153,7 +1150,7 @@ impl WorkspaceAction {
             #[cfg(target_family = "wasm")]
             ToggleConversationTranscriptDetailsPanel => false,
             #[cfg(debug_assertions)]
-            | DebugResetAwsBedrockLoginBannerDismissed
+            DebugResetAwsBedrockLoginBannerDismissed
             | OpenFeatureIntroModal
             | ResetFeatureIntroModalState
             | OpenAutoHandoffSleepModal

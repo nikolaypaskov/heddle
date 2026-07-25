@@ -16,7 +16,6 @@ use warpui::{
     WeakModelHandle,
 };
 
-use super::ambient_agent::is_cloud_agent_pre_first_exchange;
 use super::shared_session::adapter::Kind as SharedSessionKind;
 use super::{Event, PaneConfiguration, TerminalAction, TerminalViewState, Viewer};
 use crate::ai::agent::conversation::{
@@ -401,11 +400,7 @@ impl TerminalView {
 
         // Cloud-mode-only ambient agent cancel button is shown while we're waiting
         // for the session to be ready.
-        let is_waiting_for_session = FeatureFlag::CloudMode.is_enabled()
-            && self
-                .ambient_agent_view_model
-                .as_ref()
-                .is_some_and(|model| model.as_ref(app).is_waiting_for_session());
+        let is_waiting_for_session = false;
         let button_element = if is_waiting_for_session {
             Some(self.render_ambient_agent_cancel_button(app))
         } else if self.can_show_conversation_details_ui(app) {
@@ -897,12 +892,10 @@ impl TerminalView {
         ))
     }
 
-    pub fn is_ambient_agent_session(&self, ctx: &AppContext) -> bool {
-        FeatureFlag::CloudMode.is_enabled()
-            && self
-                .ambient_agent_view_model
-                .as_ref()
-                .is_some_and(|model| model.as_ref(ctx).is_ambient_agent())
+    /// Heddle (FOSS): the ambient cloud-agent runtime is removed, so a pane is never
+    /// an ambient agent session.
+    pub fn is_ambient_agent_session(&self, _ctx: &AppContext) -> bool {
+        false
     }
 
     /// Whether this pane should be treated as an ambient agent conversation for display
@@ -910,14 +903,9 @@ impl TerminalView {
     /// single source of truth for that check; surfaces should call it rather than re-deriving
     /// the condition, so they can't drift apart.
     ///
-    /// Two signals are combined because they live in different places and neither subsumes the
-    /// other:
-    /// - [`Self::is_ambient_agent_session`] reads the pane's [`AmbientAgentViewModel`], which is
-    ///   how a cloud/ambient run composed or spawned *in this view* is recognized before it has
-    ///   any shared-session source.
-    /// - [`TerminalModel::is_cloud_agent_conversation`] reads model state — a shared *ambient*
-    ///   session or viewing an ambient conversation transcript — which the view model doesn't
-    ///   carry (e.g. a viewer that joined someone else's ambient session).
+    /// Heddle (FOSS): [`Self::is_ambient_agent_session`] is now always `false`, so this reduces
+    /// to [`TerminalModel::is_cloud_agent_conversation`] — model state saying the pane is
+    /// viewing an ambient conversation transcript.
     ///
     /// It deliberately does NOT treat a manually shared *local* (`User`) session as a cloud
     /// agent session even though it now carries an orchestrator task id on its `source_task_id`
@@ -961,22 +949,10 @@ impl TerminalView {
     /// both the `WaitingForSession` phase (env being provisioned, "Connecting to Host") and
     /// the post-session pre-first-exchange phase (session ready, harness not started, no
     /// exchange yet). In either case the run is committed and we want the UI to read as busy.
-    fn is_in_cloud_agent_setup_phase(&self, ctx: &AppContext) -> bool {
-        if self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(ctx).is_waiting_for_session())
-        {
-            return true;
-        }
-
-        let model = self.model.lock();
-        is_cloud_agent_pre_first_exchange(
-            self.ambient_agent_view_model.as_ref(),
-            &self.agent_view_controller,
-            &model,
-            ctx,
-        )
+    fn is_in_cloud_agent_setup_phase(&self, _ctx: &AppContext) -> bool {
+        // Heddle (FOSS): the ambient cloud-agent runtime is removed, so a pane is never
+        // in a cloud setup phase.
+        false
     }
 
     /// Selected conversation status for chrome, or [`ConversationStatus::InProgress`] while the

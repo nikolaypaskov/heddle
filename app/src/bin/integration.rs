@@ -34,13 +34,13 @@ pub fn main() -> Result<()> {
                 rtc_server_url: "ws://192.0.2.0:9/graphql/v2".into(),
                 session_sharing_server_url: None,
                 iap_config: None,
-            },
+            }),
             oz_config: Some(OzConfig {
                 // Use an IP in the IANA testing range, with the TCP discard port, to
                 // black-hole server traffic.
                 oz_root_url: "http://192.0.2.0:9".into(),
                 workload_audience_url: None,
-            },
+            }),
             telemetry_config: None,
             crash_reporting_config: None,
             autoupdate_config: None,

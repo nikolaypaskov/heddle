@@ -46,8 +46,8 @@ fn user_query(text: &str) -> QueuedQuery {
     QueuedQuery::new(text.to_owned(), QueuedQueryOrigin::QueueSlashCommand)
 }
 
-fn initial_cloud_mode_query(text: &str) -> QueuedQuery {
-    QueuedQuery::new(text.to_owned(), QueuedQueryOrigin::InitialCloudMode)
+fn locked_query(text: &str) -> QueuedQuery {
+    QueuedQuery::new(text.to_owned(), QueuedQueryOrigin::PendingLrcAutoQueue)
 }
 
 fn command_query(text: &str) -> QueuedQuery {
@@ -75,11 +75,11 @@ fn append_user(
 }
 
 #[test]
-fn initial_cloud_mode_head_rejects_user_mutations_and_autofire() {
+fn locked_head_rejects_user_mutations_and_autofire() {
     with_model(|mut app, model, _events| {
         let conv = AIConversationId::new();
         let initial_id = model.update(&mut app, |model, ctx| {
-            model.append(conv, initial_cloud_mode_query("initial"), ctx)
+            model.append(conv, locked_query("initial"), ctx)
         });
         let followup_id = append_user(&model, &mut app, conv, "follow up");
 
@@ -101,7 +101,7 @@ fn initial_cloud_mode_head_rejects_user_mutations_and_autofire() {
             let queue = model.queue(conv);
             assert_eq!(queue.len(), 2);
             assert_eq!(queue[0].id(), initial_id);
-            assert_eq!(queue[0].origin(), QueuedQueryOrigin::InitialCloudMode);
+            assert_eq!(queue[0].origin(), QueuedQueryOrigin::PendingLrcAutoQueue);
             assert_eq!(queue[1].id(), followup_id);
             assert_eq!(model.editing_row(conv), None);
         });
@@ -111,12 +111,11 @@ fn initial_cloud_mode_head_rejects_user_mutations_and_autofire() {
 #[test]
 fn pop_front_no_ops_when_head_is_locked() {
     // The Error/Cancelled drain path calls `pop_front` to restore a row to the editor. A locked
-    // initial Cloud Mode head must not be popped even if a status-transition arrives before the
-    // ambient-agent cleanup events fire `remove_initial_cloud_mode_row`.
+    // head must not be popped even if a status-transition arrives before the row is unlocked.
     with_model(|mut app, model, _events| {
         let conv = AIConversationId::new();
         let initial_id = model.update(&mut app, |model, ctx| {
-            model.append(conv, initial_cloud_mode_query("locked initial"), ctx)
+            model.append(conv, locked_query("locked head"), ctx)
         });
         let followup_id = append_user(&model, &mut app, conv, "follow up");
 
@@ -129,43 +128,6 @@ fn pop_front_no_ops_when_head_is_locked() {
             assert_eq!(queue[0].id(), initial_id);
             assert_eq!(queue[1].id(), followup_id);
         });
-    });
-}
-
-#[test]
-fn remove_initial_cloud_mode_row_only_removes_the_locked_head() {
-    with_model(|mut app, model, events| {
-        let conv = AIConversationId::new();
-        let initial_id = model.update(&mut app, |model, ctx| {
-            model.append(conv, initial_cloud_mode_query("initial"), ctx)
-        });
-        append_user(&model, &mut app, conv, "follow up");
-        events.borrow_mut().clear();
-
-        let removed = model.update(&mut app, |model, ctx| {
-            model.remove_initial_cloud_mode_row(conv, ctx)
-        });
-        assert_eq!(
-            removed.map(|query| query.text().to_owned()),
-            Some("initial".to_owned())
-        );
-
-        let removed_again = model.update(&mut app, |model, ctx| {
-            model.remove_initial_cloud_mode_row(conv, ctx)
-        });
-        assert!(removed_again.is_none());
-
-        let action = model.read(&app, |model, _| model.peek_autofire(conv));
-        match action {
-            Some(AutofireAction::Submit { text, .. }) => assert_eq!(text, "follow up"),
-            other => panic!("expected Submit, got {other:?}"),
-        }
-
-        let evts = events.borrow();
-        assert!(matches!(
-            evts.first(),
-            Some(QueuedQueryEvent::Removed { query_id, .. }) if *query_id == initial_id
-        ));
     });
 }
 
@@ -943,11 +905,11 @@ fn has_autofireable_prompt_is_true_for_a_queued_prompt() {
 
 #[test]
 fn has_autofireable_prompt_is_false_when_only_a_locked_head_is_queued() {
-    // A locked initial Cloud Mode head never auto-fires on finish, so it must not count.
+    // A locked head never auto-fires on finish, so it must not count.
     with_model(|mut app, model, _events| {
         let conv = AIConversationId::new();
         model.update(&mut app, |m, ctx| {
-            m.append(conv, initial_cloud_mode_query("initial"), ctx)
+            m.append(conv, locked_query("initial"), ctx)
         });
         model.read(&app, |m, _| assert!(!m.has_autofireable_prompt(conv)));
     });
@@ -959,7 +921,7 @@ fn has_autofireable_prompt_is_false_when_a_locked_head_precedes_a_prompt() {
     with_model(|mut app, model, _events| {
         let conv = AIConversationId::new();
         model.update(&mut app, |m, ctx| {
-            m.append(conv, initial_cloud_mode_query("initial"), ctx)
+            m.append(conv, locked_query("initial"), ctx)
         });
         append_user(&model, &mut app, conv, "follow up");
         model.read(&app, |m, _| assert!(!m.has_autofireable_prompt(conv)));
