@@ -1552,7 +1552,7 @@ impl SettingsWidget for AppAnalyticsWidget {
             Align::new(
                 ui_builder
                     .link(
-                        "Read more about Warp's use of data".into(),
+                        "Read more about how this build handles data".into(),
                         Some(TELEMETRY_DOCS_URL.into()),
                         None,
                         self.docs_link_mouse_state.clone(),

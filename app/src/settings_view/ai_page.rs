@@ -2875,9 +2875,11 @@ impl AISettingsPageView {
                 widgets.push(Box::new(GeminiEnterpriseWidget::new(ctx)));
                 widgets.push(Box::new(AgentAttributionWidget::default()));
                 widgets.push(Box::new(OtherAIWidget::default()));
-                if FeatureFlag::AgentModeComputerUse.is_enabled() {
-                    widgets.push(Box::new(CloudAgentComputerUseWidget::default()));
-                }
+                // No cloud-agent computer-use widget. It configures Warp's hosted agents
+                // ("oz cloud agent computer use orchestration multi-agent"), which this build
+                // cannot reach. `agent_mode_computer_use` is in the default feature set, so this
+                // was rendering.
+                
             }
             Some(AISubpage::WarpAgent) => {
                 // Oz page: global toggle + Active AI + Input + Other
@@ -2916,9 +2918,11 @@ impl AISettingsPageView {
                 }
                 widgets.push(Box::new(AgentAttributionWidget::default()));
                 widgets.push(Box::new(OtherAIWidget::default()));
-                if FeatureFlag::AgentModeComputerUse.is_enabled() {
-                    widgets.push(Box::new(CloudAgentComputerUseWidget::default()));
-                }
+                // No cloud-agent computer-use widget. It configures Warp's hosted agents
+                // ("oz cloud agent computer use orchestration multi-agent"), which this build
+                // cannot reach. `agent_mode_computer_use` is in the default feature set, so this
+                // was rendering.
+                
             }
             Some(AISubpage::Profiles) => {
                 if !FeatureFlag::UsageBasedPricing.is_enabled() {
@@ -4841,7 +4845,7 @@ impl SettingsWidget for GlobalAIWidget {
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
             .with_child(
                 Text::new_inline(
-                    "Warp Agent",
+                    "Agent",
                     appearance.ui_font_family(),
                     PRIMARY_HEADER_FONT_SIZE,
                 )
@@ -6009,7 +6013,7 @@ impl AgentsWidget {
         );
         render_ai_list(
             "Command denylist",
-            "Regular expressions to match commands that the Warp Agent should always ask permission to execute.",
+            "Regular expressions to match commands that the agent should always ask permission to execute.",
             list,
             view,
             ai_settings,
@@ -6044,7 +6048,7 @@ impl AgentsWidget {
 
         render_ai_list(
             "Command allowlist",
-            "Regular expressions to match commands that can be automatically executed by the Warp Agent.",
+            "Regular expressions to match commands that the agent may execute automatically.",
             list,
             view,
             ai_settings,
@@ -6146,7 +6150,7 @@ impl AgentsWidget {
             appearance,
             "Base model",
             Some(
-                "This model serves as the primary engine behind the Warp Agent. It powers most interactions and invokes other models for tasks like planning or code generation when necessary. Warp may automatically switch to alternate models based on model availability or for auxiliary tasks such as conversation summarization.",
+                "This model is the primary engine behind the agent. It powers most interactions and invokes other models for tasks like planning or code generation when necessary. An alternate model may be used automatically when the chosen one is unavailable, or for auxiliary tasks such as conversation summarization.",
             ),
             Some(show_in_prompt_checkbox),
             LocalOnlyIconState::Hidden,
@@ -6250,7 +6254,7 @@ impl AgentsWidget {
         let subtext = {
             let subtext_fragments = vec![
                 FormattedTextFragment::plain_text(
-                    "You haven't added any MCP servers yet. Once you do, you'll be able to control how much autonomy the Warp Agent has when interacting with them. ",
+                    "You haven't added any MCP servers yet. Once you do, you'll be able to control how much autonomy the agent has when interacting with them. ",
                 ),
                 FormattedTextFragment::hyperlink_action(
                     "Add a server",
@@ -6331,7 +6335,7 @@ impl AgentsWidget {
         {
             let allowlist = self.render_mcp_list(
                 "MCP allowlist",
-                "Allow the Warp Agent to call these MCP servers.",
+                "Allow the agent to call these MCP servers.",
                 &view.mcp_allowlist_dropdown,
                 BlocklistAIPermissions::as_ref(app).get_mcp_allowlist(app, None),
                 view.mcp_allowlist_mouse_state_handles.clone(),
@@ -6348,7 +6352,7 @@ impl AgentsWidget {
         {
             let denylist = self.render_mcp_list(
                 "MCP denylist",
-                "The Warp Agent will always ask for permission before calling any MCP servers on this list.",
+                "The agent will always ask for permission before calling any MCP servers on this list.",
                 &view.mcp_denylist_dropdown,
                 BlocklistAIPermissions::as_ref(app).get_mcp_denylist(app, None),
                 view.mcp_denylist_mouse_state_handles.clone(),
@@ -6900,7 +6904,7 @@ impl AIFactWidget {
 
         let rules_description = vec![
             FormattedTextFragment::plain_text(
-                "Rules help the Warp Agent follow your conventions, whether for codebases or specific workflows. ",
+                "Rules help the agent follow your conventions, whether for codebases or specific workflows. ",
             ),
             FormattedTextFragment::hyperlink(
                 "Learn more",
@@ -6978,7 +6982,7 @@ impl AIFactWidget {
         );
 
         let description = render_ai_setting_description(
-            "The Warp Agent can leverage your Warp Drive Contents to tailor responses to your personal and team developer workflows and environments. This includes any Workflows, Notebooks, and Environment Variables.",
+            "The agent can use your local workflows and environment variables to tailor its responses to how you work.",
             ai_settings.is_any_ai_enabled(app),
             app,
         );
@@ -7936,7 +7940,11 @@ impl SettingsWidget for CloudHandoffWidget {
     }
 
     fn should_render(&self, _app: &AppContext) -> bool {
-        FeatureFlag::OzHandoff.is_enabled() && FeatureFlag::HandoffLocalCloud.is_enabled()
+        // Never. This configures handing a running agent off to Warp's cloud -- auto-handoff on
+        // sleep, the `&` suffix, moving between local and cloud. There is no cloud here, so the
+        // toggles could only ever fail. Both feature flags it used to consult are still in the
+        // default set, so it WAS rendering.
+        false
     }
 
     fn render(
@@ -8046,7 +8054,7 @@ impl SettingsWidget for CloudHandoffWidget {
                 );
                 column.add_child(auto_handoff_on_sleep_row);
                 column.add_child(render_ai_setting_description(
-                    "When macOS is about to sleep, automatically moves the most recently focused running local Warp Agent conversation to Cloud Mode so it can keep working.",
+                    "Unavailable in this build: it moved a running conversation to a hosted environment, which this build has no way to reach.",
                     true,
                     app,
                 ));
@@ -8529,7 +8537,7 @@ impl ApiKeysWidget {
 
         if show_provider_keys {
             add_paragraph(vec![FormattedTextFragment::plain_text(
-                "Use your own API keys from model providers for Warp Agent. API keys are used to make requests to your chosen model provider. Using auto models or models you do not have available API keys for will consume Warp credits.",
+                "Use your own API keys from model providers. Keys are stored on this device and are never sent anywhere by this build.",
             )]);
         }
 
@@ -8783,7 +8791,7 @@ impl ApiKeysWidget {
 
         let description = Container::new(
             Text::new(
-                "Connect your SuperGrok subscription to use Grok models in the Warp Agent through your xAI account.",
+                "Connect your SuperGrok subscription to use Grok models through your own xAI account.",
                 appearance.ui_font_family(),
                 CONTENT_FONT_SIZE,
             )
