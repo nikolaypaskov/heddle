@@ -172,7 +172,6 @@
 ./app/src/ai/ai_document_view.rs	warp
 ./app/src/ai/ai_document_view.rs	warp
 ./app/src/ai/ai_document_view.rs	warp
-./app/src/ai/ai_document_view.rs	warp
 ./app/src/ai/ambient_agents/github_auth_url.rs	warp
 ./app/src/ai/ambient_agents/github_auth_url.rs	warp
 ./app/src/ai/ambient_agents/task.rs	warp

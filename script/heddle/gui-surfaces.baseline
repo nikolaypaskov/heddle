@@ -50,7 +50,6 @@
 ./app/src/ai/ai_document_view.rs	warp drive
 ./app/src/ai/ai_document_view.rs	warp drive
 ./app/src/ai/ai_document_view.rs	warp drive
-./app/src/ai/ai_document_view.rs	warp drive
 ./app/src/ai/aws_credentials.rs	log in
 ./app/src/ai/aws_credentials.rs	login
 ./app/src/ai/aws_credentials.rs	login

@@ -58,22 +58,6 @@ impl DetailsBar {
             .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
             .with_cross_axis_alignment(CrossAxisAlignment::Center);
 
-        header_row.add_child(
-            Shrinkable::new(
-                2.,
-                render_breadcrumbs(
-                    self.breadcrumbs.iter().cloned(),
-                    appearance,
-                    |ctx, _, breadcrumb| {
-                        ctx.dispatch_typed_action(NotebookAction::ViewInWarpDrive(
-                            breadcrumb.kind.into_item_id(),
-                        ));
-                    },
-                ),
-            )
-            .finish(),
-        );
-
         let mut editing_state_row = Flex::row()
             .with_main_axis_alignment(MainAxisAlignment::End)
             .with_cross_axis_alignment(CrossAxisAlignment::Center);

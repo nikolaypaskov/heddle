@@ -5,7 +5,6 @@ use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObject;
-use crate::ui_components::object_icon_color::warp_drive_icon_color;
 use crate::drive::{CloudObjectTypeAndId, DriveObjectType};
 use crate::notebooks::CloudNotebook;
 use crate::search::command_palette::mixer::CommandPaletteItemAction;
@@ -17,6 +16,7 @@ use crate::search::notebooks::fuzzy_match::{
 };
 use crate::search::result_renderer::ItemHighlightState;
 use crate::ui_components::icons::Icon;
+use crate::ui_components::object_icon_color::warp_drive_icon_color;
 
 /// Search item result for a cloud notebook.
 #[derive(Debug)]
@@ -136,9 +136,9 @@ impl SearchItem for NotebookSearchItem {
     }
 
     fn execute_result(&self) -> Self::Action {
-        CommandPaletteItemAction::ViewInWarpDrive {
-            id: CloudObjectTypeAndId::Notebook(self.cloud_notebook.id),
-        }
+        // Was "view in Warp Drive". No Drive, nowhere to navigate; the alternate
+        // binding now matches the primary action instead of doing nothing.
+        self.accept_result()
     }
 
     fn accessibility_label(&self) -> String {

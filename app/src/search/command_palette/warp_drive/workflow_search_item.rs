@@ -5,7 +5,6 @@ use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObject;
-use crate::ui_components::object_icon_color::warp_drive_icon_color;
 use crate::drive::{CloudObjectTypeAndId, DriveObjectType};
 use crate::search::command_palette::mixer::CommandPaletteItemAction;
 use crate::search::command_palette::render_util::render_search_item_icon;
@@ -14,6 +13,7 @@ use crate::search::item::{IconLocation, SearchItem};
 use crate::search::result_renderer::ItemHighlightState;
 use crate::search::workflows::fuzzy_match::FuzzyMatchWorkflowResult;
 use crate::ui_components::icons::Icon;
+use crate::ui_components::object_icon_color::warp_drive_icon_color;
 use crate::workflows::CloudWorkflow;
 
 /// Search item result for a cloud workflow.
@@ -143,9 +143,10 @@ impl SearchItem for WorkflowSearchItem {
     }
 
     fn execute_result(&self) -> Self::Action {
-        CommandPaletteItemAction::ViewInWarpDrive {
-            id: CloudObjectTypeAndId::Workflow(self.cloud_workflow.id),
-        }
+        // Was "view in Warp Drive", which navigated to the Drive panel. With no Drive there is
+        // nowhere to navigate, so the alternate binding now does the same useful thing as the
+        // primary one rather than silently doing nothing.
+        self.accept_result()
     }
 
     fn accessibility_label(&self) -> String {

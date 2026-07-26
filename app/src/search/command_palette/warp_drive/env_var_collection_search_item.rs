@@ -6,7 +6,6 @@ use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObject;
-use crate::ui_components::object_icon_color::warp_drive_icon_color;
 use crate::drive::{CloudObjectTypeAndId, DriveObjectType};
 use crate::env_vars::CloudEnvVarCollection;
 use crate::search::command_palette::mixer::CommandPaletteItemAction;
@@ -16,6 +15,7 @@ use crate::search::env_var_collections::fuzzy_match::FuzzyMatchEnvVarCollectionR
 use crate::search::item::{IconLocation, SearchItem};
 use crate::search::result_renderer::ItemHighlightState;
 use crate::ui_components::icons::Icon;
+use crate::ui_components::object_icon_color::warp_drive_icon_color;
 
 pub const ENV_VAR_NAME_SEPARATOR: &str = ", ";
 
@@ -152,14 +152,9 @@ impl SearchItem for EnvVarCollectionSearchItem {
     }
 
     fn execute_result(&self) -> Self::Action {
-        CommandPaletteItemAction::ViewInWarpDrive {
-            id: CloudObjectTypeAndId::GenericStringObject {
-                object_type: crate::cloud_object::GenericStringObjectFormat::Json(
-                    crate::cloud_object::JsonObjectType::EnvVarCollection,
-                ),
-                id: self.cloud_env_var_collection.id,
-            },
-        }
+        // Was "view in Warp Drive". No Drive, nowhere to navigate; the alternate
+        // binding now matches the primary action instead of doing nothing.
+        self.accept_result()
     }
 
     fn accessibility_label(&self) -> String {

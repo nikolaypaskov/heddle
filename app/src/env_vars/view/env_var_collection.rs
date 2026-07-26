@@ -305,7 +305,6 @@ pub struct EnvVarCollectionView {
 pub enum EnvVarCollectionEvent {
     Pane(PaneEvent),
     UpdatedEnvVarCollection(SyncId),
-    ViewInWarpDrive(WarpDriveItemId),
     Invoke(EnvVarCollectionType),
 }
 #[derive(Debug, Clone)]
@@ -341,7 +340,6 @@ pub enum EnvVarCollectionAction {
     ForceClose,
     CloseUnsavedChangesDialog,
     // Breadcrumbs action
-    ViewInWarpDrive(WarpDriveItemId),
 }
 
 /// Defines the view for a collection of environment variables
@@ -1094,10 +1092,6 @@ impl EnvVarCollectionView {
             });
     }
 
-    fn view_in_warp_drive(&mut self, id: WarpDriveItemId, ctx: &mut ViewContext<Self>) {
-        ctx.emit(EnvVarCollectionEvent::ViewInWarpDrive(id));
-    }
-
     // This is a public re-export of close since it's a trait method
     pub(super) fn close_env_var_collection(&mut self, ctx: &mut ViewContext<Self>) {
         self.close(ctx);
@@ -1296,33 +1290,6 @@ impl View for EnvVarCollectionView {
             .editability(app);
 
         content.extend(self.render_trash_banner(access_level, app));
-
-        content.add_child(
-            Align::new(
-                ConstrainedBox::new(
-                    Align::new(
-                        Container::new(render_breadcrumbs(
-                            self.breadcrumbs.clone(),
-                            appearance,
-                            |ctx, _, breadcrumb| {
-                                ctx.dispatch_typed_action(EnvVarCollectionAction::ViewInWarpDrive(
-                                    breadcrumb.kind.into_item_id(),
-                                ));
-                            },
-                        ))
-                        .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
-                        .with_vertical_margin(CORE_VERTICAL_MARGIN / 2.)
-                        .finish(),
-                    )
-                    .top_left()
-                    .finish(),
-                )
-                .with_max_width(CORE_MAX_WIDTH)
-                .finish(),
-            )
-            .top_center()
-            .finish(),
-        );
 
         if let TrashStatus::Active = self
             .active_env_var_collection_data
@@ -1535,7 +1502,6 @@ impl TypedActionView for EnvVarCollectionView {
                 self.update_open_modal_state(ctx);
                 ctx.notify();
             }
-            EnvVarCollectionAction::ViewInWarpDrive(id) => self.view_in_warp_drive(*id, ctx),
         }
     }
 }
