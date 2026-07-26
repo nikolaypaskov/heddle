@@ -64,7 +64,6 @@ FORBIDDEN=(
     # class of miss -- including documentation links, which have all been
     # replaced so the claim can be unconditional.
     "warp.dev"
-    "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs"  # Firebase auth API key
     "dataplane.rudderstack.com"
     "rudderlabs.com"
     # Warp-branded embedded assets. rust_embed stores each asset's relative
@@ -90,6 +89,18 @@ FORBIDDEN=(
     "The Oz CLI is a tool"
     "orchestration platform for cloud agents"
     "Log in to Warp"
+)
+
+# Patterns, not literals. Matched with `grep -aE`.
+#
+# The Firebase auth API key used to sit in FORBIDDEN as a literal, which meant this
+# scanner -- a file in a public repository -- contained the very credential it exists
+# to forbid. GitHub secret scanning flagged it, correctly. Forbidding the SHAPE of a
+# Google API key instead is both safer and strictly stronger: it catches that key, any
+# rotation of it, and any other Google credential that is ever linked in, while this
+# file stores no secret at all.
+FORBIDDEN_PATTERNS=(
+    'AIza[0-9A-Za-z_-]{35}'   # any Google API key, including Warp's Firebase auth key
 )
 
 # Scan RAW BYTES with grep, not `strings`.
@@ -125,6 +136,16 @@ for needle in "${FORBIDDEN[@]}"; do
     count="$( { LC_ALL=C grep -aoF -- "${needle}" "${BINARY}" || true; } | wc -l | tr -d ' ')"
     if [[ "${count}" -gt 0 ]]; then
         echo "  FORBIDDEN: ${needle} (${count} occurrence(s))"
+        FOUND=1
+    fi
+done
+
+for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+    count="$( { LC_ALL=C grep -aoE -- "${pattern}" "${BINARY}" || true; } | wc -l | tr -d ' ')"
+    if [[ "${count}" -gt 0 ]]; then
+        # Deliberately does not echo the match: printing a found credential into CI
+        # logs would re-publish it in a second place.
+        echo "  FORBIDDEN PATTERN: ${pattern} (${count} match(es), value withheld)"
         FOUND=1
     fi
 done

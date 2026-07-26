@@ -1,5 +1,12 @@
 # Egress baseline evidence — unmodified `Channel::Oss`
 
+> **The Firebase key in the captures below is redacted after the fact.** This document exists to
+> record that the unmodified client shipped a hardcoded credential; the credential's *value* was
+> never the evidence, and reproducing it here republished Warp's key from a public repository.
+> GitHub secret scanning flagged it, correctly. The scanner now matches the Google API key *shape*
+> rather than storing the literal, so it catches this key, any rotation of it, and any other Google
+> credential, while holding no secret itself.
+
 **Date:** 2026-07-22
 **Artifact:** `target/debug/warp-tui-oss`, built from upstream `a66337f4` with no fork changes
 **Conditions:** empty `HOME`, no user config, logged out (no keychain available), ~25s run
@@ -44,7 +51,7 @@ server_config: WarpServerConfig {
     server_root_url: "https://app.warp.dev",
     rtc_server_url: "wss://rtc.app.warp.dev/graphql/v2",
     session_sharing_server_url: Some("wss://sessions.app.warp.dev"),
-    firebase_auth_api_key: "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs",
+    firebase_auth_api_key: "AIza<redacted: Warp's Firebase auth key; the value is not the point and this file is public>",
 }
 oz_config: OzConfig { oz_root_url: "https://oz.warp.dev" }
 telemetry_config: None

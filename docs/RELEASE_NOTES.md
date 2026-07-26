@@ -86,6 +86,18 @@ Observed on a logged-out cold start, versus the unmodified upstream build:
 | Opened a Warp Drive websocket, retried on failure | listener never starts |
 | Fetched privacy preferences and set `telemetry=true` | nothing |
 
+## What it asks of your Mac
+
+Heddle declares **one** macOS capability: AppleScript automation. It is kept because a terminal runs
+your programs and macOS attributes a child process's request to the terminal — without it,
+`osascript` driving another application fails.
+
+Upstream declared seven: camera, microphone, contacts, calendars, reminders, location and photo
+library. Under the hardened runtime an entitlement is what actually permits access, so those were
+not decorative. Each was checked against the source before removal — six had zero references
+anywhere in the codebase, and the microphone's only consumer transcribed through a server this fork
+does not have. Heddle no longer appears in six System Settings privacy panes.
+
 ## Known limitations
 
 - **This is a terminal, not an agentic environment.** Warp's built-in agent runs
@@ -93,8 +105,10 @@ Observed on a logged-out cold start, versus the unmodified upstream build:
   local agent process — is designed but not implemented. Heddle will not be
   described as agentic until permission handling and cancellation work
   end-to-end.
-- **Binaries: Linux x86_64 and macOS Apple Silicon.** The macOS artefact is
-  unsigned and not notarized — see above. No Windows, no Linux ARM, no Intel Mac.
+- **Binaries: Linux x86_64 and macOS Apple Silicon.** No Windows, no Linux ARM,
+  no Intel Mac. (An earlier version of this line said the macOS artefact was
+  unsigned and not notarized, contradicting the install section above it. The
+  macOS builds have been signed and notarized since v0.3.0.)
 - **No cloud sync.** Warp Drive is removed, not reimplemented.
 - **Paid Warp features are not unlocked.** Entitlements were enforced
   server-side; there is no server here to grant them.
