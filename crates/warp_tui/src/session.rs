@@ -24,18 +24,22 @@ use crate::telemetry::TuiStartupTelemetryEvent;
 use crate::terminal_background::probe_and_select_theme;
 use crate::terminal_session_view::{TuiConversationRestoreOrigin, TuiConversationRestoreTarget};
 
-/// Command-line arguments.
-///
-/// Deliberately empty of the two flags upstream exposes here, because both require a server this
-/// build does not have and both were advertised in `--help`:
-///
-///   --resume <token>   resumed a conversation held on Warp's servers, by server token;
-///   --api-key <key>    authenticated non-interactively against them, also read from WARP_API_KEY.
-///
-/// Offering them meant `heddle-tui --help` described a hosted product. The plumbing behind them is
-/// left alone and simply passed `None`; removing that is a wider change than this.
+// Command-line arguments.
+//
+// NOTE: these are `//` and not `///` on purpose. clap turns a doc comment on this struct into the
+// command's `about` text, so writing the rationale here as documentation printed it verbatim in
+// `heddle-tui --help` -- including the names of the very flags it explains were removed. Found by
+// running --help on the packaged binary, not by reading the source.
+//
+// Deliberately empty of the two flags upstream exposes here, because both require a server this
+// build does not have and both were advertised in --help:
+//
+//   --resume <token>   resumed a conversation held on Warp's servers, by server token;
+//   --api-key <key>    authenticated non-interactively against them, also read from WARP_API_KEY.
+//
+// The plumbing behind them is left alone and simply passed None; removing that is wider than this.
 #[derive(Parser)]
-#[command(name = "heddle-tui")]
+#[command(name = "heddle-tui", about = "Heddle terminal, headless frontend")]
 struct TuiArgs {}
 
 /// Boots the headless Warp app and mounts the transcript-capable TUI session.
