@@ -9,6 +9,14 @@ updates:
       interval: "daily"
     # Only send security updates, not general version updates.
     open-pull-requests-limit: 0
+    cooldown:
+      # Release-age quarantine (claudeconf constitution §4.6): do not adopt a crate the
+      # day it is published. Most supply-chain compromises are caught within days, so a
+      # waiting period converts "we were first" into "someone else was first".
+      # Security updates bypass this — patching a known vulnerability outweighs the
+      # fresh-release risk, and this ecosystem block is limited to security updates
+      # already (open-pull-requests-limit: 0).
+      default-days: 7
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

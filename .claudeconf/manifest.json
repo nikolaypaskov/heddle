@@ -1,0 +1,84 @@
+{
+  "constitutionVersion": "3",
+  "generator": "claudeconf-skill",
+  "agentUse": true,
+  "stacks": ["rust"],
+  "hookRunner": { "name": "lefthook", "version": "2.1.10" },
+  "milestones": {
+    "format": {
+      "tool": "rustfmt",
+      "version": "1.92.0",
+      "tiers": ["edit", "gate", "ci"]
+    },
+    "lint": {
+      "tool": "clippy",
+      "version": "1.92.0",
+      "tiers": ["pre-commit", "gate", "ci"]
+    },
+    "typecheck": {
+      "tool": "cargo-check",
+      "version": "1.92.0",
+      "tiers": ["pre-commit", "gate", "ci"]
+    },
+    "unit": {
+      "tool": "cargo-nextest",
+      "version": "0.9.140",
+      "tiers": ["pre-commit", "pre-push", "gate", "ci"]
+    },
+    "e2e": {
+      "tool": "cargo-nextest",
+      "version": "0.9.140",
+      "tiers": ["gate", "ci"]
+    },
+    "sast": {
+      "tool": "semgrep",
+      "version": "1.171.0",
+      "tiers": ["pre-push", "gate", "ci"],
+      "rules": {
+        "source": "hand-authored",
+        "ref": "n/a",
+        "license": "AGPL-3.0-or-later"
+      }
+    },
+    "secret-scan": {
+      "tool": "trufflehog",
+      "version": "3.96.0",
+      "tiers": ["pre-commit", "gate", "ci"]
+    },
+    "dependency-audit": {
+      "tool": "cargo-deny",
+      "version": "0.20.2",
+      "tiers": ["pre-push", "gate", "ci"]
+    },
+    "build": {
+      "tool": "cargo",
+      "version": "1.92.0",
+      "tiers": ["pre-push", "gate", "ci"]
+    }
+  },
+  "ci": {
+    "provider": "github-actions",
+    "workflow": ".github/workflows/ci.yml",
+    "auditors": [
+      { "tool": "actionlint", "version": "1.7.12" },
+      { "tool": "zizmor", "version": "1.27.0" }
+    ]
+  },
+  "e2e": { "framework": "cargo-nextest", "suite": "crates/warp_tui/tests/" },
+  "reviewGate": {
+    "tool": "codex",
+    "version": "0.145.0",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "sandbox": "read-only",
+    "tiers": ["gate"],
+    "note": "Local-only adversarial reviewer. Cannot run in GitHub CI (no credentials there); it is a local pre-merge gate, not a CI status check."
+  },
+  "projectGates": [
+    "script/heddle/verify-no-warp-endpoints",
+    "script/heddle/verify-bundled-assets",
+    "script/heddle/verify-warp-supply-chain",
+    "script/heddle/gui-surface-gate",
+    "script/heddle/wasm-diagnostic-gate"
+  ]
+}

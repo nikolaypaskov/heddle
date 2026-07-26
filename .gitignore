@@ -74,10 +74,16 @@ __pycache__/
 # Release artefacts staged by script/heddle packaging; never committed (hundreds of MB).
 dist/
 
-# Local AI/agent tooling. These are developer-machine configuration, not part of the
-# product: an empty .claude/settings.json and an .mcp.json both inherited from upstream,
-# and .agents/skills, which were upstream's internal process docs. Ignored so that a
-# contributor's own agent setup never lands in a commit.
-.claude/
+# Local AI/agent tooling stays out of the repository: .mcp.json and .agents/skills were
+# both inherited from upstream and are developer-machine configuration, not product.
+#
+# The one exception is .claude/settings.json, which the quality harness owns: it carries
+# the edit-tier formatter hook and the deny rules that keep secret-bearing paths out of an
+# agent's reach. Those are project policy that every contributor should get, not personal
+# setup — and the harness contract requires them to exist. Everything else under .claude/
+# (session state, local overrides, worktrees) stays ignored.
+.claude/*
+!.claude/settings.json
+.claude/settings.local.json
 .mcp.json
 .agents/

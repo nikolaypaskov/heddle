@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+#
+# Independent adversarial review of the current branch, before merge.
+#
+# The deterministic gates prove the tree still compiles, passes its tests, and contains no
+# Warp endpoints. None of them can tell you the change is a GOOD idea, that a removal took
+# a local feature with it, or that a test asserts something weaker than its name claims.
+# That is what this is for: a second model, with no memory of the reasoning that produced
+# the diff, reading it cold.
+#
+# Read-only by construction. The sandbox flag means it cannot edit, stage, or run the
+# project's code -- it reads and reports. Its verdict is advisory to the human, never an
+# auto-merge signal.
+#
+# Not a CI check: this needs local Codex credentials, which CI does not have. It is a
+# pre-merge gate you run, and its absence from CI is deliberate rather than an oversight.
+#
+# Usage:
+#   script/heddle/codex-review              # review vs the default branch
+#   script/heddle/codex-review HEAD~3       # review vs an explicit base
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+
+command -v codex >/dev/null 2>&1 || {
+  echo "error: codex CLI not found on PATH." >&2
+  echo "       This gate is local-only; install codex or skip it explicitly." >&2
+  exit 2
+}
+
+MODEL="gpt-5.6-sol"
+EFFORT="xhigh"
+
+BASE="${1:-}"
+if [[ -z "$BASE" ]]; then
+  if git rev-parse --verify --quiet master >/dev/null 2>&1; then
+    BASE="$(git merge-base HEAD master 2>/dev/null || echo "")"
+  fi
+  [[ -z "$BASE" ]] && BASE="$(git rev-parse --verify --quiet HEAD~1 || echo "")"
+fi
+[[ -n "$BASE" ]] || { echo "error: could not determine a base commit to diff against" >&2; exit 2; }
+
+OUT_DIR="${TMPDIR:-/tmp}/heddle-codex-review"
+mkdir -p "$OUT_DIR"
+DIFF_FILE="$OUT_DIR/diff.patch"
+PROMPT_FILE="$OUT_DIR/prompt.txt"
+REPORT="$OUT_DIR/report.txt"
+
+git diff "$BASE"...HEAD > "$DIFF_FILE"
+if [[ ! -s "$DIFF_FILE" ]]; then
+  echo "No changes against $BASE; nothing to review."
+  exit 0
+fi
+
+STAT="$(git diff --stat "$BASE"...HEAD | tail -1)"
+echo "Reviewing $(git rev-parse --short "$BASE")..$(git rev-parse --short HEAD) — $STAT"
+echo "Model $MODEL, reasoning effort $EFFORT, read-only sandbox. This takes a few minutes."
+
+cat > "$PROMPT_FILE" <<'PROMPT'
+You are reviewing a change to Heddle, a de-commercialized AGPL fork of the Warp terminal.
+You have no memory of the reasoning that produced this diff. Read it cold and adversarially.
+
+Context you need:
+
+- The fork removes Warp's commercial and cloud surfaces: accounts, telemetry, Warp Drive
+  cloud sync, billing, hosted auth. It must reach no Warp server.
+- HARD CONSTRAINT. The following must keep working, and a change that breaks any of them
+  is wrong no matter how much commercial code it removes:
+    * local Agent Mode with the user's own API keys (BYOK)
+    * the local terminal itself
+    * the conversation-list panel
+    * local model / harness selection
+    * session sharing
+- Naming is misleading here on purpose, and it has caused real bugs. "Cloud" in this
+  codebase frequently means SYNCABLE, not remote: `CloudModel` is the LOCAL sqlite-backed
+  object store that holds the user's workflows and notebooks. Deleting something because
+  its name contains "Cloud" or "WarpDrive" is a known way to break a local feature.
+- A recurring defect class: upstream gates a paid capability behind an account check.
+  Remove accounts and the predicate becomes constant, so the capability does not become
+  free -- it becomes permanently OFF, silently. Test suites miss this because they build
+  auth state reporting a SIGNED-IN user.
+
+What I want from you, in priority order:
+
+1. Does this change break any hard-constraint feature? Trace the actual call paths; do not
+   infer from names.
+2. Does it remove a user-visible local capability while claiming to remove a commercial
+   one?
+3. Are there account-gate predicates that are now constant?
+4. Do the tests actually test what their names claim? Would they fail if the behaviour
+   regressed? Point at any that would pass against a broken implementation.
+5. Anything the commit message asserts that the diff does not support.
+
+Be specific and cite file:line. If you find nothing serious, say so plainly rather than
+inventing minor findings -- a padded review is worse than a short one. Rank what you do
+find by severity, and separate "this is wrong" from "I would have done it differently".
+PROMPT
+
+{
+  echo "=== REVIEW BRIEF ==="
+  cat "$PROMPT_FILE"
+  echo
+  echo "=== DIFF STAT ==="
+  git diff --stat "$BASE"...HEAD
+  echo
+  echo "=== COMMIT MESSAGES ON THIS BRANCH ==="
+  git log --format='--- %h %s%n%b' "$BASE"..HEAD
+  echo
+  echo "=== FULL DIFF ==="
+  cat "$DIFF_FILE"
+} > "$OUT_DIR/input.txt"
+
+codex exec \
+  -m "$MODEL" \
+  -c model_reasoning_effort="$EFFORT" \
+  -s read-only \
+  "$(cat "$OUT_DIR/input.txt")" \
+  > "$REPORT" 2>&1 < /dev/null
+
+RC=$?
+echo
+echo "===================== CODEX REVIEW ====================="
+cat "$REPORT"
+echo "========================================================"
+echo
+echo "Full report: $REPORT"
+
+if [[ "$RC" -ne 0 ]]; then
+  echo "warning: codex exited $RC — treat the review above as incomplete." >&2
+  exit "$RC"
+fi
+
+# Advisory by design. The reviewer's judgement goes to a human; it does not gate
+# automatically, because a model verdict is not a deterministic check and should not be
+# able to block or approve a merge on its own.
+echo "Advisory gate: read the review above before merging. It does not auto-block."
+exit 0

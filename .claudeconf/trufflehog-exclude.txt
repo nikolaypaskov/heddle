@@ -1,0 +1,50 @@
+# trufflehog --exclude-paths entries are REGEXES, not globs. A glob such as `*.lock`
+# fails to compile ("can not compile regular expression") and takes the whole scan
+# down with it. This differs from lefthook's `exclude:` key, which DOES take globs --
+# the same intent, spelled two ways.
+
+# VCS metadata. actions/checkout injects the runner's ephemeral GITHUB_TOKEN into
+# .git/config; without this line every CI run fails on a guaranteed false positive.
+\.git/
+
+# Build output and vendored trees: dependency docs and fixtures legitimately contain
+# example credentials. Noise, not this project's secrets.
+^target/
+node_modules/
+\.yarn/
+
+# Lockfiles.
+Cargo\.lock$
+yarn\.lock$
+package-lock\.json$
+
+# The harness's own recorded baselines: these are lists of strings found in the tree,
+# so a scanner walking them re-reports whatever they record.
+script/heddle/.*\.baseline$
+script/heddle/.*\.vocabulary$
+
+# Upstream test fixtures for the product's OWN secret-redaction feature. These are
+# deliberately key-shaped and upstream states they are fake; the redaction tests exist
+# precisely to stop real secrets reaching logs.
+app/src/terminal/model/secrets_tests\.rs$
+
+# Test fixtures that are credential-SHAPED on purpose. Enumerated individually rather
+# than excluding `_tests.rs` wholesale: a blanket test exclusion would mean a real
+# credential committed in a NEW test file scans clean, which is precisely the mistake
+# worth keeping impossible. Each entry below was inspected.
+
+# Binary sqlite fixtures for the integration suite. They contain URI-style
+# `user:pass@host` strings inside serialised cloud-object rows -- sample data, not
+# credentials, and unreadable as text anyway.
+crates/integration/tests/data/.*\.sqlite$
+
+# Tests for the product's own secret-REDACTION feature. The fake Stripe and GitHub keys
+# here are the INPUT to the thing that stops secrets reaching logs; removing them to
+# quiet the scanner would delete the protection.
+app/src/ai/blocklist/block/secret_redaction_tests\.rs$
+
+# URI-style literals used to exercise URL parsing and credential handling.
+app/src/ai/agent_sdk/driver/git_credentials_tests\.rs$
+crates/websocket/src/proxy_tests\.rs$
+app/src/terminal/input_tests\.rs$
+crates/warp_core/src/semantic_selection/mod_tests\.rs$
