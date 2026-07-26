@@ -24,7 +24,7 @@ A Codex `gpt-5.6-sol` (max reasoning) feature audit found the tree **not yet
 honestly de-commercialized**: commercial features are still default-compiled and
 flag-enabled, so backend-gated UX fails/no-ops/asks for accounts. Full work-list
 and remove-vs-neutralize guidance:
-`docs/superpowers/specs/2026-07-23-decommercialization-audit.md`.
+`docs/design/specs/2026-07-23-decommercialization-audit.md`.
 
 Progress on the sweep:
 
@@ -239,7 +239,7 @@ phases implemented" — so the goal is understood as *v0.1 shipped; Phase 6 next
 not *all six done*.
 
 Full Phase 6 design and effort breakdown:
-`docs/superpowers/specs/2026-07-22-acp-agent-bridge-design.md`.
+`docs/design/specs/2026-07-22-acp-agent-bridge-design.md`.
 
 ## Verification you can run
 

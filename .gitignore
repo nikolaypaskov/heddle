@@ -73,3 +73,11 @@ __pycache__/
 
 # Release artefacts staged by script/heddle packaging; never committed (hundreds of MB).
 dist/
+
+# Local AI/agent tooling. These are developer-machine configuration, not part of the
+# product: an empty .claude/settings.json and an .mcp.json both inherited from upstream,
+# and .agents/skills, which were upstream's internal process docs. Ignored so that a
+# contributor's own agent setup never lands in a commit.
+.claude/
+.mcp.json
+.agents/

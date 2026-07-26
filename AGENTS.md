@@ -9,7 +9,7 @@ This file provides guidance when working with code in this repository.
 > do not reintroduce network calls to `warp.dev`, telemetry, account/sign-in
 > flows, or Warp Drive cloud sync. Many types still carry `Warp`/`Oz`/cloud names
 > from upstream; that code is being removed incrementally (see
-> [`docs/superpowers/`](docs/superpowers/)). The `warp_tui` binary is verified
+> [`docs/design/`](docs/design/)). The `warp_tui` binary is verified
 > endpoint-free by `script/heddle/verify-no-warp-endpoints` on every change.
 
 ## Development Commands

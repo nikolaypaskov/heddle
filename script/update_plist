@@ -25,7 +25,18 @@ if [[ -n "$GIT_RELEASE_TAG" ]]; then
   # (They technically only allow [major].[minor].[patch], but it's not enforced.)
   # This allows IT admins to work with a more stable version of our internal versioning scheme.
   # A tag like `v0.2025.01.07.08.02.stable_02` would be converted to `0.2025.01.07.08.02.02`.
-  if [[ $GIT_RELEASE_TAG =~ ^v([0-9]+)\.([0-9]{4})\.([0-9]{2})\.([0-9]{2})\.([0-9]{2})\.([0-9]{2})\.[a-z]+_([0-9]{2})$ ]]; then
+  # Heddle tags releases as plain semver (v0.3.1). Upstream's dated scheme is still accepted so
+  # this script keeps working for the other channels, but a semver tag used to fall through to the
+  # warning below and leave CFBundleShortVersionString at cargo-bundle's value from Cargo.toml --
+  # which is 0.1.0 and has never been bumped. Every Heddle release so far therefore reported itself
+  # as 0.1.0 in Finder and in About, including the published v0.2.0 and v0.3.0.
+  if [[ $GIT_RELEASE_TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    FORMATTED_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+
+    echo "Updating plist version to $FORMATTED_VERSION"
+    plutil -replace CFBundleShortVersionString -string "$FORMATTED_VERSION" "$WARP_PLIST_PATH"
+    plutil -replace CFBundleVersion -string "$FORMATTED_VERSION" "$WARP_PLIST_PATH"
+  elif [[ $GIT_RELEASE_TAG =~ ^v([0-9]+)\.([0-9]{4})\.([0-9]{2})\.([0-9]{2})\.([0-9]{2})\.([0-9]{2})\.[a-z]+_([0-9]{2})$ ]]; then
     MAJOR="${BASH_REMATCH[1]}"
     YEAR="${BASH_REMATCH[2]}"
     MONTH="${BASH_REMATCH[3]}"
@@ -40,7 +51,8 @@ if [[ -n "$GIT_RELEASE_TAG" ]]; then
     plutil -replace CFBundleShortVersionString -string "$FORMATTED_VERSION" "$WARP_PLIST_PATH"
     plutil -replace CFBundleVersion -string "$FORMATTED_VERSION" "$WARP_PLIST_PATH"
   else
-    echo "Warning: GIT_RELEASE_TAG '$GIT_RELEASE_TAG' does not match expected format vN.YYYY.MM.DD.HH.MM.channel_NN"
+    echo "Warning: GIT_RELEASE_TAG '$GIT_RELEASE_TAG' matches neither vMAJOR.MINOR.PATCH nor vN.YYYY.MM.DD.HH.MM.channel_NN;"
+    echo "         leaving CFBundleShortVersionString at the value from Cargo.toml, which will be wrong."
   fi
 fi
 
@@ -258,16 +270,22 @@ fi
 # https://blog.smittytone.net/2021/01/19/how-tools-try-to-own-markdown/
 
 echo "Updating plist with permissions descriptions"
-plutil -insert NSAppleEventsUsageDescription -string "A program in Warp wants to use AppleScript." "$WARP_PLIST_PATH"
-plutil -insert NSCameraUsageDescription -string "A program in Warp wants to use the camera." "$WARP_PLIST_PATH"
-plutil -insert NSMicrophoneUsageDescription -string "A program in Warp wants to use your microphone." "$WARP_PLIST_PATH"
-plutil -insert NSContactsUsageDescription -string "A program in Warp wants to use your contacts." "$WARP_PLIST_PATH"
-plutil -insert NSCalendarsUsageDescription -string "A program in Warp wants to use your calendar." "$WARP_PLIST_PATH"
-plutil -insert NSCalendarsFullAccessUsageDescription -string "A program in Warp wants full access to your calendar." "$WARP_PLIST_PATH"
-plutil -insert NSRemindersUsageDescription -string "A program in Warp wants to use your reminders." "$WARP_PLIST_PATH"
-plutil -insert NSRemindersFullAccessUsageDescription -string "A program in Warp wants full access to your reminders." "$WARP_PLIST_PATH"
-plutil -insert NSLocationUsageDescription -string "A program in Warp wants to use your location information." "$WARP_PLIST_PATH"
-plutil -insert NSPhotoLibraryUsageDescription -string "A program in Warp wants to use your photo library." "$WARP_PLIST_PATH"
+# The ONLY permission this app declares.
+#
+# A terminal runs the user's own programs, and macOS attributes a child process's
+# request to the responsible app -- this terminal. Kept because `osascript` targeting
+# another application is an ordinary thing to run from a shell, and without it those
+# calls fail with -1743 rather than prompting.
+#
+# Camera, microphone, contacts, calendars, reminders, location and photo-library
+# descriptions were removed along with their entitlements. Nothing in this codebase
+# referenced any of them; the microphone's only consumer was agent voice input, which
+# transcribes via ServerVoiceTranscriber against a server this fork does not have and is
+# not even compiled in (`voice_input` is not a default feature). A terminal that asks
+# for your calendar is asking for something it never uses.
+#
+# This text appears verbatim in the macOS consent dialog, so it must say Heddle.
+plutil -insert NSAppleEventsUsageDescription -string "A program in Heddle wants to use AppleScript." "$WARP_PLIST_PATH"
 
 echo "Disabling use of Liquid Glass on macOS Tahoe"
 plutil -insert UIDesignRequiresCompatibility -bool true "$WARP_PLIST_PATH"

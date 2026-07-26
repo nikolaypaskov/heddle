@@ -482,6 +482,25 @@ miniz_oxide.opt-level = 3
 [profile.release-lto]
 inherits = "release"
 lto = "thin"
+# Heddle: no debuginfo, and therefore no dSYM.
+#
+# The inherited `debug = 1` and `split-debuginfo = "packed"` exist, per their own comments above,
+# so that Sentry can symbolicate crash reports -- `packed` is there specifically to "force the rust
+# compiler to create a dSYM". This fork compiles no Sentry: `crash_reporting` is excluded for the
+# oss channel in script/macos/bundle, and the scripts that uploaded symbols have been deleted.
+#
+# So the pipeline generated DWARF through codegen and ThinLTO, ran dsymutil single-threaded, wrote
+# a 2.2 GB .dSYM, lipo'd it, and copied it beside the bundle -- for an artefact with no consumer.
+# It is never shipped inside the .app and never uploaded. That was the serial tail of every release
+# build, which is why an 18-core machine sat ~85% idle through it.
+#
+# Nothing observable changes: `strip = "symbols"` already strips the shipped binary, so its panic
+# backtraces carry no symbol names either way. This also lowers peak ThinLTO memory, which the
+# comment above notes was OOM-killing release builds on CI.
+#
+# If you need to debug a release binary, build with CARGO_PROFILE_RELEASE_LTO_DEBUG=1.
+debug = 0
+split-debuginfo = "off"
 
 # A shorthand profile for `release-lto`.
 # Windows enforces that any path is a maximum of 255 characters and

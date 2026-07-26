@@ -2,27 +2,41 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- The com.apple.security.application-groups entitlement was removed.
-         It requested "2BBY89MBSN.dev.warp", an app group belonging to Warp's Apple team, and an
-         app group must be owned by the signing team. Keeping it made the bundle unsignable by any
-         other Developer ID and would fail notarization.
-         Nothing depends on it: warp_core::paths::app_group_container_path is its only consumer,
-         via secure_state_dir, and every caller falls back to state_dir already.
+    <!-- Heddle declares ONE capability. Upstream declared seven.
+         Under the hardened runtime an entitlement is what actually PERMITS access, so removing one
+         means macOS denies the capability outright rather than leaving it merely unused. These were
+         audited against the code before removal, not guessed at:
+           device.camera                        no code references
+           device.audio_input                   only agent voice input, which transcribes through
+                                                ServerVoiceTranscriber against a server this fork
+                                                does not have, and which is not compiled in at all
+                                                because voice_input is not a default feature
+           personal_information.addressbook     no code references
+           personal_information.calendars       no code references
+           personal_information.location        no code references
+           personal_information.photos_library  no code references
+         Each was removed together with its NSxxxUsageDescription in script/update_plist. The two
+         must move together: an app that touches a protected resource while holding the entitlement
+         but no usage string is terminated by the OS.
+         Visible effect: Heddle no longer appears in six System Settings privacy panes.
          NOTE: XML comments may not contain a double hyphen. AMFI rejects the whole file if one
          appears here, while plutil lint accepts it, so a lint pass is not sufficient proof. -->
+
+    <!-- Kept. A terminal runs the user's own programs, and macOS attributes a child process's
+         request to the responsible app, so this is what lets osascript drive another application.
+         That is an ordinary thing to run from a shell; without it such calls fail with error 1743.
+         Heddle's own two uses would survive removal (cli_install spawns osascript for a shell
+         script with administrator privileges, which is Authorization Services, and app.m only
+         READS the current Apple event to find the quit reason). It is kept for the user's scripts,
+         not for the app. -->
     <key>com.apple.security.automation.apple-events</key>
 	<true/>
-    <key>com.apple.security.device.audio-input</key>
-	<true/>
-	<key>com.apple.security.device.camera</key>
-	<true/>
-    <key>com.apple.security.personal-information.addressbook</key>
-	<true/>
-	<key>com.apple.security.personal-information.calendars</key>
-	<true/>
-	<key>com.apple.security.personal-information.location</key>
-	<true/>
-	<key>com.apple.security.personal-information.photos-library</key>
-	<true/>
+
+    <!-- The com.apple.security.application_groups entitlement was removed earlier, for a different
+         reason: it requested an app group belonging to Warp's Apple team, and an app group must be
+         owned by the signing team. Keeping it made the bundle unsignable by any other Developer ID
+         and would fail notarization. Nothing depends on it:
+         warp_core::paths::app_group_container_path was its only consumer, via secure_state_dir,
+         and every caller already falls back to state_dir. -->
 </dict>
 </plist>

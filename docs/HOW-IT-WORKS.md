@@ -72,7 +72,7 @@ change; see [Verification](#verification) for exactly what that check does and d
 | **Warp Drive sync** | The cloud-object listener does not start |
 | **Hosted auth** | Sign-in, sign-up, SSO and device-authorization flows have no endpoint |
 | **Billing surfaces** | Upgrade links, Stripe pages, plan-comparison and pricing links removed |
-| **The ambient cloud-agent runtime** | Cloud pane creation, composer, restoration and the view-model are being excised slice by slice — see the [removal plan](superpowers/plans/2026-07-24-ambient-runtime-removal.md) |
+| **The ambient cloud-agent runtime** | Cloud pane creation, composer, restoration and the view-model are being excised slice by slice — see the [removal plan](design/plans/2026-07-24-ambient-runtime-removal.md) |
 | **Warp's legal pages** | Terms of Service and privacy policy no longer linked as if they govern Heddle |
 | **Warp support contacts** | `support@`, `sales@`, `feedback@` and `referrals@warp.dev` replaced with Heddle's issue tracker |
 | **All `warp.dev` links** | Every URL, mailto and documentation link — the scanner forbids the apex domain |
@@ -175,7 +175,7 @@ updated. Removing an asset and leaving its consumer behind is silent by construc
 
 Warp's built-in agent runs on their proprietary server and cannot work here. The intended
 replacement is [ACP](https://agentclientprotocol.com/), bridging to a local agent process. The
-design is written up in `superpowers/specs/2026-07-22-acp-agent-bridge-design.md`.
+design is written up in `design/specs/2026-07-22-acp-agent-bridge-design.md`.
 
 It is deliberately **not** implemented yet. An agent that streams tool calls without working
 permission prompts and cancellation can execute commands the user never agreed to, so a

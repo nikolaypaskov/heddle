@@ -2,7 +2,7 @@
 2026-07-22T11:36:29Z [INFO] [warp::terminal::local_tty::server] Spawning terminal server process...
 2026-07-22T11:36:29Z [INFO] [warp::terminal::local_tty::server::event_loop] Running terminal server...
 2026-07-22T11:36:29Z [INFO] [warp_server_auth::auth_state] Unable to read user from secure storage: SecureStorageError(Unknown(A default keychain could not be found.))
-2026-07-22T11:36:29Z [WARN] [warp::persistence::sqlite] SQLite error 283 (A WAL mode database file was recovered): recovered 258 frames from WAL file /Users/npaskov/Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.WarpTui/tui/warp.sqlite-wal
+2026-07-22T11:36:29Z [WARN] [warp::persistence::sqlite] SQLite error 283 (A WAL mode database file was recovered): recovered 258 frames from WAL file <path> Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.WarpTui/tui/warp.sqlite-wal
 2026-07-22T11:36:29Z [INFO] [warp::persistence::sqlite] Connecting to SQLite database
 2026-07-22T11:36:29Z [ERROR] [errors::report_error] Failed to read API keys from secure storage: unknown error: A default keychain could not be found.
 2026-07-22T11:36:29Z [ERROR] [errors::report_error] Failed to read Grok tokens from secure storage: unknown error: A default keychain could not be found.
@@ -48,7 +48,7 @@
 2026-07-22T11:36:38Z [INFO] [warp::settings::privacy] Warp Drive privacy preferences are set, using those for telemetry=true, crash_reporting=true, cloud_conversation_storage=true
 2026-07-22T11:36:38Z [INFO] [warp::terminal::model::ansi] Received Precmd hook
 2026-07-22T11:36:38Z [INFO] [warp::terminal::model::ansi] Received InputBuffer hook
-2026-07-22T11:36:38Z [INFO] [repo_metadata::local_model] Successfully indexed repository: /Users/npaskov/Development/warp with 6026 files
+2026-07-22T11:36:38Z [INFO] [repo_metadata::local_model] Successfully indexed repository: <repo> with 6026 files
 2026-07-22T11:36:38Z [INFO] [warp::server::server_api] Received channel versions from Warp server: dev: ChannelVersion { version_info: VersionInfo { version: "v0.2026.07.21.20.09.dev_00", version_for_new_users: None, update_by: None, soft_cutoff: Some("v0.2023.05.12.08.03.dev_00"), last_prominent_update: Some("v0.2025.03.05.08.02.dev_00"), is_rollback: None, cli_version: None }, overrides: [] }; preview: ChannelVersion { version_info: VersionInfo { version: "v0.2026.07.15.08.55.preview_01", version_for_new_users: None, update_by: None, soft_cutoff: Some("v0.2026.06.03.09.49.preview_04"), last_prominent_update: Some("v0.2026.07.08.17.54.preview_02"), is_rollback: None, cli_version: None }, overrides: [] }; stable: ChannelVersion { version_info: VersionInfo { version: "v0.2026.07.15.08.55.stable_01", version_for_new_users: None, update_by: None, soft_cutoff: Some("v0.2026.06.03.09.49.stable_04"), last_prominent_update: Some("v0.2026.07.08.17.54.stable_02"), is_rollback: None, cli_version: None }, overrides: [] }
 2026-07-22T11:36:38Z [INFO] [warp::changelog_model] No changelog found for current version and channel
 2026-07-22T11:36:54Z [INFO] [warp::terminal::local_tty::server::protocol] Received empty message; assuming the connection has been closed.

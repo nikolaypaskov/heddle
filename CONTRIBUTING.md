@@ -18,7 +18,7 @@ Good contributions:
 - Bug fixes, especially in the local (non-cloud) code paths.
 - Removing remaining dependence on Warp's proprietary backend, telemetry, or
   hosted services (see the de-commercialization work in
-  [`docs/superpowers/`](docs/superpowers/)).
+  [`docs/design/`](docs/design/)).
 - Portability, packaging, and build fixes.
 - Documentation improvements.
 

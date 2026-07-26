@@ -1,7 +1,5 @@
 # Heddle: Baseline Build & Egress Verification Harness — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Prove the OSS build compiles, build a harness that *observes* its network egress, use that harness to demonstrate the phone-home leak, then close the leaks that are knowable without compiler feedback.
 
 **Architecture:** Test-first at the system level. Task 2 builds an egress observer and runs it against the *unmodified* OSS build, where it must FAIL — that failure is the proof the leak exists. Tasks 3–6 close leaks at their source-of-truth choke points until it passes. Every override is gated on `Channel::Oss` so the diff stays additive and upstream's other channels keep their tests green.
@@ -18,7 +16,7 @@ That change's blast radius is a compile-error inventory that cannot exist until 
 compiled once (Task 1). It gets its own plan, written against the real inventory produced by
 Task 7.
 
-Spec: `docs/superpowers/specs/2026-07-22-foss-fork-design.md`
+Spec: `docs/design/specs/2026-07-22-foss-fork-design.md`
 
 ## Global Constraints
 
@@ -106,7 +104,7 @@ is not GPU-free at build time on this platform. (The Linux container in Task 2 i
 - [ ] **Step 3: Build the OSS TUI binary**
 
 ```bash
-cd /Users/npaskov/Development/warp
+cd <repo>
 set -o pipefail
 cargo build -p warp_tui --bin warp-tui-oss 2>&1 | tail -30
 ```
@@ -133,10 +131,10 @@ Expected: the binary exists and prints usage without panicking.
 - [ ] **Step 5: Record the baseline**
 
 ```bash
-cargo --version > docs/superpowers/plans/baseline-build.txt
-rustc --version >> docs/superpowers/plans/baseline-build.txt
-echo "warp-tui-oss built OK: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> docs/superpowers/plans/baseline-build.txt
-git add docs/superpowers/plans/baseline-build.txt
+cargo --version > docs/design/plans/baseline-build.txt
+rustc --version >> docs/design/plans/baseline-build.txt
+echo "warp-tui-oss built OK: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> docs/design/plans/baseline-build.txt
+git add docs/design/plans/baseline-build.txt
 git commit -m "chore: record baseline OSS build environment"
 ```
 
@@ -379,8 +377,8 @@ have seen it fail for the right reason.
 - [ ] **Step 4: Record the observed baseline leak**
 
 ```bash
-cp target/heddle-egress.log docs/superpowers/plans/egress-baseline.log
-git add script/heddle/egress-test docker/heddle-egress/Dockerfile docs/superpowers/plans/egress-baseline.log
+cp target/heddle-egress.log docs/design/plans/egress-baseline.log
+git add script/heddle/egress-test docker/heddle-egress/Dockerfile docs/design/plans/egress-baseline.log
 git commit -m "test: add egress observation harness, capture baseline leak
 
 Observes connect() syscalls of a cold-start warp-tui-oss in a Linux
@@ -610,7 +608,7 @@ ChannelConfig Option migration."
 Upstream treats `WarpDrivePrivacySettings` — a **cloud object** — as "the source of truth for these
 booleans" (`app/src/settings/privacy.rs:250`). `PrivacySettings` initialises from it *and
 subscribes to changes*, so a server update flips telemetry at any time. This was observed live:
-see `docs/superpowers/plans/egress-baseline-evidence.md`, where a logged-out cold start logged
+see `docs/design/plans/egress-baseline-evidence.md`, where a logged-out cold start logged
 
 ```
 Warp Drive privacy preferences are set, using those for
@@ -1024,12 +1022,12 @@ git commit -m "feat(experiments): ignore server-side experiments on OSS channel"
 Turns the remaining leaks into the input for the follow-up plan.
 
 **Files:**
-- Create: `docs/superpowers/plans/egress-residual.md`
+- Create: `docs/design/plans/egress-residual.md`
 - Modify: none
 
 **Interfaces:**
 - Consumes: `script/heddle/egress-test` (Task 2), all overrides from Tasks 3–6.
-- Produces: `docs/superpowers/plans/egress-residual.md` — the enumerated remaining egress paths
+- Produces: `docs/design/plans/egress-residual.md` — the enumerated remaining egress paths
   that the `ChannelConfig` `Option` migration must eliminate.
 
 - [ ] **Step 1: Re-run the egress harness**
@@ -1045,14 +1043,14 @@ through `http_client`.
 - [ ] **Step 2: Diff against the baseline**
 
 ```bash
-diff <(grep -oE 'inet_addr\("[0-9.]+"' docs/superpowers/plans/egress-baseline.log | sort -u) \
+diff <(grep -oE 'inet_addr\("[0-9.]+"' docs/design/plans/egress-baseline.log | sort -u) \
      <(grep -oE 'inet_addr\("[0-9.]+"' target/heddle-egress.log | sort -u) \
      || true
 ```
 
 - [ ] **Step 3: Write the residual inventory**
 
-Create `docs/superpowers/plans/egress-residual.md` recording, for each remaining destination: the
+Create `docs/design/plans/egress-residual.md` recording, for each remaining destination: the
 observed address, the code path responsible (find it with
 `grep -rn '<hostname>' crates app --include='*.rs'`), and whether the `Option` migration will
 remove it. Known candidates to check explicitly:
@@ -1075,7 +1073,7 @@ fixing it — unrelated upstream lint churn is not this plan's problem.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add docs/superpowers/plans/egress-residual.md
+git add docs/design/plans/egress-residual.md
 git commit -m "docs: record residual egress inventory after OSS choke-point overrides
 
 Input for the ChannelConfig Option migration plan."

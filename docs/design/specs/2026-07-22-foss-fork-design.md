@@ -161,7 +161,7 @@ Two things follow:
    `true`.
 
 The fix therefore clamps at every **write** and blocks the **ingestion**, leaving the readers
-untouched. Full evidence: `docs/superpowers/plans/egress-baseline-evidence.md`.
+untouched. Full evidence: `docs/design/plans/egress-baseline-evidence.md`.
 
 ### Agent replacement
 

@@ -99,6 +99,13 @@ jobs:
           key: heddle-release-${{ matrix.target }}
 
       - name: Build release binary
+        # GIT_RELEASE_TAG is read via option_env! in warp_core, so the binary can report its own
+        # version. Without it app_version() is None and the build claims to be whatever Cargo.toml
+        # says, which is 0.1.0 and has never been bumped -- every release before v0.3.1 shipped
+        # reporting 0.1.0. Cargo records this in the crate's dep-info as an env-dep, so changing the
+        # tag correctly invalidates the build rather than silently reusing a cached one.
+        env:
+          GIT_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: cargo build --release -p warp_tui --bin heddle-tui --features standalone
 
       # A release artefact that phones home is worse than no release at all.
