@@ -469,13 +469,6 @@
 ./app/src/autoupdate/linux.rs	warp
 ./app/src/autoupdate/linux.rs	warp
 ./app/src/autoupdate/linux.rs	warp
-./app/src/autoupdate/linux.rs	warp
-./app/src/autoupdate/linux.rs	warp
-./app/src/autoupdate/linux.rs	warp
-./app/src/autoupdate/linux.rs	warp
-./app/src/autoupdate/linux.rs	warp
-./app/src/autoupdate/linux.rs	warp
-./app/src/autoupdate/linux.rs	warp
 ./app/src/autoupdate/linux_tests.rs	warp
 ./app/src/autoupdate/linux_tests.rs	warp
 ./app/src/autoupdate/mac.rs	warp
@@ -1450,7 +1443,6 @@
 ./app/src/terminal/view/block_onboarding/onboarding_prompt_block.rs	warp
 ./app/src/terminal/view/block_onboarding/onboarding_prompt_block.rs	warp
 ./app/src/terminal/view/block_onboarding/onboarding_prompt_block.rs	warp
-./app/src/terminal/view/block_onboarding/onboarding_prompt_block.rs	warp
 ./app/src/terminal/view/blocklist_filter_tests.rs	warp
 ./app/src/terminal/view/docker_sandbox/mod.rs	warp
 ./app/src/terminal/view/init.rs	warp
@@ -1487,8 +1479,6 @@
 ./app/src/terminal/view/open_in_warp.rs	warp
 ./app/src/terminal/view/shared_session/conversation_ended_tombstone_view.rs	warp
 ./app/src/terminal/view/shared_session/conversation_ended_tombstone_view.rs	warp
-./app/src/terminal/view/shell_terminated_banner.rs	warp
-./app/src/terminal/view/shell_terminated_banner.rs	warp
 ./app/src/terminal/view/ssh_remote_server_choice_view.rs	warp
 ./app/src/terminal/view/ssh_remote_server_choice_view.rs	warp
 ./app/src/terminal/view/ssh_remote_server_failed_banner.rs	warp
