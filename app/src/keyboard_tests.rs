@@ -147,3 +147,57 @@ fn purging_an_action_with_no_legacy_spelling_changes_nothing() {
         "another action's legacy entry must not be collateral damage"
     );
 }
+
+/// These target the functions the WRITE PATHS actually call, not the purge helper in
+/// isolation. The earlier tests called `purge_legacy_aliases` directly, so deleting either
+/// production call site left them green -- they proved the helper worked, not that anything
+/// used it.
+#[test]
+fn writing_a_binding_drops_the_stale_spelling_of_that_action() {
+    let mut map = std::collections::HashMap::new();
+    map.insert("terminal:warpify_subshell".to_string(), "none");
+
+    super::apply_binding_write(
+        &mut map,
+        "terminal:heddlify_subshell".to_string(),
+        "ctrl-x",
+    );
+
+    assert_eq!(map.get("terminal:heddlify_subshell"), Some(&"ctrl-x"));
+    assert!(
+        !map.contains_key("terminal:warpify_subshell"),
+        "the stale entry must not survive the write that supersedes it"
+    );
+}
+
+#[test]
+fn removing_a_binding_drops_the_stale_spelling_too() {
+    // The case that actually bites: reset a migrated binding, and if the legacy `none` survives
+    // it is re-applied on the next launch, silently undoing the reset.
+    let mut map = std::collections::HashMap::new();
+    map.insert("terminal:warpify_subshell".to_string(), "none");
+    map.insert("terminal:heddlify_subshell".to_string(), "ctrl-x");
+
+    super::apply_binding_removal(&mut map, "terminal:heddlify_subshell");
+
+    assert!(map.is_empty(), "both spellings gone, leaving {map:?}");
+}
+
+#[test]
+fn writes_and_removals_leave_other_actions_alone() {
+    // Control for both of the above: if they removed entries indiscriminately, those tests
+    // would pass for entirely the wrong reason.
+    let mut map = std::collections::HashMap::new();
+    map.insert("terminal:warpify_subshell".to_string(), "none");
+    map.insert("editor:unrelated".to_string(), "cmd-x");
+
+    super::apply_binding_write(&mut map, "editor:something_else".to_string(), "cmd-y");
+    super::apply_binding_removal(&mut map, "editor:unrelated");
+
+    assert!(
+        map.contains_key("terminal:warpify_subshell"),
+        "an unrelated action's legacy entry is not collateral damage"
+    );
+    assert_eq!(map.get("editor:something_else"), Some(&"cmd-y"));
+    assert!(!map.contains_key("editor:unrelated"));
+}

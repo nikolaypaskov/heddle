@@ -90,6 +90,32 @@ fn purge_legacy_aliases<V>(map: &mut std::collections::HashMap<String, V>, curre
         .count()
 }
 
+/// Records `trigger` for `name`, dropping any stale spelling of the same action.
+///
+/// This exists as its own function so the purge is covered by tests. `write_custom_keybinding`
+/// is `#[cfg(not(test))]` because it touches the real keybindings file, so a test that only
+/// called `purge_legacy_aliases` directly would stay green if the production call site were
+/// deleted -- it would be testing the helper, not the behaviour.
+fn apply_binding_write<V>(
+    map: &mut std::collections::HashMap<String, V>,
+    name: String,
+    trigger: V,
+) {
+    purge_legacy_aliases(map, &name);
+    map.insert(name, trigger);
+}
+
+/// Forgets `name`, along with any stale spelling of the same action.
+///
+/// The purge matters more here than on write. Removing only the current ID leaves a legacy
+/// entry behind to be re-applied on the next launch, quietly reversing the reset the user just
+/// asked for -- and because that entry is usually `none`, what comes back is a keystroke they
+/// had deliberately turned off.
+fn apply_binding_removal<V>(map: &mut std::collections::HashMap<String, V>, name: &str) {
+    purge_legacy_aliases(map, name);
+    map.remove(name);
+}
+
 /// Load all stored custom keybindings into the UI framework so that they are used
 #[cfg(not(test))]
 pub fn load_custom_keybindings(app: &mut AppContext) {
@@ -137,9 +163,7 @@ pub fn write_custom_keybinding(name: String, keybinding: UserDefinedKeybinding) 
 
     let mut map = read_custom_keybindings().unwrap_or_default();
 
-    // Drop stale spellings of this action so they cannot outlive the entry being written.
-    purge_legacy_aliases(&mut map.0, &name);
-    map.0.insert(name, keybinding.into());
+    apply_binding_write(&mut map.0, name, keybinding.into());
     save_custom_keybindings(map);
 }
 
@@ -157,10 +181,7 @@ where
 
     let mut map = read_custom_keybindings().unwrap_or_default();
 
-    // Removing only the current ID would leave a legacy entry behind to be re-applied on the
-    // next launch, quietly reversing the reset the user just asked for.
-    purge_legacy_aliases(&mut map.0, name.as_ref());
-    map.0.remove(name.as_ref());
+    apply_binding_removal(&mut map.0, name.as_ref());
     save_custom_keybindings(map);
 }
 

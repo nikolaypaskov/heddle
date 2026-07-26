@@ -150,6 +150,15 @@ fn merge_missing(target: Option<&mut Item>, old: &Item) {
 /// The data is synced before the replacement, so a crash cannot leave a file that exists, has
 /// the right name, and contains nothing.
 fn write_atomically(path: &Path, contents: &str) -> Result<()> {
+    // Read the source mode BEFORE creating anything. `if let Ok(meta)` swallowed a stat failure
+    // and carried on, so the migration could report success having written the file with
+    // NamedTempFile's default mode instead of the user's -- the same silent-widening outcome
+    // the permission copy exists to prevent, just reached by a different route. The caller has
+    // already read this file, so a stat failure here is genuinely exceptional and worth saying.
+    let permissions = fs::metadata(path)
+        .with_context(|| format!("could not read the existing mode of {}", path.display()))?
+        .permissions();
+
     // Same directory as the target: the replacement is only atomic within one filesystem.
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let mut tmp = NamedTempFile::new_in(dir)
@@ -157,14 +166,10 @@ fn write_atomically(path: &Path, contents: &str) -> Result<()> {
 
     // Permissions BEFORE contents. If the original is more restrictive than the 0600 the temp
     // file starts at, this narrows it before there is anything to read; if it is laxer, the
-    // contents are about to be world-readable under that path anyway. A failure here is
-    // propagated rather than ignored, since silently leaving the wrong mode on a file the user
-    // may have deliberately locked down is not a detail to shrug at.
-    if let Ok(meta) = fs::metadata(path) {
-        fs::set_permissions(tmp.path(), meta.permissions()).with_context(|| {
-            format!("could not carry permissions across to {}", tmp.path().display())
-        })?;
-    }
+    // contents are about to be readable under that path anyway.
+    fs::set_permissions(tmp.path(), permissions).with_context(|| {
+        format!("could not carry permissions across to {}", tmp.path().display())
+    })?;
 
     tmp.write_all(contents.as_bytes())
         .with_context(|| format!("could not write {}", tmp.path().display()))?;

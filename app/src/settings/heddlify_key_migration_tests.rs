@@ -3,6 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 
 use super::migrate_warpify_table;
+use super::write_atomically;
 
 /// Writes `contents` to a settings.toml inside a fresh temp dir and returns both.
 fn settings_file(contents: &str) -> (TempDir, std::path::PathBuf) {
@@ -238,5 +239,49 @@ fn malformed_toml_is_reported_rather_than_silently_skipped() {
     assert_eq!(
         after, "[warpify.ssh\nthis is not toml",
         "the user's file is left exactly as it was"
+    );
+}
+
+#[test]
+fn a_failed_replacement_propagates_and_leaves_no_debris() {
+    // The existing cleanup test only ever exercises a SUCCESSFUL persist, which really just
+    // observes NamedTempFile behaving normally. This drives the failure path: the destination
+    // is a directory, so the temp file is created and written fine and the final replacement is
+    // the step that fails. Both halves matter -- the error must surface, and the temp file must
+    // not be left sitting next to the user's settings.
+    let dir = TempDir::new().expect("temp dir");
+    let target = dir.path().join("settings.toml");
+    fs::create_dir(&target).expect("make the destination a directory");
+
+    let err = write_atomically(&target, "anything").expect_err("replacing a directory must fail");
+    assert!(
+        format!("{err:#}").contains("settings.toml"),
+        "the error names the file it could not replace: {err:#}"
+    );
+
+    let leftovers: Vec<_> = fs::read_dir(dir.path())
+        .expect("read dir")
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "settings.toml")
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "a failed migration must not strand a temp file: {leftovers:?}"
+    );
+}
+
+#[test]
+fn an_unreadable_source_mode_is_reported_rather_than_defaulted() {
+    // `if let Ok(meta)` used to swallow a stat failure and carry on, writing the replacement
+    // with the temp file's default mode instead of the user's -- silently widening access by a
+    // different route than the one the permission copy guards.
+    let dir = TempDir::new().expect("temp dir");
+    let missing = dir.path().join("does-not-exist.toml");
+
+    let err = write_atomically(&missing, "x").expect_err("a missing source must fail");
+    assert!(
+        format!("{err:#}").contains("existing mode"),
+        "the failure is attributed to reading the mode: {err:#}"
     );
 }
