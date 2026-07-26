@@ -38,6 +38,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASELINE="$REPO_ROOT/script/heddle/gui-surfaces.baseline"
 VOCABULARY="$REPO_ROOT/script/heddle/gui-surfaces.vocabulary"
+BRANDING_BASELINE="$REPO_ROOT/script/heddle/gui-branding.baseline"
+BRANDING_VOCABULARY="$REPO_ROOT/script/heddle/gui-branding.vocabulary"
 
 # Kept identical to the oss branch of script/macos/bundle. If that feature list changes, this
 # one must change with it, or the gate stops checking what actually ships.
@@ -176,7 +178,7 @@ build_file_list() {
 # single row under -u, and a fourth could then be added invisibly -- a false negative in the
 # exact tool built to prevent one.
 collect() {
-  local out="$1" filelist="$2" err status
+  local out="$1" filelist="$2" vocabulary="$3" err status
   err="$(mktemp)" || die_infra "mktemp failed"
   cd "$REPO_ROOT"
 
@@ -185,13 +187,13 @@ collect() {
   # failure in the second stage (say, a write error part-way through) produced a truncated
   # result that was then sorted, compared, and accepted by --update as a legitimate shrink.
   set +e
-  ./script/heddle/extract-rust-literals "$VOCABULARY" < "$filelist" > "$out.raw" 2>"$err"
+  ./script/heddle/extract-rust-literals "$vocabulary" < "$filelist" > "$out.raw" 2>"$err"
   status=$?
   set -e
 
-  # The extractor exits 0 whether or not it found anything -- "no commercial UI left" is the
-  # goal of this sweep, not an error -- and non-zero only when it could not do its job:
-  # an unreadable file, a path the record format cannot encode, a file that does not lex.
+  # The extractor exits 0 whether or not it found anything -- "nothing left" is the goal of this
+  # sweep, not an error -- and non-zero only when it could not do its job: an unreadable file, a
+  # path the record format cannot encode, a file that does not lex.
   if (( status != 0 )); then
     local detail; detail="$(head -3 "$err")"; rm -f "$err"
     die_infra "literal extraction failed (status $status): $detail"
@@ -202,83 +204,125 @@ collect() {
   rm -f "$out.raw"
 }
 
-[[ -f "$VOCABULARY" ]] || die_infra "no vocabulary at $VOCABULARY"
+# Compare one vocabulary against its baseline.
+#
+# Echoes nothing on a match; prints removals, and returns 1 for additions or 3 for a stale
+# baseline so the caller can decide the overall status. Infrastructure problems still exit(2)
+# immediately via die_infra, because there is nothing meaningful to aggregate after one.
+compare_set() {
+  local label="$1" vocabulary="$2" baseline="$3" noun="$4"
+  local current added removed
+
+  [[ -f "$vocabulary" ]] || die_infra "no vocabulary at $vocabulary"
+
+  current="$(mktemp)" || die_infra "mktemp failed"
+  SCRATCH+=("$current" "$current.raw")
+  collect "$current" "$FILELIST" "$vocabulary"
+
+  if [[ ! -f "$baseline" ]]; then
+    # A missing baseline is the --update rubber stamp in another costume: delete the file, run
+    # --update, and everything currently in the tree is blessed at once with exit 0 -- no
+    # additions reported, because there was nothing to compare against. Bootstrapping is a
+    # legitimate but rare act, so it has to be said out loud, exactly like baselining additions.
+    if [[ "$MODE" == update && "$ALLOW_ADDITIONS" == true ]]; then
+      cp "$current" "$baseline" || die_infra "could not write $baseline"
+      echo "Bootstrapped $(wc -l < "$baseline" | tr -d ' ') $noun to $baseline"
+      return 0
+    fi
+    if [[ "$MODE" == update ]]; then
+      echo "FAIL: no baseline at $baseline, so --update would bless every entry in the tree" >&2
+      echo "      at once without reporting a single addition. If that is really what you want," >&2
+      echo "      say so: --update --allow-additions" >&2
+      return 1
+    fi
+    echo "error: no baseline at $baseline. Bootstrap it with --update --allow-additions." >&2
+    exit 2
+  fi
+
+  # A baseline that is not sorted in this collation makes `comm` emit nonsense, and the nonsense
+  # looks exactly like additions -- a regression that never happened.
+  LC_ALL=C sort -c "$baseline" 2>/dev/null \
+    || die_infra "$baseline is not sorted under LC_ALL=C; re-record it with --update"
+
+  added="$(LC_ALL=C comm -13 "$baseline" "$current")" || die_infra "comm failed against $baseline"
+  removed="$(LC_ALL=C comm -23 "$baseline" "$current")" || die_infra "comm failed against $baseline"
+
+  if [[ "$MODE" == update ]]; then
+    # --update must not be a rubber stamp. Recording whatever happens to be present would let
+    # anyone add a sign-in button and legitimise it in the same breath, which defeats the only
+    # purpose this gate has. Removals re-record freely; additions demand saying so out loud.
+    if [[ -n "$added" && "$ALLOW_ADDITIONS" == false ]]; then
+      echo "FAIL: --update refuses to baseline ADDED $noun:" >&2
+      echo "$added" | sed 's/^/  + /' >&2
+      echo >&2
+      echo "Removals re-record without ceremony; additions do not. If these are genuinely" >&2
+      echo "wanted, say so explicitly: --update --allow-additions" >&2
+      return 1
+    fi
+    cp "$current" "$baseline" || die_infra "could not write $baseline"
+    echo "Recorded $(wc -l < "$baseline" | tr -d ' ') $noun to $baseline"
+    return 0
+  fi
+
+  if [[ -n "$removed" ]]; then
+    echo "These $noun are GONE relative to the baseline:"
+    echo "$removed" | sed 's/^/  - /'
+    echo
+  fi
+
+  if [[ -n "$added" ]]; then
+    echo "FAIL: this change adds $noun that are not in $baseline:" >&2
+    echo "$added" | sed 's/^/  + /' >&2
+    echo >&2
+    echo "$label" >&2
+    echo "If this text is genuinely needed, record it deliberately with" >&2
+    echo "--update --allow-additions." >&2
+    return 1
+  fi
+
+  if [[ -n "$removed" ]]; then
+    echo "FAIL: $baseline is now stale. Until it is re-recorded, those entries could be" >&2
+    echo "      reintroduced up to the recorded count without failing this gate." >&2
+    echo "      Re-record in THIS change: ./script/heddle/gui-surface-gate --update" >&2
+    return 3
+  fi
+
+  echo "PASS: $noun match the baseline ($(wc -l < "$baseline" | tr -d ' ') entries, $SCANNED files scanned)."
+  return 0
+}
+
 [[ -x "$REPO_ROOT/script/heddle/extract-rust-literals" ]] \
   || die_infra "script/heddle/extract-rust-literals is missing or not executable"
 
 FILELIST="$(mktemp)" || die_infra "mktemp failed"
-CURRENT="$(mktemp)" || die_infra "mktemp failed"
-trap 'rm -f "$CURRENT" "$CURRENT.raw" "$FILELIST" "${raw:-}"' EXIT
+SCRATCH=("$FILELIST")
+trap 'rm -f "${SCRATCH[@]:-}" "${raw:-}"' EXIT
 
 SCANNED="$(build_file_list "$FILELIST")"
-collect "$CURRENT" "$FILELIST"
 
-if [[ ! -f "$BASELINE" ]]; then
-  # A missing baseline is the --update rubber stamp in another costume: delete the file, run
-  # --update, and every surface currently in the tree is blessed at once with exit 0 -- no
-  # additions reported, because there was nothing to compare against. Bootstrapping is a
-  # legitimate but rare act, so it has to be said out loud, exactly like baselining additions.
-  if [[ "$MODE" == update && "$ALLOW_ADDITIONS" == true ]]; then
-    cp "$CURRENT" "$BASELINE" || die_infra "could not write $BASELINE"
-    echo "Bootstrapped $(wc -l < "$BASELINE" | tr -d ' ') commercial UI surfaces to $BASELINE"
-    exit 0
-  fi
-  if [[ "$MODE" == update ]]; then
-    echo "FAIL: no baseline at $BASELINE, so --update would bless every surface in the tree" >&2
-    echo "      at once without reporting a single addition. If that is really what you want," >&2
-    echo "      say so: --update --allow-additions" >&2
-    exit 1
-  fi
-  echo "error: no baseline at $BASELINE. Bootstrap one with --update --allow-additions." >&2
-  exit 2
-fi
+# Two independent ratchets over the same scan.
+#
+# The commercial set is the narrow one: sign-in, billing, Drive, upgrade prompts. The branding
+# set is the word "Warp" itself, which the commercial vocabulary says nothing about -- which is
+# why every "Warp Agent", "Warp Drive Contents" and "consume Warp credits" string walked past a
+# green gate. Its baseline is large and mostly permanent: `WARP_` environment variables, `.warp/`
+# paths and test fixtures are persistence contracts that must NOT be renamed. That is fine. The
+# point is not that the number reaches zero, it is that it can only ever go down.
+overall=0
+set +e
+compare_set \
+  "Heddle has no account and no vendor backend, so there is nothing for a sign-in, a Drive panel or an upgrade prompt to talk to." \
+  "$VOCABULARY" "$BASELINE" "commercial UI surfaces"
+status=$?
+set -e
+(( status > overall )) && overall=$status
 
-# A baseline that is not sorted in this collation makes `comm` emit nonsense, and the nonsense
-# looks exactly like added surfaces -- exit 1, a regression that never happened.
-LC_ALL=C sort -c "$BASELINE" 2>/dev/null \
-  || die_infra "$BASELINE is not sorted under LC_ALL=C; re-record it with --update"
+set +e
+compare_set \
+  "AGPL grants the code, not the trademark. Check whether this is user-visible copy (rename it) or a persistence contract such as a WARP_ variable or a .warp/ path (leave it alone)." \
+  "$BRANDING_VOCABULARY" "$BRANDING_BASELINE" "Warp brand mentions"
+status=$?
+set -e
+(( status > overall )) && overall=$status
 
-ADDED="$(LC_ALL=C comm -13 "$BASELINE" "$CURRENT")" || die_infra "comm failed comparing to the baseline"
-REMOVED="$(LC_ALL=C comm -23 "$BASELINE" "$CURRENT")" || die_infra "comm failed comparing to the baseline"
-
-if [[ "$MODE" == update ]]; then
-  # --update must not be a rubber stamp. Recording whatever happens to be present would let
-  # anyone add a sign-in button and legitimise it in the same breath, which defeats the only
-  # purpose this gate has. Removals re-record freely; additions demand saying so out loud.
-  if [[ -n "$ADDED" && "$ALLOW_ADDITIONS" == false ]]; then
-    echo "FAIL: --update refuses to baseline ADDED commercial UI surfaces:" >&2
-    echo "$ADDED" | sed 's/^/  + /' >&2
-    echo >&2
-    echo "Removals re-record without ceremony; additions do not. If these are genuinely" >&2
-    echo "wanted, say so explicitly: --update --allow-additions" >&2
-    exit 1
-  fi
-  cp "$CURRENT" "$BASELINE" || die_infra "could not write $BASELINE"
-  echo "Recorded $(wc -l < "$BASELINE" | tr -d ' ') commercial UI surfaces to $BASELINE"
-  exit 0
-fi
-
-if [[ -n "$REMOVED" ]]; then
-  echo "These commercial UI surfaces are GONE relative to the baseline:"
-  echo "$REMOVED" | sed 's/^/  - /'
-  echo
-fi
-
-if [[ -n "$ADDED" ]]; then
-  echo "FAIL: this change adds commercial UI surfaces that are not in the baseline:" >&2
-  echo "$ADDED" | sed 's/^/  + /' >&2
-  echo >&2
-  echo "Heddle has no account and no vendor backend, so there is nothing for a sign-in," >&2
-  echo "a Drive panel or an upgrade prompt to talk to. If this text is genuinely needed," >&2
-  echo "record it deliberately with --update --allow-additions." >&2
-  exit 1
-fi
-
-if [[ -n "$REMOVED" ]]; then
-  echo "FAIL: the baseline is now stale. Until it is re-recorded, those surfaces could be" >&2
-  echo "      reintroduced up to the recorded count without failing this gate." >&2
-  echo "      Re-record in THIS change: ./script/heddle/gui-surface-gate --update" >&2
-  exit 3
-fi
-
-echo "PASS: commercial UI surface matches the baseline ($(wc -l < "$BASELINE" | tr -d ' ') entries, $SCANNED files scanned)."
+exit "$overall"
