@@ -392,7 +392,6 @@
 ./app/src/settings_view/ai_page.rs	cloud agent
 ./app/src/settings_view/ai_page.rs	cloud agent
 ./app/src/settings_view/ai_page.rs	cloud agent
-./app/src/settings_view/ai_page.rs	cloud agent
 ./app/src/settings_view/ai_page.rs	compare plans
 ./app/src/settings_view/ai_page.rs	credits
 ./app/src/settings_view/ai_page.rs	credits
@@ -421,9 +420,6 @@
 ./app/src/settings_view/ai_page.rs	upgrade
 ./app/src/settings_view/ai_page.rs	upgrade
 ./app/src/settings_view/ai_page.rs	upgrade
-./app/src/settings_view/ai_page.rs	warp drive
-./app/src/settings_view/ai_page.rs	warp drive
-./app/src/settings_view/ai_page.rs	warp drive
 ./app/src/settings_view/ai_page.rs	your account
 ./app/src/settings_view/appearance_page.rs	warp drive
 ./app/src/settings_view/appearance_page.rs	warp drive
@@ -557,10 +553,6 @@
 ./app/src/workspace/mod.rs	login
 ./app/src/workspace/mod.rs	login
 ./app/src/workspace/mod.rs	warp drive
-./app/src/workspace/mod.rs	warp drive
-./app/src/workspace/mod.rs	warp drive
-./app/src/workspace/mod.rs	warp drive
-./app/src/workspace/mod.rs	warp drive
 ./app/src/workspace/view.rs	cloud agent
 ./app/src/workspace/view.rs	login
 ./app/src/workspace/view.rs	login
@@ -570,8 +562,6 @@
 ./app/src/workspace/view.rs	sign up
 ./app/src/workspace/view.rs	sign up
 ./app/src/workspace/view.rs	upgrade
-./app/src/workspace/view.rs	warp drive
-./app/src/workspace/view.rs	warp drive
 ./app/src/workspace/view.rs	warp drive
 ./app/src/workspace/view.rs	warp drive
 ./app/src/workspace/view.rs	warp drive
