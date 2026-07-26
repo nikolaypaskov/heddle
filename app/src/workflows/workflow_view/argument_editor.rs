@@ -20,10 +20,10 @@ use super::{
     VERTICAL_TEXT_INPUT_PADDING, WORKFLOW_PARAMETER_HIGHLIGHT_COLOR, WorkflowAction, WorkflowView,
     WorkflowViewEvent,
 };
-use crate::drive::workflows::workflow_arg_selector::{
+use crate::workflows::args::workflow_arg_selector::{
     WorkflowArgSelector, WorkflowArgSelectorStyles,
 };
-use crate::drive::workflows::workflow_arg_type_helpers::{self, ArgumentTypeEditor};
+use crate::workflows::args::workflow_arg_type_helpers::{self, ArgumentTypeEditor};
 use crate::editor::{
     EditOrigin, EditorView, Event as EditorEvent, InteractionState,
     PlainTextEditorViewAction as EditorAction,

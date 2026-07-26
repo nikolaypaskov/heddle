@@ -13,7 +13,7 @@ use super::shared_objects_creation_denied_body::{
     SharedObjectsCreationDeniedBody, SharedObjectsCreationDeniedBodyEvent,
 };
 use crate::drive::DriveObjectType;
-use crate::drive::cloud_object_styling::warp_drive_icon_color;
+use crate::ui_components::object_icon_color::warp_drive_icon_color;
 use crate::modal::{Modal, ModalEvent};
 use crate::server::ids::ServerId;
 use crate::themes::theme::Fill;

@@ -574,7 +574,6 @@
 ./app/src/drive/sharing/dialog/mod.rs	warp
 ./app/src/drive/sharing/dialog/mod.rs	warp
 ./app/src/drive/sharing/qr_code_tests.rs	warp
-./app/src/drive/workflows/modal.rs	warp
 ./app/src/editor/view/mod_tests.rs	warp
 ./app/src/editor/view/mod_tests.rs	warp
 ./app/src/editor/view/mod_tests.rs	warp
@@ -1600,6 +1599,7 @@
 ./app/src/wasm_nux_dialog.rs	warp
 ./app/src/wasm_nux_dialog.rs	warp
 ./app/src/workflows/aliases.rs	warp
+./app/src/workflows/args/modal.rs	warp
 ./app/src/workflows/command_parser_tests.rs	warp
 ./app/src/workflows/command_parser_tests.rs	warp
 ./app/src/workflows/command_parser_tests.rs	warp

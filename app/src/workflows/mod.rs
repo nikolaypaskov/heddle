@@ -6,6 +6,7 @@ use warp_core::context_flag::ContextFlag;
 use warp_core::features::FeatureFlag;
 use warpui::{AppContext, SingletonEntity};
 
+pub mod args;
 pub mod categories;
 use anyhow::Result;
 use workflow::Workflow;

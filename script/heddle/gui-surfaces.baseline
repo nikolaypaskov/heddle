@@ -254,7 +254,6 @@
 ./app/src/drive/sharing/dialog/mod.rs	upgrade
 ./app/src/drive/sharing/dialog/mod.rs	upgrade
 ./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/workflows/ai_assist.rs	credits
 ./app/src/experiments/login_layer.rs	login
 ./app/src/integration_testing/assertions.rs	subscription
 ./app/src/integration_testing/assertions.rs	subscription
@@ -544,6 +543,7 @@
 ./app/src/util/git_tests.rs	login
 ./app/src/wasm_nux_dialog.rs	warp drive
 ./app/src/workflows/aliases.rs	warp drive
+./app/src/workflows/args/ai_assist.rs	credits
 ./app/src/workflows/categories.rs	upgrade
 ./app/src/workflows/workflow_view.rs	sign in
 ./app/src/workspace/bonus_grant_notification_model.rs	credits
