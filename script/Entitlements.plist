@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- No com.apple.security.application-groups.
+         It requested "2BBY89MBSN.dev.warp", an app group belonging to Warp's Apple team. An app
+         group must be owned by the signing team, so that entitlement makes the bundle
+         unsignable by anyone else: it fails under a different Developer ID and fails
+         notarization. It is also unnecessary. The only consumer is
+         warp_core::paths::app_group_container_path, used by secure_state_dir, and every caller
+         already falls back with .unwrap_or_else(state_dir) -- which is the path these ad-hoc
+         signed builds have always taken, since an ungranted entitlement yields no usable
+         container. Removing it keeps the state directory stable rather than letting it move if
+         entitlements ever change. -->
     <key>com.apple.security.automation.apple-events</key>
 	<true/>
     <key>com.apple.security.device.audio-input</key>
@@ -16,9 +26,5 @@
 	<true/>
 	<key>com.apple.security.personal-information.photos-library</key>
 	<true/>
-    <key>com.apple.security.application-groups</key>
-    <array>
-    <string>2BBY89MBSN.dev.warp</string>
-    </array>
 </dict>
 </plist>

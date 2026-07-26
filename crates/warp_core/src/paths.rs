@@ -392,7 +392,11 @@ pub fn app_group_container_path() -> Option<PathBuf> {
         use objc2_foundation::{NSFileManager, NSString};
 
         let fm = NSFileManager::defaultManager();
-        // Keep in sync with Entitlements.plist
+        // NOTE: script/Entitlements.plist no longer requests this app group -- it named Warp's
+        // Apple team, which makes the bundle unsignable by any other team. So this lookup finds
+        // no usable container and secure_state_dir() returns None, which every caller already
+        // handles by falling back to state_dir(). Left in place rather than deleted because it
+        // is the only thing documenting what the group was.
         let group_id = format!("{}.dev.warp", crate::macos::APPLE_TEAM_ID);
         let group_id = NSString::from_str(&group_id);
         // containerURLForSecurityApplicationGroupIdentifier always returns a value on macOS (unlike iOS).

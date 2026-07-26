@@ -17,8 +17,11 @@ release workflow alongside the artefact and published with it.
 
 ## Installing (macOS, Apple Silicon)
 
-**This binary is unsigned and not notarized.** Notarizing requires a paid Apple
-Developer ID this project does not have. Please read what that costs you:
+**These builds are ad-hoc signed and not notarized.** A paid Apple Developer
+Program membership exists, but distribution requires a *Developer ID
+Application* certificate — a different credential from the *Apple Development*
+one used for local work — plus stored notarization credentials. Until both are
+in place, releases stay ad-hoc signed. Please read what that costs you:
 
 - macOS quarantines the download and refuses to open it. Clearing that flag is
   you overriding a security control. That decision belongs in your hands, which
@@ -30,7 +33,19 @@ Developer ID this project does not have. Please read what that costs you:
 If that is not acceptable to you, build from source instead (below); it is the
 same code, and you establish provenance yourself.
 
+Two artefacts ship for macOS: the GUI app and the terminal-only frontend.
+
 ```bash
+# GUI. Use ditto, not Finder or unzip -- those can strip the code signature,
+# after which macOS refuses to launch the app.
+shasum -a 256 -c Heddle-aarch64-apple-darwin.app.zip.sha256
+ditto -x -k Heddle-aarch64-apple-darwin.app.zip .
+xattr -dr com.apple.quarantine Heddle.app
+open Heddle.app
+```
+
+```bash
+# Terminal-only frontend.
 shasum -a 256 -c heddle-aarch64-apple-darwin.tar.gz.sha256
 tar -xzf heddle-aarch64-apple-darwin.tar.gz
 cd heddle-aarch64-apple-darwin
@@ -47,8 +62,10 @@ cargo build --release -p warp_tui --bin heddle-tui
 ./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
 ```
 
-If someone later accepts the cost and the duty of protecting signing keys,
-signed macOS builds can follow.
+Signed builds are blocked only on issuing that certificate; the bundle itself is
+ready for it. The app-group entitlement that named Warp's Apple team has been
+removed, because an app group must belong to the signing team and that one made
+the bundle unsignable by anyone else.
 
 ## What is verified in this build
 

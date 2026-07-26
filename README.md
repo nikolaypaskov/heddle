@@ -120,8 +120,11 @@ nothing — only a build does:
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-**The published Apple Silicon binary is unsigned and not notarized.** Notarization requires a
-paid Apple Developer ID this project does not have. Read that plainly before you use it:
+**The published Apple Silicon builds are ad-hoc signed and not notarized.** A paid Apple
+Developer Program membership exists, but distribution needs a *Developer ID Application*
+certificate, which is a different credential from the *Apple Development* one used for local
+work; until that certificate is issued and notarization credentials are stored, releases stay
+ad-hoc signed. Read that plainly before you use them:
 
 - macOS will quarantine the download and refuse to open it. Clearing that flag is you
   overriding a security control, so it belongs in *your* hands, not in an install script.
@@ -158,11 +161,25 @@ shutdown. **That work is not done.**
 
 Honest caveats:
 
-- **The string rebrand is incomplete.** Menu items, dialogs, notifications and icons say Heddle, but
-  roughly 600 further strings — mostly log messages and internal diagnostics — still say "Warp".
-  Two categories are left alone deliberately: `Warp OSC` markers are a wire-protocol identifier
-  that shell hooks depend on, and "Warp Drive" names an upstream feature Heddle removed, so
-  renaming it would imply Heddle has it.
+- **The string rebrand is incomplete, and now measured rather than estimated.** A gate tracks every
+  string literal mentioning Warp and fails if the count rises: `script/heddle/gui-surface-gate`.
+  It currently stands at **2,987**. An earlier draft of this README guessed "roughly 600", which was
+  wrong by a factor of five.
+
+  Most of that number is not renameable, and should not be:
+
+  | Category | Why it stays |
+  |---|---|
+  | `WARP_*` environment variables, `.warp/` project directories | read by the shell integration and by users' own repositories |
+  | keybinding action ids (`terminal:heddlify_subshell` and friends) | persisted in `keybindings.yaml`; renaming orphans user bindings |
+  | `SourcedRcFileForWarp` and `Warp OSC` markers | wire-protocol identifiers the shell hooks depend on |
+  | `warpdotdev/claude-code-warp`, `warpdotdev/codex-warp` | the real upstream repos the CLI-agent plugins install from |
+  | test fixtures, telemetry event ids | not user-visible |
+
+  About 1,100 sit outside tests and telemetry; the user-visible remainder is a few hundred and is
+  being worked down. On Linux and Windows the data directory is still Warp-named, because those
+  platforms derive it from an application id whose default is unchanged — that holds real settings,
+  so it needs a migration rather than a rename.
 - Observed behaviour on a logged-out cold start is below; it is evidence, not proof.
 
 | Unmodified upstream did | Heddle |
@@ -170,6 +187,27 @@ Honest caveats:
 | Fetched channel versions from Warp's server | nothing |
 | Opened a Warp Drive websocket, retried on failure | listener never starts |
 | Fetched privacy preferences and set `telemetry=true` | nothing |
+
+### The account-gate trap
+
+Worth writing down, because it caused more damage than any leftover label and took three
+encounters to recognise as a pattern.
+
+Upstream gates paid capabilities behind an account check. Remove accounts and the predicate becomes
+a constant — so the capability does not become free, it becomes **permanently off**, silently:
+
+| Function | Consequence before the fix |
+|---|---|
+| `AISettings::is_any_ai_enabled` | returned false for every user at 312 call sites; every AI surface reported itself unavailable |
+| `UserWorkspaces::is_byo_api_key_enabled` | API-key fields built disabled, and one path erased a key the user had already saved |
+| `apply_onboarding_settings(has_account)` | choosing the agent during first run completed onboarding with AI switched off |
+
+None of these looked like anything until the predicate was read. All 64 call sites of
+`is_anonymous_or_logged_out()` and `is_logged_in()` have since been audited: most are correct and
+guard operations that genuinely need a server.
+
+Test suites do not catch this class, and the reason is worth knowing: they build auth state with a
+helper that reports a **signed-in** user, so the state this fork is always in is never exercised.
 
 ## Non-goals
 
@@ -186,8 +224,11 @@ Honest caveats:
 | Endpoint removal | Verified — scanner passes, enforced in CI |
 | Telemetry / experiments / Drive | Removed |
 | Ambient cloud-agent runtime | Being excised slice by slice, each independently reviewed — [plan](docs/superpowers/plans/2026-07-24-ambient-runtime-removal.md) |
-| Rebrand | Own name, icon, logo, bundle ID, paths; upstream doc links remain |
-| Release builds | Linux x86_64; macOS Apple Silicon (**unsigned, not notarized** — see macOS notes) |
+| Rebrand | Own name, icon, logo, bundle ID, paths, CLI command; remaining Warp strings tracked by a gate that can only shrink |
+| Commercial UI | Account menus, Warp Drive, the billing/Account page, upgrade prompts and the first-run login all removed; surface tracked by the same gate |
+| Release builds | Linux x86_64 via CI; macOS Apple Silicon GUI + TUI (**ad-hoc signed, not notarized** — see macOS notes) |
+| Built-in agent | **Cannot send requests.** Its transport requires a Warp server; keys can be stored but not used |
+| Third-party CLI agents | Working — local child processes reading credentials from your environment |
 | Agent support (ACP) | Designed + `AgentBackend` seam planned; **not implemented** (next milestone) |
 
 Warp's built-in agent runs on their proprietary server and cannot work here. The intended
