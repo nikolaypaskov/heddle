@@ -120,16 +120,22 @@ nothing — only a build does:
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-**The published Apple Silicon builds are ad-hoc signed and not notarized.** A paid Apple
-Developer Program membership exists, but distribution needs a *Developer ID Application*
-certificate, which is a different credential from the *Apple Development* one used for local
-work; until that certificate is issued and notarization credentials are stored, releases stay
-ad-hoc signed. Read that plainly before you use them:
+**The published Apple Silicon builds are signed with a Developer ID and notarized by Apple.**
+The GUI carries a stapled ticket, so it opens by double-click with no quarantine flag to clear
+and no security override asked of you.
 
-- macOS will quarantine the download and refuse to open it. Clearing that flag is you
-  overriding a security control, so it belongs in *your* hands, not in an install script.
+The CLI is signed and notarized too, but carries no stapled ticket: Apple staples only to bundles,
+disk images and packages, never to a bare executable. Running `spctl` against it locally therefore
+reports "Unnotarized Developer ID" even though Apple's record says otherwise, because there is no
+stapled ticket for it to read.
+
+Two things a signature does *not* give you, worth stating since they are easy to over-read:
+
+- It proves the build came from this signing identity and has not been altered since. It says
+  nothing about whether the code does what the README claims — that is what the endpoint scanner,
+  the surface gates and the test suite are for.
 - A SHA-256 published beside the artefact proves the file matches what the release job
-  produced. It does **not** prove provenance the way a signature does — anyone who can write
+  produced. Provenance now comes from the signature; the checksum remains useful because anyone who can write
   to the release page can replace both.
 
 If that trade-off is not acceptable to you, build from source; it is the same code and you

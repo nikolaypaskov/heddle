@@ -17,15 +17,11 @@ release workflow alongside the artefact and published with it.
 
 ## Installing (macOS, Apple Silicon)
 
-**These builds are ad-hoc signed and not notarized.** A paid Apple Developer
-Program membership exists, but distribution requires a *Developer ID
-Application* certificate — a different credential from the *Apple Development*
-one used for local work — plus stored notarization credentials. Until both are
-in place, releases stay ad-hoc signed. Please read what that costs you:
+**These builds are signed with a Developer ID and notarized by Apple.** The GUI
+carries a stapled ticket and opens by double-click; there is no quarantine flag
+to clear. The CLI is signed and notarized as well, but cannot carry a stapled
+ticket, because Apple staples only to bundles, disk images and packages.
 
-- macOS quarantines the download and refuses to open it. Clearing that flag is
-  you overriding a security control. That decision belongs in your hands, which
-  is why it is a step you run, not something an install script does for you.
 - The SHA-256 below proves the file matches what the release job produced. It
   does **not** prove provenance the way a signature would — anyone able to write
   to this release page could replace the artefact and its checksum together.
@@ -40,7 +36,6 @@ Two artefacts ship for macOS: the GUI app and the terminal-only frontend.
 # after which macOS refuses to launch the app.
 shasum -a 256 -c Heddle-aarch64-apple-darwin.app.zip.sha256
 ditto -x -k Heddle-aarch64-apple-darwin.app.zip .
-xattr -dr com.apple.quarantine Heddle.app
 open Heddle.app
 ```
 
@@ -49,7 +44,6 @@ open Heddle.app
 shasum -a 256 -c heddle-aarch64-apple-darwin.tar.gz.sha256
 tar -xzf heddle-aarch64-apple-darwin.tar.gz
 cd heddle-aarch64-apple-darwin
-xattr -d com.apple.quarantine ./heddle-tui
 ./heddle-tui
 ```
 
@@ -62,10 +56,9 @@ cargo build --release -p warp_tui --bin heddle-tui
 ./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
 ```
 
-Signed builds are blocked only on issuing that certificate; the bundle itself is
-ready for it. The app-group entitlement that named Warp's Apple team has been
-removed, because an app group must belong to the signing team and that one made
-the bundle unsignable by anyone else.
+The app-group entitlement that named Warp's Apple team was removed to make this
+possible: an app group must belong to the signing team, so that entitlement made
+the bundle unsignable by any other Developer ID.
 
 ## What is verified in this build
 
