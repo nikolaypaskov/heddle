@@ -59,3 +59,31 @@ impl RudderBatchMessage {
         }
     }
 }
+
+/// No telemetry destination is configured in this build, and the send path must refuse on that
+/// basis rather than relying on the HTTP client to fail.
+///
+/// Running the shipped v0.2.0 app produced these lines in heddle.log:
+///
+///   [INFO] Start to send telemetry events to RudderStack
+///   [INFO] Failed to flush events from Telemetry queue: builder error
+///
+/// Nothing was transmitted, but only because `telemetry_config: None` leaves `root_url` empty,
+/// so the POST target became the relative string "/v1/batch" and reqwest could not build a
+/// request from it. A privacy guarantee resting on someone else's URL parser is the wrong shape,
+/// and the log line reads like telemetry being sent.
+#[test]
+fn no_rudderstack_destination_is_configured_in_this_build() {
+    use warp_core::channel::ChannelState;
+
+    assert!(
+        ChannelState::rudderstack_ugc_destination().root_url.is_empty(),
+        "the oss channel must configure no UGC telemetry destination"
+    );
+    assert!(
+        ChannelState::rudderstack_non_ugc_destination()
+            .root_url
+            .is_empty(),
+        "the oss channel must configure no telemetry destination"
+    );
+}

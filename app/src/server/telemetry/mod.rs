@@ -316,6 +316,24 @@ impl TelemetryApi {
             return Ok(());
         }
 
+        // Refuse to send when no destination is configured, which is always in this build.
+        //
+        // Without this the pipeline ran to completion: it logged "Start to send telemetry events
+        // to RudderStack", built a batch, and only failed because `telemetry_config: None` leaves
+        // `root_url` empty, making the POST target the relative string "/v1/batch" -- which
+        // reqwest cannot turn into a request. Nothing was transmitted, but the reason was a URL
+        // parse failure inside an HTTP library rather than a decision made here.
+        //
+        // A privacy guarantee should not depend on someone else's error path. It is also visible:
+        // running the shipped app writes that "Start to send telemetry events" line into
+        // heddle.log, which reads exactly like telemetry being sent.
+        let ugc_destination = ChannelState::rudderstack_ugc_destination();
+        let non_ugc_destination = ChannelState::rudderstack_non_ugc_destination();
+        if ugc_destination.root_url.is_empty() && non_ugc_destination.root_url.is_empty() {
+            log::debug!("No telemetry destination is configured; discarding queued events.");
+            return Ok(());
+        }
+
         log::info!("Start to send telemetry events to RudderStack");
 
         let (mut messages_with_ugc, messages_without_ugc): (Vec<_>, Vec<_>) = messages
@@ -328,14 +346,8 @@ impl TelemetryApi {
         }
 
         for (messages, rudder_stack_destination) in [
-            (
-                messages_with_ugc,
-                ChannelState::rudderstack_ugc_destination(),
-            ),
-            (
-                messages_without_ugc,
-                ChannelState::rudderstack_non_ugc_destination(),
-            ),
+            (messages_with_ugc, ugc_destination),
+            (messages_without_ugc, non_ugc_destination),
         ] {
             if messages.is_empty() {
                 continue;

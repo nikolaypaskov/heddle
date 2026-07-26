@@ -24,24 +24,19 @@ use crate::telemetry::TuiStartupTelemetryEvent;
 use crate::terminal_background::probe_and_select_theme;
 use crate::terminal_session_view::{TuiConversationRestoreOrigin, TuiConversationRestoreTarget};
 
+/// Command-line arguments.
+///
+/// Deliberately empty of the two flags upstream exposes here, because both require a server this
+/// build does not have and both were advertised in `--help`:
+///
+///   --resume <token>   resumed a conversation held on Warp's servers, by server token;
+///   --api-key <key>    authenticated non-interactively against them, also read from WARP_API_KEY.
+///
+/// Offering them meant `heddle-tui --help` described a hosted product. The plumbing behind them is
+/// left alone and simply passed `None`; removing that is a wider change than this.
 #[derive(Parser)]
-#[command(name = "warp")]
-struct TuiArgs {
-    /// Resume an Oz/Warp conversation by server token.
-    #[arg(long)]
-    resume: Option<String>,
-
-    /// API key for non-interactive authentication.
-    #[arg(long, env = "WARP_API_KEY")]
-    api_key: Option<String>,
-}
-
-/// Validates and wraps a server conversation token from the command line.
-fn parse_resume_token(token: String) -> Result<ServerConversationToken> {
-    uuid::Uuid::parse_str(&token)
-        .with_context(|| format!("invalid server conversation token: {token}"))?;
-    Ok(ServerConversationToken::new(token))
-}
+#[command(name = "heddle-tui")]
+struct TuiArgs {}
 
 /// Boots the headless Warp app and mounts the transcript-capable TUI session.
 pub fn run() -> Result<()> {
@@ -64,21 +59,18 @@ pub fn run() -> Result<()> {
         }
         Err(error) => return Err(anyhow::Error::new(error)),
     };
-    let resume_token = args.resume.map(parse_resume_token).transpose()?;
+    let _ = args;
     let exit_summary = TuiExitSummaryHandle::default();
     let exit_summary_for_app = exit_summary.clone();
-    let result = warp::run_tui(
-        args.api_key,
-        Box::new(move |ctx| init(resume_token, exit_summary_for_app, ctx)),
-    );
-    if result.is_ok()
-        && let Some(token) = exit_summary.token()
-    {
-        let token = token.as_str();
-        println!("To continue this conversation, run:");
-        println!("warp --resume {token}");
-    }
-    result
+    // No resume token and no API key: both came from flags that needed a server.
+    //
+    // The exit hint that used to follow printed `warp --resume <token>` -- the wrong binary name
+    // for a workflow that cannot work here, since the token it echoes only exists for a
+    // conversation stored on a server.
+    warp::run_tui(
+        None,
+        Box::new(move |ctx| init(None, exit_summary_for_app, ctx)),
+    )
 }
 
 /// Creates the login-gated root and starts the headless draw and input driver.
