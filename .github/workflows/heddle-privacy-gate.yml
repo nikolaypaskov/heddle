@@ -27,6 +27,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Cheapest job, and it gates the thing that would compromise every other job's result: if the
+  # build can execute code Warp controls, no downstream scan proves anything about what shipped.
+  # Needs no toolchain, so it fails in seconds rather than after a 90-minute build.
+  supply-chain:
+    name: No Warp-controlled code path
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The self-test recovers a deleted file from history to prove the gate rejects the real
+          # artifact, not just a synthetic one. A shallow clone has no history to recover it from.
+          fetch-depth: 0
+
+      - name: Self-test the supply-chain gate
+        run: ./script/heddle/verify-warp-supply-chain-selftest
+
+      - name: Verify no Warp-controlled code path
+        run: ./script/heddle/verify-warp-supply-chain
+
   no-warp-endpoints:
     name: Binary contains no Warp endpoints
     runs-on: ubuntu-latest

@@ -222,7 +222,6 @@
 ./app/src/ai/blocklist/block/status_bar.rs	warp
 ./app/src/ai/blocklist/block/view_impl.rs	warp
 ./app/src/ai/blocklist/block/view_impl/common.rs	warp
-./app/src/ai/blocklist/block/view_impl/common.rs	warp
 ./app/src/ai/blocklist/block/view_impl/output_tests.rs	warp
 ./app/src/ai/blocklist/block_tests.rs	warp
 ./app/src/ai/blocklist/block_tests.rs	warp
@@ -422,6 +421,8 @@
 ./app/src/app_services/windows/single_instance_manager.rs	warp
 ./app/src/app_services/windows/single_instance_manager.rs	warp
 ./app/src/appearance.rs	warp
+./app/src/appearance_tests.rs	warp
+./app/src/appearance_tests.rs	warp
 ./app/src/auth/auth_manager_tests.rs	warp
 ./app/src/auth/auth_override_warning_body.rs	warp
 ./app/src/auth/auth_override_warning_body.rs	warp
@@ -1270,7 +1271,6 @@
 ./app/src/terminal/conversation_restoration_tests.rs	warp
 ./app/src/terminal/focus_env.rs	warp
 ./app/src/terminal/focus_env.rs	warp
-./app/src/terminal/general_settings.rs	warp
 ./app/src/terminal/general_settings.rs	warp
 ./app/src/terminal/general_settings.rs	warp
 ./app/src/terminal/general_settings.rs	warp
@@ -2616,8 +2616,6 @@
 ./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state.rs	warp
-./crates/warp_core/src/channel/state.rs	warp
-./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state_tests.rs	warp
 ./crates/warp_core/src/channel/state_tests.rs	warp
 ./crates/warp_core/src/channel/state_tests.rs	warp
@@ -2644,19 +2642,6 @@
 ./crates/warp_core/src/paths.rs	warp
 ./crates/warp_core/src/paths.rs	warp
 ./crates/warp_core/src/paths.rs	warp
-./crates/warp_core/src/paths.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp

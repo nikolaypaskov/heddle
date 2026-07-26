@@ -1,4 +1,10 @@
-//! Shimmering Warp loading text - renders Warp logo with shimmering text for loading states.
+//! Shimmering loading text for AI loading states.
+//!
+//! This used to prepend Warp's logomark, a private-use glyph (U+E500, `warpLogo`) that upstream
+//! patched into all six bundled Roboto faces. That glyph was subsetted out of the fonts when the
+//! fork removed Warp's branded binary assets, but these renderers kept asking for it -- so the
+//! codepoint resolved to no glyph in the UI font and the indicator drew a missing-glyph box before
+//! every "Thinking..." label. The glyph is now gone from the text as well as the font.
 
 use warp_core::ui::appearance::Appearance;
 use warpui::elements::Element;
@@ -7,11 +13,8 @@ use warpui::elements::shimmering_text::{
 };
 use warpui::{AppContext, SingletonEntity};
 
-/// Warp icon glyph character
-const WARP_GLYPH: &str = "\u{E500}";
-
-/// Creates a shimmering text element with the Warp glyph.
-pub fn shimmering_warp_loading_text(
+/// Creates a shimmering text element for a loading label.
+pub fn shimmering_loading_text(
     text: impl Into<String>,
     font_size: f32,
     shimmer_handle: ShimmeringTextStateHandle,
@@ -27,9 +30,8 @@ pub fn shimmering_warp_loading_text(
     // Hardcoded shimmer config for consistent animation
     let config = ShimmerConfig::default();
 
-    // Create a single shimmering element with glyph and text
     ShimmeringTextElement::new(
-        format!("{} {}", WARP_GLYPH, text.into()),
+        text.into(),
         appearance.ui_font_family(),
         font_size,
         base_color,

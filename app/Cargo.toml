@@ -406,6 +406,9 @@ winreg.workspace = true
 
 [dev-dependencies]
 ai = { workspace = true, features = ["test-util"] }
+# Reads the cmap of the bundled Roboto faces in `bundled_font_tests`. Already in the lockfile as a
+# transitive dependency, so this pins no new version.
+ttf-parser = "0.25.1"
 async-process.workspace = true
 computer_use = { workspace = true, features = ["test-util"] }
 firebase.workspace = true

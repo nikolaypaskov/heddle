@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+#
+# Fails if this repository can execute code that Warp controls, or build against a Warp-owned
+# dependency that can change without a commit here.
+#
+# Why this exists. Two ways in were found by audit, not by any gate:
+#
+#   1. `script/resolve_common_skills` did `curl -fsSL
+#      https://raw.githubusercontent.com/warpdotdev/common-skills/main/scripts/... | bash`, with no
+#      pinned ref and no checksum -- and `script/bootstrap` AND `script/run` both called it. So the
+#      documented way to launch a development build ran a script fetched live from a Warp-owned
+#      repository, every time.
+#   2. `email_address` was declared `branch = "main"` on a Warp-owned repository, so a push there
+#      changed what this fork compiled with no commit on our side.
+#
+# Both are now fixed. This gate is what keeps them fixed.
+#
+# What it does NOT claim. Warp-owned git dependencies are allowed -- this is a fork, they are the
+# fork's own upstream, and vendoring 20 crates is a separate decision. The rule is only that each is
+# pinned to an immutable revision, so taking a change from Warp is a deliberate commit rather than
+# something that happens to a build. It also says nothing about `curl | sh` in general: the
+# Dockerfiles install rustup and node that way, which is ordinary container bootstrapping, runs
+# inside a container, and does not involve Warp.
+#
+# Exit codes:
+#   0  clean
+#   1  a violation was found
+#   2  the gate could not run (not a git repo, missing tools)
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+
+command -v git >/dev/null 2>&1 || { echo "error: git is required" >&2; exit 2; }
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: not a git repository" >&2; exit 2; }
+
+# `--cached` so the gate sees what is committed, which is what a fresh clone would run. A file only
+# in the working tree is not yet something this repository asks anyone to execute.
+mapfile -t TRACKED < <(git ls-files)
+if [[ "${#TRACKED[@]}" -eq 0 ]]; then
+  echo "error: no tracked files; refusing to report a clean result" >&2
+  exit 2
+fi
+
+STATUS=0
+report() {
+  STATUS=1
+  echo "FAIL: $1"
+}
+
+# --- Rule 1: no fetching executable content from a Warp-owned host ------------------------------
+#
+# Matched on the raw-content and codeload hosts specifically. A `github.com/warpdotdev/...` link in
+# prose is attribution and must stay -- CONTRIBUTING.md and the README are required to say what this
+# is a fork of. Fetching from raw.githubusercontent.com is not attribution; it is a download.
+RAW_HOSTS='raw\.githubusercontent\.com/warpdotdev|codeload\.github\.com/warpdotdev|github\.com/warpdotdev/[^ ]*/(archive|releases/download)'
+
+# A literal-URL match alone is not enough, and this gate shipped broken for exactly that reason.
+# The script that motivated the rule never contained the literal string: it built the URL from
+# variables --
+#
+#     COMMON_SKILLS_REPO="warpdotdev/common-skills"
+#     RAW_BASE_URL="...raw.githubusercontent.com/${COMMON_SKILLS_REPO}/${COMMON_SKILLS_REF}/scripts"
+#
+# -- so `raw.githubusercontent.com/warpdotdev` appeared nowhere in the file. The first version of
+# this gate reported it clean. The self-test missed it too, because the planted cases were written
+# from the regex rather than from the real artifact.
+#
+# So also flag the *composition*: a file that both names a Warp-owned repository path and contains a
+# network-fetch primitive. That catches any amount of string assembly in between, because it does not
+# care how the URL is spelled.
+FETCH_PRIMITIVE='\bcurl\b|\bwget\b|Invoke-WebRequest|Invoke-RestMethod|DownloadFile|DownloadString'
+WARP_REPO_REF='warpdotdev/[A-Za-z0-9._-]+'
+
+# This file names the pattern in order to search for it, and the docs explain the removal. Both are
+# excluded by path so that describing the hazard is not itself a violation.
+is_exempt() {
+  case "$1" in
+    script/heddle/verify-warp-supply-chain|AGENTS.md|README.md|docs/*|CONTRIBUTING.md|FAQ.md) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# The composition check applies only where both signals mean something together: a file that gets
+# EXECUTED. In prose the pair is ordinary and harmless -- a skill document may cite a Warp PR number
+# on one line and use `curl` 140 lines later to install an unrelated tool, which is not a supply
+# chain at all. Binary fixtures match anything by accident and are skipped outright.
+#
+# Both false positives above were real: the first version of this check failed its own control on
+# seven `.sqlite` test fixtures and one SKILL.md. The control is why they were caught here rather
+# than by someone else later.
+runs_as_code() {
+  case "$1" in
+    script/*|.github/workflows/*|*.sh|*.bash|*.ps1|*/Dockerfile|Dockerfile) return 0 ;;
+    *) [[ -x "$1" ]] && return 0; return 1 ;;
+  esac
+}
+
+for f in "${TRACKED[@]}"; do
+  [[ -f "$f" ]] || continue
+  is_exempt "$f" && continue
+  # Skip files that are data rather than instructions, and the recorded baselines.
+  case "$f" in
+    *.baseline|*.vocabulary|Cargo.lock|*.ttf|*.png|*.svg|*.onnx|*.gz|*.zip|*.woff*|*.sqlite) continue ;;
+  esac
+  # -I so a binary file is never treated as a text match.
+  while IFS= read -r hit; do
+    report "$f:$hit fetches executable content from a Warp-owned host"
+  done < <(grep -nIE "$RAW_HOSTS" "$f" 2>/dev/null)
+
+  runs_as_code "$f" || continue
+  if grep -qIE "$FETCH_PRIMITIVE" "$f" 2>/dev/null && grep -qIE "$WARP_REPO_REF" "$f" 2>/dev/null; then
+    repo_hit="$(grep -nIEm1 "$WARP_REPO_REF" "$f" 2>/dev/null)"
+    fetch_hit="$(grep -nIEm1 "$FETCH_PRIMITIVE" "$f" 2>/dev/null)"
+    report "$f names a Warp-owned repository (line ${repo_hit%%:*}) and fetches over the network (line ${fetch_hit%%:*}); a URL assembled from variables still counts"
+  fi
+done
+
+# --- Rule 2: every Warp-owned git dependency is pinned to an immutable revision -----------------
+#
+# `rev = "<sha>"` is immutable. `branch` and `tag` are not: a branch moves by definition, and a tag
+# can be force-pushed. Cargo.lock does record a resolved commit, but `cargo update` moves it without
+# review, so the lockfile is not the control -- the manifest is.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "error: python3 is required to parse the manifests" >&2
+  exit 2
+fi
+
+MANIFESTS=()
+while IFS= read -r m; do MANIFESTS+=("$m"); done < <(git ls-files '*Cargo.toml')
+
+UNPINNED="$(python3 - "${MANIFESTS[@]}" <<'PY'
+import re, sys
+
+# One dependency entry may span lines, so join continuations before matching. Deliberately simple:
+# it looks for inline tables that mention a warpdotdev git URL and checks that entry for `rev`.
+pattern = re.compile(r'\{[^{}]*\}')
+for path in sys.argv[1:]:
+    try:
+        text = open(path, encoding="utf-8").read()
+    except (OSError, UnicodeDecodeError):
+        continue
+    # Collapse newlines inside inline tables so multi-line entries match as one.
+    flat = re.sub(r'\{[^{}]*\}', lambda m: m.group(0).replace("\n", " "), text)
+    for n, line in enumerate(flat.splitlines(), 1):
+        if "warpdotdev" not in line or "git" not in line:
+            continue
+        for entry in pattern.findall(line):
+            if "warpdotdev" not in entry:
+                continue
+            if re.search(r'\brev\s*=', entry):
+                continue
+            name = line.split("=", 1)[0].strip()
+            kind = "branch" if "branch" in entry else "tag" if "tag" in entry else "no pin"
+            print(f"{path}:{n}\t{name}\t{kind}")
+PY
+)"
+
+if [[ -n "$UNPINNED" ]]; then
+  while IFS=$'\t' read -r loc name kind; do
+    report "$loc: dependency '$name' tracks a Warp-owned repository by $kind, not an immutable rev"
+  done <<< "$UNPINNED"
+fi
+
+# --- Rule 3: the upstream remote must not be pushable -------------------------------------------
+#
+# Advisory only. A remote is local configuration, not a committed fact, so a fresh clone will not
+# have one and must not fail here.
+if git remote get-url --push upstream >/dev/null 2>&1; then
+  push_url="$(git remote get-url --push upstream 2>/dev/null)"
+  if [[ "$push_url" == *warpdotdev* ]]; then
+    echo "WARNING: the 'upstream' remote is pushable at $push_url."
+    echo "         Run: git remote set-url --push upstream no-push"
+  fi
+fi
+
+if [[ "$STATUS" -eq 0 ]]; then
+  echo "OK: no Warp-controlled code path, and every Warp-owned dependency is pinned to a revision."
+fi
+exit "$STATUS"

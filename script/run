@@ -19,9 +19,6 @@ cd "${REPO_ROOT}"
 OS_TYPE="$(uname -s)"
 
 FEATURES="gui"
-INSTALL_COMMON_SKILLS=1
-FORCE_COMMON_SKILLS=0
-COMMON_SKILLS_TARGET="${WARP_COMMON_SKILLS_INSTALL_TARGET:-}"
 
 ./script/install_channel_config || echo "Skipping internal channel config installation (no repo access)."
 
@@ -67,10 +64,6 @@ while (( "$#" )); do
         exit 1
       fi
       ;;
-    --install-common-skills)
-      FORCE_COMMON_SKILLS=1
-      shift
-      ;;
     --release)
       CARGO_PARAMS+=("$1")
       MAC_ARGS+=("$1")
@@ -86,6 +79,12 @@ while (( "$#" )); do
         exit 1
       fi
       ;;
+    --install-common-skills|--skip-common-skills)
+      # Accepted and ignored. These used to fetch agent skills from a Warp-owned
+      # repository at run time; see script/bootstrap for why that was removed.
+      echo "note: $1 no longer does anything; common-skill installation was removed." >&2
+      shift
+      ;;
     *)
       # Unknown flags (including macOS-only flags like --dont-open) and any
       # positional arguments are forwarded to the platform-specific script.
@@ -94,33 +93,6 @@ while (( "$#" )); do
       ;;
   esac
 done
-
-install_common_skills_or_continue() {
-  if ! ./script/resolve_common_skills install_common_skills -- --repo-root "${REPO_ROOT}" "$@"; then
-    echo "error: unable to install common skills; continuing without them." >&2
-  fi
-}
-if [[ "$INSTALL_COMMON_SKILLS" -eq 1 ]]; then
-  COMMON_SKILLS_ARGS=()
-  if [[ "${COMMON_SKILLS_TARGET}" = "project" || "${COMMON_SKILLS_TARGET}" = "global" ]]; then
-    COMMON_SKILLS_ARGS=("--${COMMON_SKILLS_TARGET}")
-  fi
-  if [[ "${WARP_SKIP_COMMON_SKILLS_INSTALL:-}" = "1" ]]; then
-    :
-  elif [[ "$FORCE_COMMON_SKILLS" -eq 1 ]]; then
-    if [[ "${#COMMON_SKILLS_ARGS[@]}" -gt 0 ]]; then
-      install_common_skills_or_continue "${COMMON_SKILLS_ARGS[@]}" --force
-    else
-      install_common_skills_or_continue --force --prompt-for-target
-    fi
-  else
-    if [[ "${#COMMON_SKILLS_ARGS[@]}" -gt 0 ]]; then
-      install_common_skills_or_continue "${COMMON_SKILLS_ARGS[@]}" --if-needed --quiet
-    else
-      install_common_skills_or_continue --if-needed --prompt-for-target --quiet
-    fi
-  fi
-fi
 
 # These cargo features were removed and replaced by environment variables read
 # by warp-channel-config. Intercept them here so that existing --features

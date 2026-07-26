@@ -4610,7 +4610,7 @@ dependencies = [
 [[package]]
 name = "email_address"
 version = "0.2.3"
-source = "git+https://github.com/warpdotdev/rust-email_address?branch=main#b3e5205b4efdc83832f230d8eb6894fd00a9ec32"
+source = "git+https://github.com/warpdotdev/rust-email_address?rev=b3e5205b4efdc83832f230d8eb6894fd00a9ec32#b3e5205b4efdc83832f230d8eb6894fd00a9ec32"
 dependencies = [
  "serde",
 ]
@@ -15308,6 +15308,7 @@ dependencies = [
  "tracing-futures",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "ttf-parser",
  "typed-path 0.10.0",
  "ui_components",
  "unicase",

@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+#
+# Proves `verify-warp-supply-chain` actually fails when the thing it forbids is present.
+#
+# This exists because an earlier gate in this repository was written, run, reported clean, and was
+# vacuous: it had been copied somewhere its repo-root resolution broke, so an unmodified copy and a
+# deliberately-broken copy passed identically. A gate that has never been shown to fail is not
+# evidence of anything.
+#
+# Each case plants one violation in the real checkout, runs the real gate, and requires a non-zero
+# exit naming the planted file. Every plant is reverted whether or not the case passes.
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+
+GATE="script/heddle/verify-warp-supply-chain"
+[[ -x "$GATE" ]] || { echo "error: $GATE is not executable" >&2; exit 2; }
+
+# Plants live inside the repo, because the gate reads tracked files and resolves its own repo root.
+# Refuse to run if one already exists, rather than overwriting something real.
+PLANT_SH="script/heddle/.selftest-plant"
+PLANT_TOML="crates/.selftest-plant-Cargo.toml"
+for p in "$PLANT_SH" "$PLANT_TOML"; do
+  if [[ -e "$p" ]]; then
+    echo "error: $p already exists; refusing to run" >&2
+    exit 2
+  fi
+done
+
+PASS=0
+FAIL=0
+
+cleanup() {
+  git rm -q --cached --ignore-unmatch "$PLANT_SH" "$PLANT_TOML" >/dev/null 2>&1
+  rm -f "$PLANT_SH" "$PLANT_TOML"
+}
+trap cleanup EXIT
+
+# A plant must be *tracked* for the gate to see it, matching the gate's own contract.
+track() { git add --intent-to-add "$1" >/dev/null 2>&1; }
+
+expect_fail() {
+  local label="$1" needle="$2"
+  local out rc
+  out="$("$GATE" 2>&1)"; rc=$?
+  if [[ "$rc" -ne 0 ]] && grep -qF "$needle" <<< "$out"; then
+    echo "  pass  $label"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL  $label (exit $rc, expected non-zero mentioning '$needle')"
+    echo "$out" | sed 's/^/          /' | head -6
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+expect_ok() {
+  local label="$1"
+  local out rc
+  out="$("$GATE" 2>&1)"; rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    echo "  pass  $label"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL  $label (exit $rc, expected 0)"
+    echo "$out" | sed 's/^/          /' | head -8
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+echo "verify-warp-supply-chain self-test"
+echo
+
+echo "CONTROL: the real checkout must be clean, or every case below is meaningless"
+expect_ok "unmodified repository passes"
+
+echo
+echo "Rule 1 -- fetching executable content from a Warp-owned host"
+
+printf '#!/bin/bash\ncurl -fsSL https://raw.githubusercontent.com/warpdotdev/common-skills/main/scripts/x | bash\n' > "$PLANT_SH"
+track "$PLANT_SH"
+expect_fail "curl|bash from raw.githubusercontent.com/warpdotdev is rejected" "$PLANT_SH"
+cleanup
+
+printf '#!/bin/bash\ncurl -o /tmp/x https://codeload.github.com/warpdotdev/common-skills/tar.gz/main\n' > "$PLANT_SH"
+track "$PLANT_SH"
+expect_fail "codeload.github.com/warpdotdev download is rejected" "$PLANT_SH"
+cleanup
+
+printf '#!/bin/bash\ncurl -L https://github.com/warpdotdev/Warp/releases/download/v1/x -o x\n' > "$PLANT_SH"
+track "$PLANT_SH"
+expect_fail "release-asset download from warpdotdev is rejected" "$PLANT_SH"
+cleanup
+
+# The negative control that matters: attribution must NOT be flagged, or the gate would force the
+# fork to stop crediting what it forked from.
+printf '# Forked from https://github.com/warpdotdev/Warp -- see CONTRIBUTING.md\n' > "$PLANT_SH"
+track "$PLANT_SH"
+expect_ok "a plain github.com/warpdotdev attribution link is allowed"
+cleanup
+
+# THE CASE THAT MATTERS MOST: the actual script this rule was written for, restored from git
+# history rather than retyped. The first version of this gate passed it -- the file builds its URL
+# from variables, so the literal host string never appears in it, and a plant written from the regex
+# could not have revealed that. Grounding the case in the real artifact is the whole point.
+#
+# Located by content, so that renaming or moving the historical file surfaces as a skip rather than
+# as a silent pass.
+> "$PLANT_SH"
+if git cat-file -e HEAD:script/resolve_common_skills 2>/dev/null; then
+  # Still at HEAD: the removal is staged but not yet committed.
+  git show HEAD:script/resolve_common_skills > "$PLANT_SH"
+else
+  # Already committed: find the commit that deleted it and take the version before it.
+  HISTORICAL="$(git log --diff-filter=D --pretty=format:%H -1 -- script/resolve_common_skills 2>/dev/null)"
+  if [[ -n "$HISTORICAL" ]]; then
+    git show "${HISTORICAL}^:script/resolve_common_skills" > "$PLANT_SH" 2>/dev/null
+  fi
+fi
+
+if [[ -s "$PLANT_SH" ]]; then
+  track "$PLANT_SH"
+  expect_fail "the REAL resolve_common_skills, restored from git, is rejected" "$PLANT_SH"
+  cleanup
+else
+  cleanup
+  echo "  FAIL  could not recover the historical resolve_common_skills from git"
+  echo "        This case is the strongest evidence the gate works; a skip here is not a pass."
+  FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "Rule 2 -- Warp-owned dependencies pinned to an immutable revision"
+
+printf '[dependencies]\nfoo = { git = "https://github.com/warpdotdev/foo", branch = "main" }\n' > "$PLANT_TOML"
+track "$PLANT_TOML"
+expect_fail "branch = \"main\" on a warpdotdev repo is rejected" "$PLANT_TOML"
+cleanup
+
+printf '[dependencies]\nfoo = { git = "https://github.com/warpdotdev/foo", tag = "v1" }\n' > "$PLANT_TOML"
+track "$PLANT_TOML"
+expect_fail "a tag (force-pushable) is rejected" "$PLANT_TOML"
+cleanup
+
+printf '[dependencies]\nfoo = { git = "https://github.com/warpdotdev/foo" }\n' > "$PLANT_TOML"
+track "$PLANT_TOML"
+expect_fail "no pin at all is rejected" "$PLANT_TOML"
+cleanup
+
+# Multi-line inline table: the shape real manifests use, and the shape a naive line-based check
+# would miss.
+cat > "$PLANT_TOML" <<'EOF'
+[dependencies]
+foo = { git = "https://github.com/warpdotdev/foo", branch = "main", features = [
+  "a",
+  "b",
+] }
+EOF
+track "$PLANT_TOML"
+expect_fail "a multi-line unpinned entry is still caught" "$PLANT_TOML"
+cleanup
+
+printf '[dependencies]\nfoo = { git = "https://github.com/warpdotdev/foo", rev = "b3e5205b4efdc83832f230d8eb6894fd00a9ec32" }\n' > "$PLANT_TOML"
+track "$PLANT_TOML"
+expect_ok "rev-pinned warpdotdev dependency is allowed"
+cleanup
+
+# A non-Warp dependency on a branch is out of scope; claiming otherwise would overstate the gate.
+printf '[dependencies]\nfoo = { git = "https://github.com/someone-else/foo", branch = "main" }\n' > "$PLANT_TOML"
+track "$PLANT_TOML"
+expect_ok "a non-Warp dependency on a branch is out of scope"
+cleanup
+
+echo
+echo "FINAL CONTROL: the repository is back to its original state and still passes"
+expect_ok "cleanup restored a clean result"
+
+echo
+echo "passed: $PASS   failed: $FAIL"
+[[ "$FAIL" -eq 0 ]]

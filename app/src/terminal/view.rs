@@ -271,7 +271,7 @@ use crate::ai::execution_profiles::ExecutionProfileId;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
 use crate::ai::get_relevant_files::controller::GetRelevantFilesController;
 use crate::ai::llms::{LLMId, LLMModelHost, LLMPreferences};
-use crate::ai::loading::shimmering_warp_loading_text;
+use crate::ai::loading::shimmering_loading_text;
 #[cfg(feature = "local_fs")]
 use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::ai::predict::prompt_suggestions::{
@@ -12547,7 +12547,7 @@ impl TerminalView {
             })
             .unwrap_or_else(|| "Starting shell...".to_string());
 
-        let shimmer_element = shimmering_warp_loading_text(
+        let shimmer_element = shimmering_loading_text(
             message,
             appearance.monospace_font_size() - 2.,
             self.remote_server_shimmer_handle.clone(),

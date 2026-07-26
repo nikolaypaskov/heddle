@@ -448,3 +448,7 @@ pub fn register(app: &mut impl AddSingletonModel) {
     app.add_singleton_model(|ctx| build_appearance(ctx));
     app.add_singleton_model(AppearanceManager::new);
 }
+
+#[cfg(test)]
+#[path = "appearance_tests.rs"]
+mod tests;

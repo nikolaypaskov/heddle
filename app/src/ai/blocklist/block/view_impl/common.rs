@@ -81,7 +81,7 @@ use crate::ai::blocklist::view_util::{
     failed_output_presentation,
 };
 use crate::ai::blocklist::{BlocklistAIActionModel, ShellCommandExecutor, TextLocation};
-use crate::ai::loading::shimmering_warp_loading_text;
+use crate::ai::loading::shimmering_loading_text;
 use crate::code::editor::view::CodeEditorView;
 use crate::code::editor_management::CodeSource;
 use crate::notebooks::editor::{markdown_table_appearance, rich_text_styles};
@@ -555,17 +555,8 @@ pub fn render_warping_indicator_base(
     // will be rendered on a second line below the warping text. Captured before
     // `secondary_element` is consumed so the container can reserve room for it.
     let has_secondary_element = secondary_element.is_some();
-    // Unicode code point for the Warp glyph that is embedded in the version of Roboto we bundle
-    // into the app. This code point MUST be rendered using Roboto (the default ui font) or else the
-    // glyph may not be rendered.
-    const WARP_GLYPH: &str = "\u{E500}";
 
     let appearance = Appearance::as_ref(app);
-
-    let should_indent_tip_for_warp_glyph = matches!(
-        warping_indicator_text,
-        MaybeShimmeringText::Shimmering { .. }
-    );
 
     let text = render_output_status_text(warping_indicator_text, appearance, app);
 
@@ -590,29 +581,11 @@ pub fn render_warping_indicator_base(
 
     let mut text_col = Flex::column();
     if let Some(sub_element) = secondary_element {
-        // Our warping indicator text prepends the Warp glyph (and a space) to the label.
-        // If we render the tip directly underneath, it will align to the glyph instead of
-        // the start of the actual warping text.
-        let sub_element = if should_indent_tip_for_warp_glyph {
-            let font_size = appearance.monospace_font_size() - 3.;
-            let glyph_indent = Text::new_inline(
-                format!("{WARP_GLYPH} "),
-                appearance.ui_font_family(),
-                font_size,
-            )
-            .with_color(ColorU::new(0, 0, 0, 0))
-            .with_selectable(false)
-            .soft_wrap(false)
-            .finish();
-
-            Flex::row()
-                .with_cross_axis_alignment(CrossAxisAlignment::Start)
-                .with_child(glyph_indent)
-                .with_child(Shrinkable::new(1., sub_element).finish())
-                .finish()
-        } else {
-            Shrinkable::new(1., sub_element).finish()
-        };
+        // No indent here any more. This used to render the label's leading glyph a second time in
+        // a fully transparent colour, purely to push the tip below it into alignment. The glyph is
+        // gone -- it was Warp's logomark, subsetted out of the bundled Roboto -- so the spacer now
+        // has nothing to compensate for and would indent the tip against nothing.
+        let sub_element = Shrinkable::new(1., sub_element).finish();
 
         text_col = text_col
             .with_child(text_content)
@@ -702,7 +675,7 @@ pub fn render_output_status_text(
         MaybeShimmeringText::Shimmering {
             text,
             shimmering_text_handle,
-        } => shimmering_warp_loading_text(
+        } => shimmering_loading_text(
             text.to_string(),
             appearance.monospace_font_size() - 2.,
             shimmering_text_handle,
