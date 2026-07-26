@@ -201,7 +201,7 @@ Honest caveats:
 
 - **The string rebrand is incomplete, and now measured rather than estimated.** A gate tracks every
   string literal mentioning Warp and fails if the count rises: `script/heddle/gui-surface-gate`.
-  It currently stands at **2,987**. An earlier draft of this README guessed "roughly 600", which was
+  It currently stands at **2,972**. An earlier draft of this README guessed "roughly 600", which was
   wrong by a factor of five.
 
   Most of that number is not renameable, and should not be:

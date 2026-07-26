@@ -73,11 +73,18 @@ RAW_HOSTS='raw\.githubusercontent\.com/warpdotdev|codeload\.github\.com/warpdotd
 FETCH_PRIMITIVE='\bcurl\b|\bwget\b|Invoke-WebRequest|Invoke-RestMethod|DownloadFile|DownloadString'
 WARP_REPO_REF='warpdotdev/[A-Za-z0-9._-]+'
 
-# This file names the pattern in order to search for it, and the docs explain the removal. Both are
-# excluded by path so that describing the hazard is not itself a violation.
+# This file names the pattern in order to search for it; the self-test must plant real forbidden
+# URLs to prove the rule fires; and the docs explain the removal. All are excluded by path, so that
+# describing or testing the hazard is not itself a violation.
+#
+# The self-test exemption was added after the fact: the gate went green while the self-test was still
+# untracked, then turned red the moment it was committed, because the gate reads `git ls-files`. A
+# gate whose result depends on whether its own harness has been staged yet is a gate that reports on
+# the wrong thing.
 is_exempt() {
   case "$1" in
-    script/heddle/verify-warp-supply-chain|AGENTS.md|README.md|docs/*|CONTRIBUTING.md|FAQ.md) return 0 ;;
+    script/heddle/verify-warp-supply-chain|script/heddle/verify-warp-supply-chain-selftest) return 0 ;;
+    AGENTS.md|README.md|docs/*|CONTRIBUTING.md|FAQ.md) return 0 ;;
     *) return 1 ;;
   esac
 }

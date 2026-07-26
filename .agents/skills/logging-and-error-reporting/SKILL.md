@@ -1,9 +1,19 @@
 ---
 name: logging-and-error-reporting
-description: How and when to log (log::* levels, safe_* macros) and report errors to Sentry (report_error!) in the Warp codebase. Use when adding or reviewing any logging or error reporting — picking a log level, deciding log vs. report_error!, keeping sensitive data out of logs, or surfacing an error to Sentry.
+description: How and when to log (log::* levels, safe_* macros) and report errors (report_error!) in this codebase. Use when adding or reviewing any logging or error reporting — picking a log level, deciding log vs. report_error!, and keeping sensitive data out of logs. Note that the Sentry half of this document does not apply to Heddle builds; see the header.
 ---
 
 # logging-and-error-reporting
+
+> **Heddle: no error leaves the machine.** This document is upstream's, and much of it describes
+> Sentry. Heddle's only shipped channel (`oss`) is built without the `crash_reporting` feature, so
+> the Sentry client is not compiled in and nothing is uploaded anywhere. `report_error!` still works
+> and is still the right macro -- it picks the log level from whether the error is actionable
+> (`Error` if it is, `Warn` if not) -- but its capture half is inert, and every log line stays local.
+>
+> Read the Sentry sections below as background on why the macros are shaped the way they are, not as
+> a description of what a Heddle build does. The guidance that *does* apply in full is the log-level
+> guidance and, especially, keeping sensitive data out of logs.
 
 Warp has two related ways to surface what happened at runtime:
 - **`log::*`** (`error!`/`warn!`/`info!`/`debug!`/`trace!`) — local diagnostics written to the terminal/log file and, on crash-reporting builds, uploaded to Sentry as **breadcrumbs** (context attached to the next captured event).
