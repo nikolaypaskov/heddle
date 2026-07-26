@@ -20,8 +20,6 @@ use warpui::windowing::WindowManager;
 use warpui::{AppContext, SingletonEntity};
 
 use crate::ai::persisted_workspace::PersistedWorkspace;
-use crate::auth;
-use crate::auth::AuthStateProvider;
 use crate::default_terminal::DefaultTerminal;
 use crate::features::{FeatureFlag, runtime_flags_menu_items};
 use crate::root_view::OpenLaunchConfigArg;
@@ -151,10 +149,10 @@ fn make_new_app_menu(ctx: &AppContext) -> Menu {
         ))
     }
 
-    menu_items.extend([
-        MenuItem::Separator,
-        MenuItem::Separator,
-    ]);
+    // One separator, not two. The pair is left over from an earlier removal that took the
+    // items between them and not the divider that had introduced those items; adjacent
+    // separators render as a doubled divider.
+    menu_items.push(MenuItem::Separator);
 
     let preferences_menu_items = vec![
         updateable_custom_item_without_checkmark(CustomAction::ShowSettings, ctx),
@@ -227,24 +225,15 @@ fn make_new_app_menu(ctx: &AppContext) -> Menu {
         },
         None,
     )));
-    menu_items.push(MenuItem::Separator);
-    menu_items.push(MenuItem::Custom(CustomMenuItem::new(
-        "Log out",
-        auth::maybe_log_out,
-        move |_, ctx| {
-            let is_anonymous = AuthStateProvider::handle(ctx)
-                .as_ref(ctx)
-                .get()
-                .is_anonymous_or_logged_out();
-            MenuItemPropertyChanges {
-                disabled: Some(is_anonymous),
-                ..Default::default()
-            }
-        },
-        None,
-    )));
+    // No "Log out" item, and no separator to introduce it. Heddle establishes no session, so
+    // the entry was permanently disabled anyway -- its enabled state was driven by
+    // `is_anonymous_or_logged_out()`, which is always true here. A greyed-out menu item is
+    // still a claim that the feature exists.
     menu_items.push(MenuItem::Standard(StandardAction::Quit));
-    Menu::new("Warp", menu_items)
+    // The application menu carries the product's name and sits at the left of the macOS menu
+    // bar, so this is about the most visible string in the app. AGPL grants the code, not the
+    // "Warp" trademark.
+    Menu::new("Heddle", menu_items)
 }
 
 fn make_new_file_menu(ctx: &AppContext) -> Menu {

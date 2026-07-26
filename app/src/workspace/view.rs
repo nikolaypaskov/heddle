@@ -9298,21 +9298,10 @@ impl Workspace {
                 .into_item(),
         );
 
-        if self.auth_state.is_anonymous_or_logged_out() {
-            items.push(
-                MenuItemFields::new("Sign up")
-                    .with_on_select_action(WorkspaceAction::SignupAnonymousUser)
-                    .into_item(),
-            );
-        }
-
-        if !self.auth_state.is_anonymous_or_logged_out() {
-            items.push(
-                MenuItemFields::new("Log out")
-                    .with_on_select_action(WorkspaceAction::LogOut)
-                    .into_item(),
-            );
-        }
+        // No "Sign up" or "Log out" here. Heddle has no account and no vendor backend, so both
+        // items led somewhere that cannot exist: signup posts to a Warp endpoint that is not
+        // compiled into this binary, and log out clears a session that is never established.
+        // Offering them advertised a product this is not.
         items
     }
 
@@ -20716,25 +20705,16 @@ impl Workspace {
             .map(|fields| self.render_workspace_banner(fields, appearance))
     }
 
+    /// Always `None`. The reauth banner told the user their login had expired and offered to
+    /// "restore access to cloud-based features" -- two claims Heddle cannot make, since it
+    /// establishes no login and ships no cloud features.
+    ///
+    /// The flag it read, `needs_reauth`, is only ever set from a server response
+    /// (`AuthManager::set_needs_reauth`), and this build compiles in no server to respond, so
+    /// the banner was already unreachable. It is removed rather than left dormant because
+    /// dormant UI is indistinguishable from working UI until something sets the flag.
     fn render_reauth_banner_element(&self) -> Option<WorkspaceBannerFields> {
-        if self.reauth_banner_dismissed || !self.auth_state.needs_reauth() {
-            return None;
-        }
-
-        Some(WorkspaceBannerFields {
-            banner_type: WorkspaceBanner::Reauth,
-            severity: BannerSeverity::Warning,
-            heading: Some("Your login has expired.".into()),
-            description: "Please sign in again to restore access to cloud-based features.".into(),
-            secondary_button: None,
-            button: Some(WorkspaceBannerButtonDetails {
-                text: "Sign in".into(),
-                action: WorkspaceAction::Reauth,
-                variant: BannerButtonVariant::Outlined,
-                icon: None,
-                more_info_button_action: None,
-            }),
-        })
+        None
     }
 
     fn render_autoupdate_banner_element(&self, app: &AppContext) -> Option<WorkspaceBannerFields> {

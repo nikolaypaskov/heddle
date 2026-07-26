@@ -135,7 +135,6 @@
 ./app/src/ai_assistant/requests.rs	upgrade
 ./app/src/ai_assistant/requests.rs	upgrade
 ./app/src/ai_assistant/utils.rs	credits
-./app/src/app_menus.rs	log out
 ./app/src/auth/auth_manager.rs	login
 ./app/src/auth/auth_manager.rs	login
 ./app/src/auth/auth_manager.rs	login
@@ -573,7 +572,6 @@
 ./app/src/workspace/bonus_grant_notification_model.rs	credits
 ./app/src/workspace/home.rs	warp drive
 ./app/src/workspace/mod.rs	cloud agent
-./app/src/workspace/mod.rs	log out
 ./app/src/workspace/mod.rs	login
 ./app/src/workspace/mod.rs	login
 ./app/src/workspace/mod.rs	login
@@ -583,16 +581,11 @@
 ./app/src/workspace/mod.rs	warp drive
 ./app/src/workspace/mod.rs	warp drive
 ./app/src/workspace/view.rs	cloud agent
-./app/src/workspace/view.rs	log out
 ./app/src/workspace/view.rs	login
 ./app/src/workspace/view.rs	login
 ./app/src/workspace/view.rs	login
 ./app/src/workspace/view.rs	login
 ./app/src/workspace/view.rs	login
-./app/src/workspace/view.rs	login
-./app/src/workspace/view.rs	sign in
-./app/src/workspace/view.rs	sign in
-./app/src/workspace/view.rs	sign up
 ./app/src/workspace/view.rs	sign up
 ./app/src/workspace/view.rs	sign up
 ./app/src/workspace/view.rs	upgrade
