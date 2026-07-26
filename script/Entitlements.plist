@@ -2,16 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- No com.apple.security.application-groups.
-         It requested "2BBY89MBSN.dev.warp", an app group belonging to Warp's Apple team. An app
-         group must be owned by the signing team, so that entitlement makes the bundle
-         unsignable by anyone else: it fails under a different Developer ID and fails
-         notarization. It is also unnecessary. The only consumer is
-         warp_core::paths::app_group_container_path, used by secure_state_dir, and every caller
-         already falls back with .unwrap_or_else(state_dir) -- which is the path these ad-hoc
-         signed builds have always taken, since an ungranted entitlement yields no usable
-         container. Removing it keeps the state directory stable rather than letting it move if
-         entitlements ever change. -->
+    <!-- The com.apple.security.application-groups entitlement was removed.
+         It requested "2BBY89MBSN.dev.warp", an app group belonging to Warp's Apple team, and an
+         app group must be owned by the signing team. Keeping it made the bundle unsignable by any
+         other Developer ID and would fail notarization.
+         Nothing depends on it: warp_core::paths::app_group_container_path is its only consumer,
+         via secure_state_dir, and every caller falls back to state_dir already.
+         NOTE: XML comments may not contain a double hyphen. AMFI rejects the whole file if one
+         appears here, while plutil lint accepts it, so a lint pass is not sufficient proof. -->
     <key>com.apple.security.automation.apple-events</key>
 	<true/>
     <key>com.apple.security.device.audio-input</key>
