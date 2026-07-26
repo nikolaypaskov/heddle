@@ -660,8 +660,6 @@
 ./crates/local_control/src/protocol_tests.rs	login
 ./crates/mcp/src/oauth.rs	login
 ./crates/onboarding/src/lib.rs	warp drive
-./crates/onboarding/src/slides/customize_slide.rs	warp drive
-./crates/onboarding/src/slides/intro_slide.rs	log in
 ./crates/onboarding/src/telemetry.rs	log in
 ./crates/onboarding/src/telemetry.rs	log in
 ./crates/onboarding/src/telemetry.rs	login
