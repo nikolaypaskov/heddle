@@ -165,7 +165,7 @@ jobs:
           tar -xzf "dist/${name}.tar.gz" -C "$workdir"
           ./script/heddle/verify-no-warp-endpoints "$workdir/${name}/heddle-tui"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: heddle-${{ matrix.target }}
           path: dist/*.tar.gz*
