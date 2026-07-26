@@ -734,7 +734,8 @@ fn app_name_prefix(channel: Channel) -> &'static str {
         Channel::Local => "warp",
         Channel::Integration => "integration",
         Channel::Dev => "WarpDev",
-        Channel::Oss => "warp-oss",
+        // The bundle is Heddle.app; the old value did not name anything that exists.
+        Channel::Oss => "Heddle",
     }
 }
 
@@ -745,7 +746,8 @@ fn executable_name(channel: Channel) -> &'static str {
         Channel::Local => "warp",
         Channel::Integration => "integration",
         Channel::Dev => "dev",
-        Channel::Oss => "warp-oss",
+        // Matches the [[bin]] target and Heddle.app/Contents/MacOS/heddle.
+        Channel::Oss => "heddle",
     }
 }
 

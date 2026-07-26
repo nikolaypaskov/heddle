@@ -55,7 +55,12 @@ impl Channel {
             Channel::Preview => "oz-preview",
             Channel::Local => "oz-local",
             Channel::Integration => "oz-integration",
-            Channel::Oss => "warp-oss",
+            // The command a user types. `warp-oss` was the pre-rename name; nobody can have it
+            // installed, because the published bundle shipped no CLI wrapper at all (its
+            // Resources/bin was empty), so there is no compatibility to preserve here.
+            //
+            // This MUST stay in step with the path script/macos/bundle writes the wrapper to.
+            Channel::Oss => "heddle",
         }
     }
 

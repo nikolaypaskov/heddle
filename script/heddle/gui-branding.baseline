@@ -478,8 +478,6 @@
 ./app/src/autoupdate/mac.rs	warp
 ./app/src/autoupdate/mac.rs	warp
 ./app/src/autoupdate/mac.rs	warp
-./app/src/autoupdate/mac.rs	warp
-./app/src/autoupdate/mac.rs	warp
 ./app/src/autoupdate/mod.rs	warp
 ./app/src/autoupdate/windows.rs	warp
 ./app/src/autoupdate/windows.rs	warp
@@ -2609,7 +2607,6 @@
 ./crates/warp_core/src/channel/mod.rs	warp
 ./crates/warp_core/src/channel/mod.rs	warp
 ./crates/warp_core/src/channel/mod.rs	warp
-./crates/warp_core/src/channel/mod.rs	warp
 ./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state.rs	warp
@@ -2648,11 +2645,6 @@
 ./crates/warp_core/src/paths.rs	warp
 ./crates/warp_core/src/paths.rs	warp
 ./crates/warp_core/src/paths.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp
