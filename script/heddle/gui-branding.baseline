@@ -2867,9 +2867,7 @@
 ./crates/warp_tui/src/platform_tests.rs	warp
 ./crates/warp_tui/src/platform_tests.rs	warp
 ./crates/warp_tui/src/platform_tests.rs	warp
-./crates/warp_tui/src/session.rs	warp
-./crates/warp_tui/src/session.rs	warp
-./crates/warp_tui/src/session.rs	warp
+./crates/warp_tui/src/session_tests.rs	warp
 ./crates/warp_tui/src/session_tests.rs	warp
 ./crates/warp_tui/src/session_tests.rs	warp
 ./crates/warp_tui/src/telemetry.rs	warp
