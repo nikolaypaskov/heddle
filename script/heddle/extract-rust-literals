@@ -71,6 +71,12 @@ def extract_literals(src: str, path: str):
                         depth, i = depth - 1, i + 2
                     else:
                         i += 1
+                # An unclosed block comment swallows the rest of the file. Returning what was
+                # collected so far would be a SHORT scan reported as a successful one -- and
+                # since --update skips compilation, that truncated result could be recorded as
+                # the baseline, blinding the gate to everything below the comment.
+                if depth:
+                    raise UnterminatedLiteral(f"{path}: unterminated block comment")
                 continue
 
         prefix_ok = i == 0 or not IDENT.match(src[i - 1])
@@ -150,8 +156,18 @@ def main() -> int:
                   f"cannot encode: {path!r}", file=sys.stderr)
             return 2
         try:
-            with open(path, encoding="utf-8", errors="replace") as fh:
+            # STRICT decoding, no errors="replace". Substituting U+FFFD for undecodable bytes
+            # would silently alter the text being searched -- a marker straddling a replaced
+            # byte simply stops matching, and the scan reports success having quietly read
+            # something other than the file. Rust source is required to be UTF-8, so a file
+            # that does not decode is a broken input and must be said out loud.
+            with open(path, encoding="utf-8") as fh:
                 src = fh.read()
+        except UnicodeDecodeError as exc:
+            print(f"error: {path} is not valid UTF-8: {exc}", file=sys.stderr)
+            print("       Rust source must be UTF-8. Refusing to scan altered text.",
+                  file=sys.stderr)
+            return 2
         except OSError as exc:
             print(f"error: could not read {path}: {exc}", file=sys.stderr)
             return 2

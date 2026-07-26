@@ -367,7 +367,12 @@ impl FromStr for SettingsSection {
             "Keyboard shortcuts" => Ok(Self::Keybindings),
             "Privacy" => Ok(Self::Privacy),
             "Scripting" => Ok(Self::Scripting),
-            "Heddlify" => Ok(Self::Heddlify),
+            // "Warpify" is the pre-rename spelling. It is persisted in SQLite as the restored
+            // settings pane and accepted by the local-control API, so dropping it would send
+            // anyone whose last-open pane was this one to a silently different page, and hand
+            // existing API callers an InvalidParams they never used to get. Same reason "Oz"
+            // and "WarpDrive" are still accepted below.
+            "Heddlify" | "Warpify" => Ok(Self::Heddlify),
             "WarpDrive" | "Warp Drive" => Ok(Self::WarpDrive),
             // This page was called "Oz" at one point, keep for backward compatibility.
             "Oz" | "Warp Agent" => Ok(Self::WarpAgent),

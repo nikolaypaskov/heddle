@@ -23,11 +23,13 @@
 //! config is its own kind of damage.
 
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context;
 use anyhow::Result;
 use toml_edit::DocumentMut;
+use toml_edit::Item;
 
 const OLD_TABLE: &str = "warpify";
 const NEW_TABLE: &str = "heddlify";
@@ -57,48 +59,122 @@ pub fn migrate_warpify_table(path: &Path) -> Result<bool> {
         return Ok(false);
     }
 
-    // If both tables are present the user has run a newer build already and has since been
-    // editing the new one. Overwriting it with stale values from the old table would undo
-    // whatever they changed in between, so leave both alone and say so.
-    if root.contains_key(NEW_TABLE) {
-        log::warn!(
-            "{} contains both [{OLD_TABLE}] and [{NEW_TABLE}] tables; leaving both untouched. \
-             [{OLD_TABLE}] is no longer read and can be deleted.",
-            path.display()
-        );
-        return Ok(false);
-    }
-
-    let Some(mut item) = root.remove(OLD_TABLE) else {
+    let Some(mut old) = root.remove(OLD_TABLE) else {
         return Ok(false);
     };
 
-    // Rename the one key whose own name carried the old stem. Guarded the same way as the
-    // table: an existing new-style key wins, because it is the one the running build wrote.
-    if let Some(ssh) = item.get_mut("ssh").and_then(|ssh| ssh.as_table_like_mut())
+    // Rename the one key whose own name carried the old stem, before any merging, so the two
+    // tables are described in the same vocabulary when they meet.
+    if let Some(ssh) = old.get_mut("ssh").and_then(|ssh| ssh.as_table_like_mut())
         && ssh.contains_key(OLD_SSH_KEY)
-        && !ssh.contains_key(NEW_SSH_KEY)
         && let Some(value) = ssh.remove(OLD_SSH_KEY)
     {
-        ssh.insert(NEW_SSH_KEY, value);
+        // A new-style key already present wins; it is what the running build wrote.
+        if !ssh.contains_key(NEW_SSH_KEY) {
+            ssh.insert(NEW_SSH_KEY, value);
+        }
     }
 
-    root.insert(NEW_TABLE, item);
+    if root.contains_key(NEW_TABLE) {
+        // Both tables exist, which means a newer build has already written one and the user may
+        // have edited it since. Refusing outright was wrong: it abandoned every setting that
+        // existed ONLY in the old table, which is the exact data loss this migration is for.
+        //
+        // So MERGE, with the new table winning every conflict -- new values are the user's more
+        // recent intent -- and carry across only what the new table has no opinion about.
+        merge_missing(root.get_mut(NEW_TABLE), &old);
+        log::info!(
+            "Merged leftover [{OLD_TABLE}] settings into [{NEW_TABLE}] in {}; \
+             existing [{NEW_TABLE}] values were kept.",
+            path.display()
+        );
+    } else {
+        root.insert(NEW_TABLE, old);
+    }
 
-    // Write via a sibling temp file and rename, so an interrupted write cannot leave the user
-    // with a truncated settings.toml. Renaming within the same directory keeps it on one
-    // filesystem, which is what makes the replacement atomic.
-    let tmp = path.with_extension("toml.heddlify-migration");
-    fs::write(&tmp, doc.to_string())
-        .with_context(|| format!("could not write {}", tmp.display()))?;
-    fs::rename(&tmp, path)
-        .with_context(|| format!("could not replace {}", path.display()))?;
+    write_atomically(path, &doc.to_string())?;
 
     log::info!(
         "Migrated [{OLD_TABLE}] settings to [{NEW_TABLE}] in {}",
         path.display()
     );
     Ok(true)
+}
+
+/// Copies every key of `old` that `target` does not already define.
+///
+/// Recurses into sub-tables so that `[warpify.ssh]` and `[heddlify.ssh]` merge key by key
+/// rather than one whole table displacing the other. `target` always wins a conflict.
+fn merge_missing(target: Option<&mut Item>, old: &Item) {
+    let (Some(target), Some(old_table)) = (
+        target.and_then(|item| item.as_table_like_mut()),
+        old.as_table_like(),
+    ) else {
+        return;
+    };
+
+    for (key, old_value) in old_table.iter() {
+        match target.get_mut(key) {
+            // Present on both sides and both are tables: descend, so a single shared key does
+            // not shadow the siblings underneath it.
+            Some(existing) if existing.is_table_like() && old_value.is_table_like() => {
+                merge_missing(Some(existing), old_value);
+            }
+            // Present on the new side as a plain value: the user's newer choice, left alone.
+            Some(_) => {}
+            None => {
+                target.insert(key, old_value.clone());
+            }
+        }
+    }
+}
+
+/// Replaces `path`'s contents with `contents`, atomically, keeping the original's permissions.
+///
+/// Three things this is careful about, each of which was wrong in the first version:
+///
+///   * The temp file name includes the process id, so two processes migrating at once cannot
+///     write through each other's half-finished file.
+///   * The original's permission bits are copied onto the replacement. Writing a fresh file
+///     would hand it the default mode instead, quietly widening access to a file that can
+///     contain whatever the user chose to put in it.
+///   * The data is flushed and synced before the rename, so a crash cannot leave a file that
+///     exists, has the right name, and contains nothing.
+fn write_atomically(path: &Path, contents: &str) -> Result<()> {
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    // Same directory as the target: `rename` is only atomic within a filesystem.
+    let tmp = dir.join(format!(
+        ".{}.heddlify-migration.{}",
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("settings.toml"),
+        std::process::id()
+    ));
+
+    let result = (|| -> Result<()> {
+        let mut file = fs::File::create(&tmp)
+            .with_context(|| format!("could not create {}", tmp.display()))?;
+        file.write_all(contents.as_bytes())
+            .with_context(|| format!("could not write {}", tmp.display()))?;
+        file.sync_all()
+            .with_context(|| format!("could not flush {}", tmp.display()))?;
+        drop(file);
+
+        if let Ok(meta) = fs::metadata(path) {
+            // Best effort: a filesystem that cannot represent the mode should not abort a
+            // migration that has otherwise succeeded.
+            let _ = fs::set_permissions(&tmp, meta.permissions());
+        }
+
+        fs::rename(&tmp, path)
+            .with_context(|| format!("could not replace {}", path.display()))
+    })();
+
+    if result.is_err() {
+        // Do not leave debris behind on a failed migration.
+        let _ = fs::remove_file(&tmp);
+    }
+    result
 }
 
 #[cfg(test)]

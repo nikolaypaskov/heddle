@@ -137,6 +137,24 @@ form_canary "line-continuation" 'const D: &str = "first line \
 second line offering a free trial";'
 form_canary "byte-and-raw-prefix" 'const E: &[u8] = br#"Upgrade plan"#;'
 
+echo "1d2. A file the extractor cannot lex must fail closed, not return a partial scan."
+# Both of these previously returned a SHORT scan and reported success. Since --update skips
+# compilation, that truncated result could be recorded as the baseline, permanently blinding
+# the gate to everything the extractor had skipped.
+printf 'const A: &str = "Upgrade plan";\n/* never closed\n' > "$CANARY"
+expect "unterminated-block-comment" "./$GATE" 2 "unterminated block comment" --surfaces-only
+rm -f "$CANARY"
+
+printf 'const A: &str = "Upgrade \xff\xfe plan";\n' > "$CANARY"
+expect "invalid-utf8" "./$GATE" 2 "not valid UTF-8" --surfaces-only
+rm -f "$CANARY"
+
+echo "1d3. CONTROL: a properly closed NESTED block comment must still scan fine."
+# Otherwise 1d2 would pass against an extractor that simply rejected all block comments.
+printf '/* outer /* inner */ still comment */\nfn canary() {}\n' > "$CANARY"
+expect "nested-comment-ok" "./$GATE" 0 "PASS: commercial UI surface" --surfaces-only
+rm -f "$CANARY"
+
 echo "1e. A comment must NOT be mistaken for rendered UI."
 # The counterpart control: the extractor must be capable of NOT matching, or "it flags
 # everything" would masquerade as thorough coverage.

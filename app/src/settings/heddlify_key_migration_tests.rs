@@ -108,26 +108,99 @@ ssh_hosts_denylist = ["a"]
 }
 
 #[test]
-fn refuses_to_clobber_an_existing_heddlify_table() {
-    // Both tables present means the user has already run a newer build and has been editing the
-    // new table since. Overwriting it with stale values would undo those edits.
+fn merges_when_both_tables_exist_with_the_new_one_winning() {
+    // Both tables present means a newer build already wrote one and the user may have edited it
+    // since. Refusing outright was the first implementation, and it was wrong: it abandoned
+    // every setting that existed ONLY in the old table -- the exact data loss this migration is
+    // supposed to prevent. So merge, and let the newer value win any conflict.
     let (_dir, path) = settings_file(
         r#"
 [warpify.ssh]
 ssh_hosts_denylist = ["stale"]
+use_ssh_tmux_wrapper = true
+
+[warpify.subshells]
+added_subshell_commands = ["only-in-old"]
 
 [heddlify.ssh]
 ssh_hosts_denylist = ["current"]
 "#,
     );
 
-    assert!(
-        !migrate_warpify_table(&path).expect("no migration performed"),
-        "must not migrate when both tables exist"
-    );
+    assert!(migrate_warpify_table(&path).expect("migration succeeds"));
 
     let after = fs::read_to_string(&path).expect("read back");
-    assert!(after.contains("current"), "newer value untouched: {after}");
+    assert!(
+        after.contains("current") && !after.contains("stale"),
+        "the newer value wins the conflict: {after}"
+    );
+    assert!(
+        after.contains("use_ssh_tmux_wrapper = true"),
+        "a sibling key present only in the old table is rescued, not shadowed by the \
+         conflicting one beside it: {after}"
+    );
+    assert!(
+        after.contains("only-in-old"),
+        "a whole sub-table present only in the old table is carried across: {after}"
+    );
+    assert!(!after.contains("[warpify"), "old table removed: {after}");
+}
+
+#[test]
+fn merging_prefers_a_new_style_ssh_key_over_the_renamed_old_one() {
+    let (_dir, path) = settings_file(
+        r#"
+[warpify.ssh]
+enable_ssh_warpification = true
+
+[heddlify.ssh]
+enable_ssh_heddlification = false
+"#,
+    );
+
+    assert!(migrate_warpify_table(&path).expect("migration succeeds"));
+
+    let after = fs::read_to_string(&path).expect("read back");
+    assert!(
+        after.contains("enable_ssh_heddlification = false"),
+        "the user's newer explicit opt-out survives: {after}"
+    );
+    assert!(
+        !after.contains("enable_ssh_heddlification = true"),
+        "the stale value must not be reintroduced: {after}"
+    );
+}
+
+#[test]
+fn preserves_file_permissions() {
+    // The replacement is a newly created file, which would otherwise take the default mode and
+    // could widen access to whatever the user has put in their settings.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_dir, path) = settings_file("[warpify.ssh]\nssh_hosts_denylist = [\"a\"]\n");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("chmod");
+
+        assert!(migrate_warpify_table(&path).expect("migration succeeds"));
+
+        let mode = fs::metadata(&path).expect("stat").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "restrictive permissions carried across");
+    }
+}
+
+#[test]
+fn leaves_no_temp_file_behind() {
+    let (dir, path) = settings_file("[warpify.ssh]\nssh_hosts_denylist = [\"a\"]\n");
+    assert!(migrate_warpify_table(&path).expect("migration succeeds"));
+
+    let leftovers: Vec<_> = fs::read_dir(dir.path())
+        .expect("read dir")
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "settings.toml")
+        .collect();
+    assert!(leftovers.is_empty(), "temp files cleaned up: {leftovers:?}");
 }
 
 #[test]

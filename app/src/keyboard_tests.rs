@@ -77,3 +77,34 @@ fn test_unparsable_persisted_trigger() {
 
     assert!(keybinding.is_err());
 }
+
+/// Renamed action IDs must keep resolving, because an ID in keybindings.yaml is a persistence
+/// contract. The loader silently ignores an ID matching no registered action, so without this
+/// map a rename turns every existing user binding for it inert -- and worse, a user who had
+/// REMOVED a default binding gets that keystroke back, having deliberately turned it off.
+#[test]
+fn legacy_action_ids_resolve_to_their_current_names() {
+    assert_eq!(
+        super::canonical_action_name("terminal:warpify_subshell"),
+        "terminal:heddlify_subshell"
+    );
+    assert_eq!(
+        super::canonical_action_name("workspace:show_settings_warpify_page"),
+        "workspace:show_settings_heddlify_page"
+    );
+}
+
+#[test]
+fn current_and_unknown_action_ids_pass_through_untouched() {
+    // Current names must not be rewritten...
+    assert_eq!(
+        super::canonical_action_name("terminal:heddlify_subshell"),
+        "terminal:heddlify_subshell"
+    );
+    // ...and an unrecognised name must reach the loader's existing warning path rather than
+    // being silently mapped to something else. This exists to rescue renames, not to validate.
+    assert_eq!(
+        super::canonical_action_name("terminal:not_a_real_action"),
+        "terminal:not_a_real_action"
+    );
+}

@@ -32,11 +32,56 @@ impl UserDefinedKeybinding {
 
 const KEYBINDINGS_FILE_NAME: &str = "keybindings.yaml";
 
+/// Action IDs that have been renamed, as `(old, current)`.
+///
+/// An action ID written into `keybindings.yaml` is a persistence contract, not just a name. The
+/// loader hands whatever the file says to `set_custom_trigger`, and an ID matching no registered
+/// action is silently ignored -- so renaming one turns every existing user binding for it inert
+/// with no warning.
+///
+/// The quiet case is the damaging one. A user who had *removed* a default binding wrote `none`
+/// against the old ID; once that entry stops matching, the removal stops applying and the
+/// default keystroke comes back. They did not get their custom binding back, they got a
+/// keystroke they had deliberately turned off.
+///
+/// Keep entries here forever. They cost one string comparison at startup.
+const RENAMED_ACTIONS: &[(&str, &str)] = &[
+    // Renamed when the fork replaced Warp's `warpify` with `heddlify`.
+    (
+        "terminal:warpify_subshell",
+        "terminal:heddlify_subshell",
+    ),
+    (
+        "workspace:show_settings_warpify_page",
+        "workspace:show_settings_heddlify_page",
+    ),
+];
+
+/// Maps a possibly-legacy action ID to the one the app registers today.
+///
+/// Unknown IDs pass through untouched: this exists to rescue renamed actions, not to validate
+/// them, and a typo should still reach the loader's existing warning path.
+pub fn canonical_action_name(name: &str) -> &str {
+    RENAMED_ACTIONS
+        .iter()
+        .find_map(|(old, current)| (*old == name).then_some(*current))
+        .unwrap_or(name)
+}
+
 /// Load all stored custom keybindings into the UI framework so that they are used
 #[cfg(not(test))]
 pub fn load_custom_keybindings(app: &mut AppContext) {
     if let Some(keybindings) = read_custom_keybindings() {
-        for (name, trigger) in keybindings.0 {
+        // Legacy IDs are applied FIRST so that a current-name entry overwrites them. If a file
+        // somehow carries both spellings, the one the user's current build wrote is the one they
+        // last chose, and it must win rather than being clobbered by a stale entry.
+        let (legacy, current): (Vec<_>, Vec<_>) = keybindings
+            .0
+            .into_iter()
+            .partition(|(name, _)| canonical_action_name(name) != name.as_str());
+
+        for (name, trigger) in legacy.into_iter().chain(current) {
+            let name = canonical_action_name(&name).to_owned();
             let keybinding_type = UserDefinedKeybinding::try_from(trigger.clone());
 
             match keybinding_type {

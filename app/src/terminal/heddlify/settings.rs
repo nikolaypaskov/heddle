@@ -46,6 +46,17 @@ maybe_define_setting!(SshHostsDenylist, group: HeddlifySettings, {
     description: "SSH hosts that should not trigger the heddlification prompt.",
 });
 
+// The storage key is PINNED to the pre-rename identifier and must stay that way.
+//
+// Without it the macro derives the key from the setting's name (`storage_key: stringify!($name)`),
+// so renaming `EnableSshWarpification` would silently repoint this setting at a fresh key in the
+// platform-native store. The TOML migration does not cover that case: it only runs when the
+// `SettingsFile` feature flag is enabled, and when it is disabled every public setting lives in
+// the native store instead. A user who had deliberately turned SSH adoption OFF would find it
+// back ON after upgrading, with no error and no way to tell why.
+//
+// `EnableSshWrapper` below is pinned to "EnableSSHWrapper" for exactly the same reason after an
+// earlier rename. A storage key is a persistence contract, not a name.
 maybe_define_setting!(EnableSshHeddlification, group: HeddlifySettings, {
     type: bool,
     default: true,
@@ -53,8 +64,9 @@ maybe_define_setting!(EnableSshHeddlification, group: HeddlifySettings, {
     sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
     surface: settings::SettingSurfaces::GUI,
     private: false,
+    storage_key: "EnableSshWarpification",
     toml_path: "heddlify.ssh.enable_ssh_heddlification",
-    description: "Whether to enable Warp features in SSH sessions.",
+    description: "Whether to enable Heddle features in SSH sessions.",
 });
 
 // NOTE: This setting has been unified into `enable_ssh_heddlification` and is no
