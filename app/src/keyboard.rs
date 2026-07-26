@@ -68,6 +68,28 @@ pub fn canonical_action_name(name: &str) -> &str {
         .unwrap_or(name)
 }
 
+/// The legacy IDs that alias `current`.
+///
+/// Used to clean stale spellings out of the file whenever the current one is written or
+/// removed. Without that, canonicalisation is in-memory only and the old entry survives on
+/// disk: resetting a migrated binding deletes the current ID, the legacy `none` beside it is
+/// left behind, and after a restart it applies again -- the reset silently undoes itself.
+fn legacy_aliases_for(current: &str) -> impl Iterator<Item = &'static str> + '_ {
+    RENAMED_ACTIONS
+        .iter()
+        .filter_map(move |(old, canonical)| (*canonical == current).then_some(*old))
+}
+
+/// Removes every legacy spelling of `current` from `map`, returning how many were dropped.
+///
+/// Split out from the write paths so it can be tested: those are `#[cfg(not(test))]`, since
+/// they touch the real keybindings file.
+fn purge_legacy_aliases<V>(map: &mut std::collections::HashMap<String, V>, current: &str) -> usize {
+    legacy_aliases_for(current)
+        .filter(|alias| map.remove(*alias).is_some())
+        .count()
+}
+
 /// Load all stored custom keybindings into the UI framework so that they are used
 #[cfg(not(test))]
 pub fn load_custom_keybindings(app: &mut AppContext) {
@@ -115,6 +137,8 @@ pub fn write_custom_keybinding(name: String, keybinding: UserDefinedKeybinding) 
 
     let mut map = read_custom_keybindings().unwrap_or_default();
 
+    // Drop stale spellings of this action so they cannot outlive the entry being written.
+    purge_legacy_aliases(&mut map.0, &name);
     map.0.insert(name, keybinding.into());
     save_custom_keybindings(map);
 }
@@ -133,6 +157,9 @@ where
 
     let mut map = read_custom_keybindings().unwrap_or_default();
 
+    // Removing only the current ID would leave a legacy entry behind to be re-applied on the
+    // next launch, quietly reversing the reset the user just asked for.
+    purge_legacy_aliases(&mut map.0, name.as_ref());
     map.0.remove(name.as_ref());
     save_custom_keybindings(map);
 }

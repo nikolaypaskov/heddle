@@ -180,12 +180,17 @@ fn preserves_file_permissions() {
         use std::os::unix::fs::PermissionsExt;
 
         let (_dir, path) = settings_file("[warpify.ssh]\nssh_hosts_denylist = [\"a\"]\n");
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("chmod");
+        // Deliberately NOT 0600. NamedTempFile creates its file at 0600, so asserting that mode
+        // would pass whether or not the permissions were actually carried across -- the test
+        // would be measuring tempfile's default, not this code. Mutation-testing caught exactly
+        // that: deleting the permission-copy left the assertion green. 0640 differs from the
+        // default in both directions of the comparison, so only a real copy satisfies it.
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).expect("chmod");
 
         assert!(migrate_warpify_table(&path).expect("migration succeeds"));
 
         let mode = fs::metadata(&path).expect("stat").permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600, "restrictive permissions carried across");
+        assert_eq!(mode, 0o640, "the original's permissions carried across");
     }
 }
 

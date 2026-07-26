@@ -28,6 +28,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use anyhow::Result;
+use tempfile::NamedTempFile;
 use toml_edit::DocumentMut;
 use toml_edit::Item;
 
@@ -131,50 +132,51 @@ fn merge_missing(target: Option<&mut Item>, old: &Item) {
 
 /// Replaces `path`'s contents with `contents`, atomically, keeping the original's permissions.
 ///
-/// Three things this is careful about, each of which was wrong in the first version:
+/// Built on `NamedTempFile` rather than a hand-rolled temp path, because the hand-rolled
+/// version got three things wrong that this gets right for free:
 ///
-///   * The temp file name includes the process id, so two processes migrating at once cannot
-///     write through each other's half-finished file.
-///   * The original's permission bits are copied onto the replacement. Writing a fresh file
-///     would hand it the default mode instead, quietly widening access to a file that can
-///     contain whatever the user chose to put in it.
-///   * The data is flushed and synced before the rename, so a crash cannot leave a file that
-///     exists, has the right name, and contains nothing.
+///   * The name was predictable (target plus process id). `NamedTempFile` uses a random name
+///     created with `O_EXCL`, so it cannot collide with a concurrent migration and cannot be
+///     pre-created by anyone else. The old `File::create` would have followed and truncated a
+///     symlink planted at that predictable path.
+///   * It starts at mode 0600, so the window between creating the file and applying the
+///     target's permissions is not a window in which the contents are readable. The old
+///     version wrote the data first and adjusted the mode afterwards.
+///   * `persist` replaces an existing destination on every supported platform. Plain
+///     `fs::rename` has platform-dependent behaviour when the destination exists, and this
+///     project ships a Windows build; a migration that only worked on Unix would leave every
+///     Windows user's `[warpify]` values unread with no indication anything had gone wrong.
+///
+/// The data is synced before the replacement, so a crash cannot leave a file that exists, has
+/// the right name, and contains nothing.
 fn write_atomically(path: &Path, contents: &str) -> Result<()> {
+    // Same directory as the target: the replacement is only atomic within one filesystem.
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    // Same directory as the target: `rename` is only atomic within a filesystem.
-    let tmp = dir.join(format!(
-        ".{}.heddlify-migration.{}",
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("settings.toml"),
-        std::process::id()
-    ));
+    let mut tmp = NamedTempFile::new_in(dir)
+        .with_context(|| format!("could not create a temp file in {}", dir.display()))?;
 
-    let result = (|| -> Result<()> {
-        let mut file = fs::File::create(&tmp)
-            .with_context(|| format!("could not create {}", tmp.display()))?;
-        file.write_all(contents.as_bytes())
-            .with_context(|| format!("could not write {}", tmp.display()))?;
-        file.sync_all()
-            .with_context(|| format!("could not flush {}", tmp.display()))?;
-        drop(file);
-
-        if let Ok(meta) = fs::metadata(path) {
-            // Best effort: a filesystem that cannot represent the mode should not abort a
-            // migration that has otherwise succeeded.
-            let _ = fs::set_permissions(&tmp, meta.permissions());
-        }
-
-        fs::rename(&tmp, path)
-            .with_context(|| format!("could not replace {}", path.display()))
-    })();
-
-    if result.is_err() {
-        // Do not leave debris behind on a failed migration.
-        let _ = fs::remove_file(&tmp);
+    // Permissions BEFORE contents. If the original is more restrictive than the 0600 the temp
+    // file starts at, this narrows it before there is anything to read; if it is laxer, the
+    // contents are about to be world-readable under that path anyway. A failure here is
+    // propagated rather than ignored, since silently leaving the wrong mode on a file the user
+    // may have deliberately locked down is not a detail to shrug at.
+    if let Ok(meta) = fs::metadata(path) {
+        fs::set_permissions(tmp.path(), meta.permissions()).with_context(|| {
+            format!("could not carry permissions across to {}", tmp.path().display())
+        })?;
     }
-    result
+
+    tmp.write_all(contents.as_bytes())
+        .with_context(|| format!("could not write {}", tmp.path().display()))?;
+    tmp.as_file()
+        .sync_all()
+        .with_context(|| format!("could not flush {}", tmp.path().display()))?;
+
+    // On failure the NamedTempFile is dropped and removes itself, so no debris is left behind.
+    tmp.persist(path)
+        .map_err(|e| e.error)
+        .with_context(|| format!("could not replace {}", path.display()))?;
+    Ok(())
 }
 
 #[cfg(test)]

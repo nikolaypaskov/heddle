@@ -108,3 +108,42 @@ fn current_and_unknown_action_ids_pass_through_untouched() {
         "terminal:not_a_real_action"
     );
 }
+
+/// Canonicalising only in memory is not enough. `remove_custom_keybinding` deletes the current
+/// ID, and if a legacy entry survives beside it, the next launch re-applies that entry --
+/// silently reversing the reset the user just asked for. This is the case that actually bites,
+/// because the legacy entry is usually `none`.
+#[test]
+fn purging_removes_legacy_spellings_of_the_current_action() {
+    let mut map = std::collections::HashMap::new();
+    map.insert("terminal:warpify_subshell".to_string(), "none");
+    map.insert("editor:unrelated".to_string(), "cmd-x");
+
+    let dropped = super::purge_legacy_aliases(&mut map, "terminal:heddlify_subshell");
+
+    assert_eq!(dropped, 1, "the legacy spelling was found and dropped");
+    assert!(
+        !map.contains_key("terminal:warpify_subshell"),
+        "stale entry cannot outlive the reset"
+    );
+    assert!(
+        map.contains_key("editor:unrelated"),
+        "unrelated bindings are untouched"
+    );
+}
+
+#[test]
+fn purging_an_action_with_no_legacy_spelling_changes_nothing() {
+    // The counterpart control: if this removed entries indiscriminately, the test above would
+    // pass for entirely the wrong reason.
+    let mut map = std::collections::HashMap::new();
+    map.insert("terminal:warpify_subshell".to_string(), "none");
+
+    let dropped = super::purge_legacy_aliases(&mut map, "editor:some_other_action");
+
+    assert_eq!(dropped, 0, "no aliases claimed for an unrelated action");
+    assert!(
+        map.contains_key("terminal:warpify_subshell"),
+        "another action's legacy entry must not be collateral damage"
+    );
+}
