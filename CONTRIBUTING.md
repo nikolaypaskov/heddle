@@ -40,6 +40,16 @@ See [Non-goals](README.md#non-goals).
 
 ## Building and testing
 
+**First, on macOS:** the Metal Toolchain is a separate Xcode component and the build fails without
+it. `xcrun -f metal` resolves even when the component is absent, so its presence proves nothing —
+only a build does.
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+
+Then:
+
 ```bash
 # Build + run the GUI app locally
 ./script/run
@@ -47,14 +57,21 @@ See [Non-goals](README.md#non-goals).
 # Headless TUI front-end
 ./script/run-tui
 
-# Tests
+# Tests. Note that `cargo test` alone covers only the workspace default members,
+# which do NOT include warp_core -- name the crate explicitly.
 cargo test -p warp --lib
+cargo test -p warp_core
 
 # Privacy scanners (must stay green — no warp.dev / keys / telemetry in the binary)
 cargo build -p warp_tui --bin heddle-tui --features standalone
 ./script/heddle/verify-no-warp-endpoints
 ./script/heddle/verify-bundled-assets
+./script/heddle/verify-warp-supply-chain
 ```
+
+`./script/bootstrap` installs build dependencies. It does not fetch anything from Warp and does not
+ask you to authenticate to any service; if you are reading an older copy that mentions common-skill
+installation or a `gcloud` login, that has been removed.
 
 ## Style
 
