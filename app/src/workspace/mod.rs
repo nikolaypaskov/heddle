@@ -1373,14 +1373,11 @@ fn add_open_setting_pages_as_editable_binding(app: &mut AppContext) {
         .with_context_predicate(id!("Workspace"))
         .with_group(bindings::BindingGroup::Settings.as_str())
         .with_custom_action(CustomAction::ShowSettings),
-        EditableBinding::new(
-            "workspace:show_settings_account_page",
-            "Open Settings: Account",
-            WorkspaceAction::ShowSettingsPage(SettingsSection::Account),
-        )
-        .with_context_predicate(id!("Workspace"))
-        .with_group(bindings::BindingGroup::Settings.as_str())
-        .with_custom_action(CustomAction::ShowAccount),
+        // No `workspace:show_settings_account_page`. The Account page configures a Warp account
+        // -- plan and billing, cloud settings sync, in-app purchase credentials, log out --
+        // none of which exist here. Leaving the binding registered would keep "Open Settings:
+        // Account" listed on the keyboard-shortcuts page as a command that opens a page about a
+        // product this is not.
         EditableBinding::new(
             "workspace:show_settings_appearance_page",
             BindingDescription::new("Open Settings: Appearance")
