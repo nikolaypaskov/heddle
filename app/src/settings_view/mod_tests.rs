@@ -1030,3 +1030,39 @@ fn arrow_down_collapsed_umbrella_respects_search_filter() {
     );
     assert_eq!(next, SettingsSection::AgentMCPServers);
 }
+
+/// Opening Settings must not land on the account/billing page.
+///
+/// Removing Account from the nav was not sufficient: the initial page falls back to
+/// `unwrap_or_default()`, so with `#[default] Account` the settings window opened directly onto
+/// the page rendering a "Free" plan badge and a "Compare plans" button. It was not unreachable,
+/// it was the front door. This pins the default so that regression cannot return quietly.
+#[test]
+fn settings_does_not_default_to_the_account_page() {
+    let default = SettingsSection::default();
+    assert_ne!(
+        default,
+        SettingsSection::Account,
+        "Settings must not open on the Account page"
+    );
+    assert_eq!(
+        default,
+        SettingsSection::Appearance,
+        "the default landing page should be the first nav entry"
+    );
+}
+
+/// The pre-rename spelling must keep parsing, because it is persisted in SQLite as the restored
+/// pane and accepted by the local-control API.
+#[test]
+fn the_legacy_warpify_page_name_still_parses() {
+    use std::str::FromStr as _;
+    assert_eq!(
+        SettingsSection::from_str("Warpify").expect("legacy spelling parses"),
+        SettingsSection::Heddlify
+    );
+    assert_eq!(
+        SettingsSection::from_str("Heddlify").expect("current spelling parses"),
+        SettingsSection::Heddlify
+    );
+}

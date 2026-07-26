@@ -227,9 +227,17 @@ pub enum SettingsViewEvent {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
     About,
-    #[default]
+    // Appearance is the default landing page, NOT Account.
+    //
+    // Removing Account from the nav was not enough: the initial page falls back to
+    // `unwrap_or_default()`, so opening Settings with no particular page requested landed
+    // straight on it -- and the branch this build always takes renders a "Free" plan badge next
+    // to a "Compare plans" button. The page was not unreachable at all; it was the front door.
+    //
+    // Appearance is the first entry in the nav and configures something this fork actually has.
     Account,
     MCPServers,
+    #[default]
     Appearance,
     Features,
     Keybindings,
@@ -1310,8 +1318,10 @@ impl SettingsView {
         let initial_page = match page {
             Some(SettingsSection::AI) => SettingsSection::WarpAgent,
             Some(SettingsSection::Code) => SettingsSection::CodeIndexing,
+            // Scripting without the control CLI used to fall back to Account, i.e. to the
+            // billing page, which is a stranger destination here than simply staying put.
             Some(SettingsSection::Scripting) if !FeatureFlag::WarpControlCli.is_enabled() => {
-                SettingsSection::Account
+                SettingsSection::Appearance
             }
             Some(section) if section.is_subpage() => section,
             other => other.unwrap_or_default(),

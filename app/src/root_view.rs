@@ -2104,15 +2104,13 @@ impl RootView {
                 });
             }
             AgentOnboardingEvent::OnboardingCompleted(selected_settings) => {
-                let AuthOnboardingState::Onboarding {
-                    target,
-                    onboarding_view,
-                } = &self.auth_onboarding_state
+                // `onboarding_view` is deliberately not bound: it existed only to be carried
+                // into the login slide, which no longer exists on this path.
+                let AuthOnboardingState::Onboarding { target, .. } = &self.auth_onboarding_state
                 else {
                     return;
                 };
                 let target = target.clone();
-                let onboarding_view = onboarding_view.clone();
 
                 mark_local_onboarding_completed(ctx);
                 if FeatureFlag::HOAOnboardingFlow.is_enabled() {
@@ -2120,76 +2118,19 @@ impl RootView {
                 }
 
                 let is_logged_in = AuthStateProvider::as_ref(ctx).get().is_logged_in();
-                // If the user isn't logged in, only require login if the applied
-                // settings need an account (AI or Warp Drive enabled).
-                let ai_enabled = selected_settings.is_ai_enabled();
-                let warp_drive_enabled = selected_settings.is_warp_drive_enabled();
-                // With old onboarding, we ask user to log in before onboarding, so don't do it after onboarding completes.
-                let requires_login = !is_logged_in
-                    && (ai_enabled || warp_drive_enabled)
-                    && FeatureFlag::OpenWarpNewSettingsModes.is_enabled();
-
-                if requires_login {
-                    let tutorial = OnboardingTutorial::from(selected_settings.clone());
-                    self.pending_tutorial = Some(tutorial);
-
-                    let appearance = Appearance::as_ref(ctx);
-                    let theme_name = appearance
-                        .theme()
-                        .name()
-                        .unwrap_or_else(|| "Dark".to_string());
-                    let (use_vertical_tabs, intention, uses_third_party_agents) =
-                        match selected_settings {
-                            SelectedSettings::AgentDrivenDevelopment {
-                                ui_customization,
-                                agent_settings,
-                                ..
-                            } => (
-                                ui_customization
-                                    .as_ref()
-                                    .map(|c| c.use_vertical_tabs)
-                                    .unwrap_or(true),
-                                OnboardingIntention::AgentDrivenDevelopment,
-                                agent_settings.disable_oz,
-                            ),
-                            SelectedSettings::Terminal {
-                                ui_customization, ..
-                            } => (
-                                ui_customization
-                                    .as_ref()
-                                    .map(|c| c.use_vertical_tabs)
-                                    .unwrap_or(false),
-                                OnboardingIntention::Terminal,
-                                false,
-                            ),
-                        };
-
-                    let login_slide_view = ctx.add_typed_action_view(|ctx| {
-                        LoginSlideView::new(
-                            ai_enabled,
-                            uses_third_party_agents,
-                            &theme_name,
-                            use_vertical_tabs,
-                            intention,
-                            LoginSlideSource::OnboardingFlow,
-                            ctx,
-                        )
-                    });
-                    ctx.subscribe_to_view(&login_slide_view, |me, _view, event, ctx| {
-                        me.handle_login_slide_event(event, ctx);
-                    });
-
-                    self.pending_post_auth_onboarding_settings = Some(selected_settings.clone());
-                    self.auth_onboarding_state = AuthOnboardingState::LoginSlide {
-                        login_slide_view,
-                        onboarding_view,
-                        target,
-                    };
-                    ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
-                    self.focus(ctx);
-                    ctx.notify();
-                    return;
-                }
+                // No login gate on finishing onboarding.
+                //
+                // Upstream sent the user to a login slide here whenever they completed
+                // onboarding with AI or Warp Drive switched on and were not signed in. In this
+                // fork that condition is permanently true -- there is no account, so
+                // `is_logged_in()` is always false -- which meant simply enabling AI during
+                // first run ended onboarding at a login screen for a server this build does not
+                // compile in. That is a functional block on the product's main feature, not a
+                // leftover label.
+                //
+                // Neither setting needs an account here: AI is bring-your-own-key and
+                // configured locally, and the Warp Drive panel is disabled outright. So
+                // onboarding always completes straight into the workspace.
 
                 apply_onboarding_settings(selected_settings, is_logged_in, ctx);
 
