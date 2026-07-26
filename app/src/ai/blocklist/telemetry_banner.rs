@@ -20,9 +20,14 @@ use crate::{Appearance, FeatureFlag, WorkspaceAction};
 // warn about collection that does not happen. `insert_telemetry_banner` also refuses to show
 // it at all; the strings are kept truthful anyway so the binary carries no false claim even
 // if some future flag reaches this code.
-const TITLE_EXISTING_USERS: &str = "No analytics are collected.";
-const TITLE_NEW_USERS: &str = "No analytics are collected.";
-const DESCRIPTION: &str = "This build sends no analytics anywhere. There is no vendor backend to send them to.";
+const TITLE_EXISTING_USERS: &str = "No analytics leave this device.";
+const TITLE_NEW_USERS: &str = "No analytics leave this device.";
+// Deliberately "leave this device" rather than "are collected". Usage events are still
+// recorded in memory by the telemetry macros and may be written to a local file on shutdown;
+// what this build does not do is transmit them, because it configures neither RudderStack nor
+// Sentry and carries no Warp endpoints. Claiming nothing is collected would be a comforting
+// overstatement, which is the same failure as the alarming one it replaced.
+const DESCRIPTION: &str = "Usage events stay on this machine. This build has no analytics destination configured, so nothing is transmitted.";
 const PRIVACY_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 #[derive(Default, Debug, Clone)]

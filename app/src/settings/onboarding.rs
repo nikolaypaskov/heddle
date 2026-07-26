@@ -17,12 +17,14 @@ use crate::workspaces::user_workspaces::UserWorkspaces;
 ///
 /// `has_account` indicates whether the user has (or is creating) a real Warp
 /// account. Warp's AI features run on a Warp account, so agent intent only
-/// enables AI when `has_account` is true; skipping login leaves AI off.
-pub fn apply_onboarding_settings(
-    selected_settings: &SelectedSettings,
-    has_account: bool,
-    app: &mut AppContext,
-) {
+/// enables AI whenever the user chose the agent intent.
+///
+/// This used to take a `has_account` flag and enable AI only when it was true. In this fork
+/// nobody has an account, so the flag was permanently false and choosing "agent-driven
+/// development" during first run completed onboarding with AI switched OFF -- the user asked
+/// for the agent and silently did not get it. Removing the login gate in front of onboarding
+/// was not enough on its own; this is the other half of that fix.
+pub fn apply_onboarding_settings(selected_settings: &SelectedSettings, app: &mut AppContext) {
     let is_ai_enabled = match selected_settings {
         SelectedSettings::AgentDrivenDevelopment {
             agent_settings,
@@ -33,11 +35,9 @@ pub fn apply_onboarding_settings(
             if let Some(ui) = ui_customization {
                 apply_ui_customization_settings(ui, true, app);
             }
-            // Agent intent means the user wants AI, but Warp's AI features run
-            // on a Warp account, so AI is only enabled once they have one.
-            // Skipping login leaves AI off even for agent intent (including the
-            // bring-your-own-agents `disable_oz` path).
-            has_account
+            // Agent intent means the user wants AI, so they get it. There is no account to
+            // condition it on.
+            true
         }
         SelectedSettings::Terminal {
             ui_customization,

@@ -449,7 +449,7 @@ pub fn render_privacy_settings_toggles<A: Action + Clone + 'static>(
         .with_child(
             Shrinkable::new(
                 1.,
-                render_privacy_settings_section_header("Help improve Warp", appearance).finish(),
+                render_privacy_settings_section_header("Usage analytics", appearance).finish(),
             )
             .finish(),
         )
@@ -468,7 +468,7 @@ pub fn render_privacy_settings_toggles<A: Action + Clone + 'static>(
 
     let telemetry_description = render_description(
         appearance,
-        "This build collects no feature usage data; it has no vendor backend to send any to.".into(),
+        "Feature usage data never leaves this device: no analytics destination is configured in this build.".into(),
     );
 
     let telemetry_link = Flex::row()

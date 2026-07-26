@@ -73,15 +73,15 @@ const USER_SECRET_REGEX_TITLE: &str = "Custom secret redaction";
 const USER_SECRET_REGEX_DESCRIPTION: &str = "Use regex to define additional secrets or data you'd like to redact. This will take effect \
     when the next command runs. You can use the inline (?i) flag as a prefix to your regex \
     to make it case-insensitive.";
-const TELEMETRY_DESCRIPTION_OLD: &str = "This build sends no analytics of any kind, including app usage \
-    metadata. It is kept only so an existing preference still has something to bind to.";
+const TELEMETRY_DESCRIPTION_OLD: &str = "Usage events stay on this machine; no analytics \
+    destination is configured. Kept only so an existing preference still binds to something.";
 const TELEMETRY_TITLE: &str = "Usage analytics";
 // The upstream copy said analytics were collected, "including certain console interactions".
 // This build is compiled with `telemetry_config: None` and carries no Warp endpoints at all,
 // so that text told users they were being measured when nothing was being sent. Wrong in the
 // alarming direction is still wrong.
-const TELEMETRY_DESCRIPTION: &str = "This build sends no analytics. There is no vendor backend \
-    to send them to, and no such endpoints are compiled into the binary.";
+const TELEMETRY_DESCRIPTION: &str = "Usage events stay on this machine. No analytics \
+    destination is configured in this build, so nothing is transmitted.";
 const TELEMETRY_DOCS_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 const DATA_MANAGEMENT_TITLE: &str = "Manage your data";

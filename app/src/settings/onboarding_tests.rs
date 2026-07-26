@@ -128,7 +128,7 @@ fn apply_onboarding_settings_preserves_existing_cloud_profile_on_existing_user_l
         };
 
         app.update(|ctx| {
-            apply_onboarding_settings(&onboarding_settings, true, ctx);
+            apply_onboarding_settings(&onboarding_settings, ctx);
         });
 
         // Post-condition: the cloud profile retains its stored values.
@@ -204,19 +204,21 @@ fn apply_onboarding_settings_gates_third_party_ai_on_account() {
             ui_customization: None,
         };
 
-        // Skipping login (no account) leaves AI off, even for agent intent.
+        // Agent intent enables AI. The upstream expectation was the opposite -- it required an
+        // account first -- which in this fork meant never, so choosing the agent during first run
+        // silently left AI off.
         app.update(|ctx| {
-            apply_onboarding_settings(&onboarding_settings, false, ctx);
+            apply_onboarding_settings(&onboarding_settings, ctx);
         });
-        let ai_disabled = app.read(|ctx| !*AISettings::as_ref(ctx).is_any_ai_enabled);
+        let ai_enabled = app.read(|ctx| *AISettings::as_ref(ctx).is_any_ai_enabled);
         assert!(
-            ai_disabled,
-            "skipping login must disable AI even for agent intent"
+            ai_enabled,
+            "choosing the agent intent must enable AI: there is no account to gate it on"
         );
 
-        // Creating an account turns AI on, including for third-party agents.
+        // Still enabled on a second application, including for third-party agents.
         app.update(|ctx| {
-            apply_onboarding_settings(&onboarding_settings, true, ctx);
+            apply_onboarding_settings(&onboarding_settings, ctx);
         });
         let ai_enabled = app.read(|ctx| *AISettings::as_ref(ctx).is_any_ai_enabled);
         assert!(

@@ -8599,7 +8599,7 @@ impl ApiKeysWidget {
             // the user's obligations.
             FormattedText::new([FormattedTextLine::Line(vec![
                 FormattedTextFragment::plain_text(
-                    "Requests go to the provider you configure here, under whatever agreement you have with that provider. Heddle adds no terms of its own and places no limit on who may use this.",
+                    "Heddle adds no terms of its own and places no limit on who may use this. Note that the built-in agent cannot currently send requests at all: its transport requires a Warp server, which this build does not have. Keys stored here are kept for when a direct provider transport lands.",
                 ),
             ])])
         };

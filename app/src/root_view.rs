@@ -2068,7 +2068,7 @@ impl RootView {
                 // User opted out of login: apply locally (no cloud race).
                 // Skipping leaves the user without an account, so AI is disabled.
                 if let Some(selected_settings) = self.pending_post_auth_onboarding_settings.take() {
-                    apply_onboarding_settings(&selected_settings, false, ctx);
+                    apply_onboarding_settings(&selected_settings, ctx);
                 }
                 self.auth_onboarding_state = AuthOnboardingState::Terminal(workspace);
                 ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
@@ -2132,7 +2132,7 @@ impl RootView {
                 // configured locally, and the Warp Drive panel is disabled outright. So
                 // onboarding always completes straight into the workspace.
 
-                apply_onboarding_settings(selected_settings, is_logged_in, ctx);
+                apply_onboarding_settings(selected_settings, ctx);
 
                 if is_logged_in {
                     AuthManager::handle(ctx)
@@ -2890,7 +2890,7 @@ impl RootView {
                         self.pending_post_auth_onboarding_settings.take()
                     {
                         // Skipped login → no account → AI disabled.
-                        apply_onboarding_settings(&selected_settings, false, ctx);
+                        apply_onboarding_settings(&selected_settings, ctx);
                     }
                     self.auth_onboarding_state = AuthOnboardingState::Terminal(workspace);
                     ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
@@ -3088,7 +3088,7 @@ impl RootView {
             return;
         };
         // Reached only after a successful login, so the user has an account.
-        apply_onboarding_settings(&selected_settings, true, ctx);
+        apply_onboarding_settings(&selected_settings, ctx);
     }
 
     /// If onboarding stored a pending tutorial (because login was required first),

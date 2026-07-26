@@ -388,7 +388,6 @@
 ./app/src/settings/ai.rs	warp drive
 ./app/src/settings/cloud_preferences_syncer.rs	logout
 ./app/src/settings/import/iterm_parser_tests.rs	login
-./app/src/settings/onboarding_tests.rs	login
 ./app/src/settings/privacy.rs	warp drive
 ./app/src/settings/privacy.rs	warp drive
 ./app/src/settings_view/ai_page.rs	billing
