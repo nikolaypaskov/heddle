@@ -881,3 +881,37 @@ fn ai_autodetection_setting_can_be_toggled_on_and_off() {
         });
     });
 }
+
+/// AI must be enabled without an account, in BOTH auth states this fork can actually be in.
+///
+/// `is_any_ai_enabled` used to require `!is_anonymous_or_logged_out()`. That predicate is
+/// permanently true here, so the function returned false for every user regardless of the
+/// toggle -- and 312 call sites consult it, so every AI surface in the GUI presented itself as
+/// unavailable. Nothing caught it, because the existing tests all use
+/// `AuthStateProvider::new_for_test()`, which reports a signed-in user; the state this build is
+/// always in was never exercised.
+#[test]
+fn ai_is_enabled_without_an_account() {
+    for (label, provider) in [
+        ("anonymous", AuthStateProvider::new_anonymous_for_test as fn() -> AuthStateProvider),
+        ("signed-off", AuthStateProvider::new_logged_out_for_test as fn() -> AuthStateProvider),
+    ] {
+        App::test((), |mut app| async move {
+            initialize_settings_for_tests(&mut app);
+            app.add_singleton_model(move |_| provider());
+            app.add_singleton_model(UserWorkspaces::default_mock);
+
+            AISettings::handle(&app).read(&app, |settings, ctx| {
+                assert!(
+                    AuthStateProvider::as_ref(ctx).get().is_anonymous_or_logged_out(),
+                    "{label}: precondition -- this must be the state this fork is always in, or the \
+                     test proves nothing about it"
+                );
+                assert!(
+                    settings.is_any_ai_enabled(ctx),
+                    "{label}: AI must follow the user's toggle, not an entitlement check"
+                );
+            });
+        });
+    }
+}

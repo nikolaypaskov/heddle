@@ -29,7 +29,6 @@ use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
 
 use crate::ai::execution_profiles::ExecutionProfilesConfig;
 use crate::ai::request_usage_model::RequestLimitInfo;
-use crate::auth::AuthStateProvider;
 use crate::settings::PrivacySettings;
 use crate::terminal::CLIAgent;
 use crate::workspaces::user_workspaces::UserWorkspaces;
@@ -1382,7 +1381,7 @@ define_settings_group!(AISettings, settings: [
         surface: settings::SettingSurfaces::GUI,
         private: false,
         toml_path: "cloud_platform.third_party_api_keys.aws_bedrock_credentials_enabled",
-        description: "Whether Warp should use your local AWS credentials for Bedrock-enabled requests.",
+        description: "Whether your local AWS credentials are used for Bedrock-enabled requests.",
     }
     // Whether to automatically run the AWS login command when Bedrock credentials are expired.
     //
@@ -1444,7 +1443,7 @@ define_settings_group!(AISettings, settings: [
         surface: settings::SettingSurfaces::GUI,
         private: false,
         toml_path: "cloud_platform.third_party_api_keys.gemini_enterprise_credentials_enabled",
-        description: "Whether Warp should route eligible requests through your workspace's Gemini Enterprise Google Cloud project.",
+        description: "Whether eligible requests are routed through your own Gemini Enterprise Google Cloud project.",
     }
     // Whether or not the user wants agent mode requests to use their saved rules.
     memory_enabled: MemoryEnabled {
@@ -1466,7 +1465,7 @@ define_settings_group!(AISettings, settings: [
         surface: settings::SettingSurfaces::GUI,
         private: false,
         toml_path: "agents.knowledge.warp_drive_context_enabled",
-        description: "Whether Warp Drive context is included in AI requests.",
+        description: "Unused in this build: it included cloud-stored context in AI requests.",
     }
 
     // Whether the codebase speedbump banner has been permanently dismissed for a given repo path.
@@ -1586,7 +1585,7 @@ define_settings_group!(AISettings, settings: [
         private: false,
         storage_key: "CanUseWarpCreditsWithByok",
         toml_path: "cloud_platform.third_party_api_keys.can_use_warp_credits_with_byok",
-        description: "Whether Warp credits can be used as a fallback for user-provided models.",
+        description: "Unused in this build: there is no metered service to fall back to.",
     }
 
     should_render_use_agent_footer_for_user_commands: ShouldRenderUseAgentToolbarForUserCommands {
@@ -1847,7 +1846,7 @@ define_settings_group!(AISettings, settings: [
         surface: settings::SettingSurfaces::GUI,
         private: false,
         toml_path: "agents.warp_agent.other.agent_attribution_enabled",
-        description: "Whether the Warp Agent adds an attribution co-author line to commit messages and pull requests it creates.",
+        description: "Whether the agent adds an attribution co-author line to commit messages and pull requests it creates.",
     }
 
     should_force_disable_cloud_handoff: ShouldForceDisableCloudHandoff {
@@ -1880,7 +1879,7 @@ define_settings_group!(AISettings, settings: [
         surface: settings::SettingSurfaces::GUI,
         private: false,
         toml_path: "agents.warp_agent.other.auto_handoff_on_sleep_enabled",
-        description: "Whether Warp automatically hands off local agent conversations to cloud when the computer is about to sleep.",
+        description: "Unused in this build: it moved a local agent conversation to a hosted environment before sleep.",
     }
 
     // This is not a user-visible setting - it's merely a one-time flag to track if the
@@ -1947,15 +1946,22 @@ impl AISettings {
         contains_remote_blocks || contains_restored_remote_blocks
     }
 
+    /// Whether AI is enabled, which here means: whether the user has switched it on.
+    ///
+    /// Upstream also required NOT being anonymous or logged out. In this fork that predicate is
+    /// permanently true, so this function returned false for every user no matter what the
+    /// toggle said -- and 312 call sites consult it. The practical effect was that every AI
+    /// surface in the GUI presented itself as unavailable, which is precisely the "setting that
+    /// cannot be activated" a user reported seeing.
+    ///
+    /// It is the same shape of defect as the BYOK entitlement: an upstream account check whose
+    /// condition is constant in a fork with no accounts, silently disabling the feature it was
+    /// meant to meter rather than merely hiding a label.
+    ///
+    /// The remote-session org policy check is kept. It is a genuine safety constraint about
+    /// remote blocks rather than an entitlement, and it is inert without a workspace anyway.
     pub fn is_any_ai_enabled(&self, app: &AppContext) -> bool {
-        // Disable AI for anonymous and logged-out users.
-        let is_anonymous_or_logged_out = AuthStateProvider::as_ref(app)
-            .get()
-            .is_anonymous_or_logged_out();
-
-        *self.is_any_ai_enabled
-            && !is_anonymous_or_logged_out
-            && !self.is_ai_disabled_due_to_remote_session_org_policy(app)
+        *self.is_any_ai_enabled && !self.is_ai_disabled_due_to_remote_session_org_policy(app)
     }
 
     pub fn default_session_mode(&self, app: &AppContext) -> DefaultSessionMode {

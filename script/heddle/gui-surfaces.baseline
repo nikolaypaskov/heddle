@@ -381,11 +381,9 @@
 ./app/src/settings/ai.rs	credits
 ./app/src/settings/ai.rs	credits
 ./app/src/settings/ai.rs	credits
-./app/src/settings/ai.rs	credits
 ./app/src/settings/ai.rs	login
 ./app/src/settings/ai.rs	login
 ./app/src/settings/ai.rs	login
-./app/src/settings/ai.rs	warp drive
 ./app/src/settings/cloud_preferences_syncer.rs	logout
 ./app/src/settings/import/iterm_parser_tests.rs	login
 ./app/src/settings/privacy.rs	warp drive
