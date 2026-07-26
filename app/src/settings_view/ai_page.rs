@@ -6177,7 +6177,7 @@ impl AgentsWidget {
 
         let codebase_context_description = vec![
             FormattedTextFragment::plain_text(
-                "Allow the Warp Agent to generate an outline of your codebase that can be used for context. No code is ever stored on our servers. ",
+                "Allow the agent to generate an outline of your codebase that can be used for context. The outline is built and kept on this device; this build has no vendor backend to send it to. ",
             ),
             FormattedTextFragment::hyperlink(
                 "Learn more",
@@ -8541,7 +8541,7 @@ impl ApiKeysWidget {
 
         if show_provider_keys || show_custom_endpoints {
             add_paragraph(vec![FormattedTextFragment::plain_text(
-                "API keys added here are stored only on this device, not on Warp's servers.",
+                "API keys added here are stored only on this device. This build has no vendor backend to send them to.",
             )]);
             add_paragraph(vec![FormattedTextFragment::hyperlink(
                 "Learn more",
@@ -8591,16 +8591,15 @@ impl ApiKeysWidget {
                 ),
             ])])
         } else {
+            // The upstream text made two claims that are simply untrue of this fork: that using
+            // BYOK binds you to Warp's Terms of Service, and that organisations with more than
+            // ten employees must buy a Business or Enterprise plan. Heddle is AGPL software with
+            // no vendor relationship and no such restriction; repeating a commercial licensing
+            // limit that does not apply is worse than branding, it is a false statement about
+            // the user's obligations.
             FormattedText::new([FormattedTextLine::Line(vec![
                 FormattedTextFragment::plain_text(
-                    "By using BYOK or custom endpoints, you agree to use them only as permitted by ",
-                ),
-                FormattedTextFragment::hyperlink(
-                    "Warp's Terms of Service",
-                    CUSTOM_INFERENCE_TERMS_URL,
-                ),
-                FormattedTextFragment::plain_text(
-                    ". BYOK and custom endpoints are intended for individual use and small teams. Companies or organizations with more than 10 employees should use Warp Business or Enterprise.",
+                    "Requests go to the provider you configure here, under whatever agreement you have with that provider. Heddle adds no terms of its own and places no limit on who may use this.",
                 ),
             ])])
         };

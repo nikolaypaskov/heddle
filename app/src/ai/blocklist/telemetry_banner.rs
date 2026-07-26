@@ -15,9 +15,14 @@ use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::UgcCollectionEnablementSetting;
 use crate::{Appearance, FeatureFlag, WorkspaceAction};
 
-const TITLE_EXISTING_USERS: &str = "We've updated our telemetry policy.";
-const TITLE_NEW_USERS: &str = "Help improve Warp.";
-const DESCRIPTION: &str = "We may collect certain console interactions to improve Warp's AI capabilities. You can opt out any time.";
+// This banner announced a telemetry policy. There is no telemetry here -- the oss channel is
+// built with `telemetry_config: None` -- so the copy is written to say that rather than to
+// warn about collection that does not happen. `insert_telemetry_banner` also refuses to show
+// it at all; the strings are kept truthful anyway so the binary carries no false claim even
+// if some future flag reaches this code.
+const TITLE_EXISTING_USERS: &str = "No analytics are collected.";
+const TITLE_NEW_USERS: &str = "No analytics are collected.";
+const DESCRIPTION: &str = "This build sends no analytics anywhere. There is no vendor backend to send them to.";
 const PRIVACY_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 #[derive(Default, Debug, Clone)]

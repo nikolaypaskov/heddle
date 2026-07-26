@@ -158,7 +158,6 @@
 ./app/src/auth/auth_view_body.rs	sign up
 ./app/src/auth/auth_view_body.rs	sign up
 ./app/src/auth/auth_view_body.rs	warp drive
-./app/src/auth/auth_view_shared_helpers.rs	log in
 ./app/src/auth/auth_view_shared_helpers.rs	logged-out
 ./app/src/auth/auth_view_shared_helpers.rs	logout
 ./app/src/auth/login_failure_notification.rs	log in

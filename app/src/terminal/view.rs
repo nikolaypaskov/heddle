@@ -243,7 +243,7 @@ use crate::ai::blocklist::orchestration_topology::OrchestrationNavigationDirecti
 use crate::ai::blocklist::suggested_agent_mode_workflow_modal::SuggestedAgentModeWorkflowAndId;
 use crate::ai::blocklist::suggested_rule_modal::SuggestedRuleAndId;
 use crate::ai::blocklist::summarization_cancel_dialog::SummarizationCancelDialog;
-use crate::ai::blocklist::telemetry_banner::{TelemetryBanner, should_collect_ai_ugc_telemetry};
+use crate::ai::blocklist::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::ai::blocklist::usage::conversation_usage_view::{
     ConversationUsageInfo, ConversationUsageView, TimingInfo,
 };
@@ -10511,38 +10511,15 @@ impl TerminalView {
     }
 
     /// Inserts telemetry policy banner into the blocklist.
-    pub fn insert_telemetry_banner(&mut self, is_onboarded: bool, ctx: &mut ViewContext<Self>) {
-        // Don't ever show telemetry banner for enterprise users.
-        if UserWorkspaces::as_ref(ctx)
-            .current_workspace()
-            .is_some_and(|w| matches!(w.billing_metadata.customer_type, CustomerType::Enterprise))
-        {
-            return;
-        }
-
-        if FeatureFlag::GlobalAIAnalyticsBanner.is_enabled()
-            && !GeneralSettings::as_ref(ctx)
-                .telemetry_banner_dismissed
-                .value()
-            // Do not insert telemetry banner if one is already showing
-            // (Happens in the case of a new user going from loginless to login
-            // without dismissing banner the first time)
-            && !self.rich_content_views.iter().any(|content| content.is_telemetry_banner())
-        {
-            let banner = ctx.add_view(|ctx| TelemetryBanner::new(is_onboarded, ctx));
-            self.insert_rich_content(
-                None,
-                banner.clone(),
-                Some(RichContentMetadata::TelemetryBanner {
-                    telemetry_banner_handle: banner,
-                }),
-                RichContentInsertionPosition::Append {
-                    insert_below_long_running_block: true,
-                },
-                ctx,
-            );
-            ctx.notify();
-        }
+    /// Does nothing. The telemetry banner disclosed data collection, and this build performs
+    /// none: the oss channel is compiled with `telemetry_config: None` and carries no Warp
+    /// endpoints.
+    ///
+    /// Both call sites are already unreachable -- one requires the `GlobalAIAnalyticsBanner`
+    /// feature, which is not in the default set, and the other sits behind an early return for
+    /// anonymous users, which is everyone here. This is the belt to that pair of braces: a
+    /// future flag flip must not be able to put a false disclosure back on screen.
+    pub fn insert_telemetry_banner(&mut self, _is_onboarded: bool, _ctx: &mut ViewContext<Self>) {
     }
 
     fn hide_telemetry_banner_permanently(&mut self, ctx: &mut ViewContext<Self>) {

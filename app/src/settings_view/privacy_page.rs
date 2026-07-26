@@ -73,20 +73,24 @@ const USER_SECRET_REGEX_TITLE: &str = "Custom secret redaction";
 const USER_SECRET_REGEX_DESCRIPTION: &str = "Use regex to define additional secrets or data you'd like to redact. This will take effect \
     when the next command runs. You can use the inline (?i) flag as a prefix to your regex \
     to make it case-insensitive.";
-const TELEMETRY_DESCRIPTION_OLD: &str = "App analytics help us make the product better for you. We only collect \
-    app usage metadata, never console input or output.";
-const TELEMETRY_TITLE: &str = "Help improve Warp";
-const TELEMETRY_DESCRIPTION: &str = "App analytics help us make the product better for you. We may collect \
-    certain console interactions to improve Warp's AI capabilities.";
+const TELEMETRY_DESCRIPTION_OLD: &str = "This build sends no analytics of any kind, including app usage \
+    metadata. It is kept only so an existing preference still has something to bind to.";
+const TELEMETRY_TITLE: &str = "Usage analytics";
+// The upstream copy said analytics were collected, "including certain console interactions".
+// This build is compiled with `telemetry_config: None` and carries no Warp endpoints at all,
+// so that text told users they were being measured when nothing was being sent. Wrong in the
+// alarming direction is still wrong.
+const TELEMETRY_DESCRIPTION: &str = "This build sends no analytics. There is no vendor backend \
+    to send them to, and no such endpoints are compiled into the binary.";
 const TELEMETRY_DOCS_URL: &str = "https://github.com/nikolaypaskov/heddle#readme";
 
 const DATA_MANAGEMENT_TITLE: &str = "Manage your data";
-const DATA_MANAGEMENT_DESCRIPTION: &str = "At any time, you may choose to delete your Warp account permanently. \
-    You will no longer be able to use Warp.";
+const DATA_MANAGEMENT_DESCRIPTION: &str = "Everything this build stores stays on this device. \
+    There is nothing held remotely to delete.";
 const DATA_MANAGEMENT_LINK_TEXT: &str = "Visit the data management page";
 
 const PRIVACY_POLICY_TITLE: &str = "Privacy policy";
-const PRIVACY_POLICY_LINK_TEXT: &str = "Read Warp's privacy policy";
+const PRIVACY_POLICY_LINK_TEXT: &str = "Read the privacy notes";
 
 /// [`None`] when this build has no Warp server: there is no hosted data
 /// management page to link to.

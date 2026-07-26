@@ -468,7 +468,7 @@ pub fn render_privacy_settings_toggles<A: Action + Clone + 'static>(
 
     let telemetry_description = render_description(
         appearance,
-        "High-level feature usage data helps Warp's product team prioritize the roadmap.".into(),
+        "This build collects no feature usage data; it has no vendor backend to send any to.".into(),
     );
 
     let telemetry_link = Flex::row()
@@ -547,7 +547,7 @@ pub fn render_privacy_settings_toggles<A: Action + Clone + 'static>(
     let cloud_conversation_storage_description = render_description(
         appearance,
         if PrivacySettings::as_ref(app).is_cloud_conversation_storage_enabled {
-            "Agent conversations can be shared with others and are retained when you log in on different devices. This data is only stored for product functionality, and Warp will not use it for analytics."
+            "Agent conversations are kept locally on this device. This build has no vendor backend, so they are not synced anywhere and no analytics are collected from them."
         } else {
             "Agent conversations are only stored locally on your machine, are lost upon logout, and cannot be shared. Note: conversation data for ambient agents are still stored in the cloud."
         }
