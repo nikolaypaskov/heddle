@@ -26067,13 +26067,15 @@ impl TypedActionView for TerminalView {
             }
             VimModeBanner(action) => self.handle_vim_banner_action(*action, ctx),
             OnboardingFlow(version) => {
-                // Don't show onboarding if it's already active or if this is a shared session or if user is anonymous
+                // Suppressed in a shared session only. The anonymous check that used to sit here
+                // was permanently true in this fork, so re-running onboarding silently did
+                // nothing -- the same account-gate-on-a-local-capability pattern that had
+                // disabled AI outright and refused BYOK.
                 if self
                     .model
                     .lock()
                     .shared_session_status()
                     .is_sharer_or_viewer()
-                    || self.auth_state.is_anonymous_or_logged_out()
                 {
                     return;
                 };

@@ -549,14 +549,7 @@
 ./app/src/wasm_nux_dialog.rs	warp drive
 ./app/src/workflows/aliases.rs	warp drive
 ./app/src/workflows/categories.rs	upgrade
-./app/src/workflows/workflow_view.rs	credits
-./app/src/workflows/workflow_view.rs	credits
-./app/src/workflows/workflow_view.rs	credits
-./app/src/workflows/workflow_view.rs	credits
 ./app/src/workflows/workflow_view.rs	sign in
-./app/src/workflows/workflow_view.rs	upgrade
-./app/src/workflows/workflow_view.rs	upgrade
-./app/src/workflows/workflow_view.rs	upgrade
 ./app/src/workspace/bonus_grant_notification_model.rs	credits
 ./app/src/workspace/home.rs	warp drive
 ./app/src/workspace/mod.rs	cloud agent
