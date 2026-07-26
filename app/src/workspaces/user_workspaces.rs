@@ -469,20 +469,28 @@ impl UserWorkspaces {
                 })
     }
 
-    /// Whether BYO API key is enabled for the current user, based on the active policies.
-    /// Note that the value may be incorrect if called before the team's billing metadata has been fetched.
-    /// For solo users (no workspace), this is controlled by the `SoloUserByok` feature flag.
-    /// Anonymous or logged-out users are not allowed to use BYO API keys.
-    pub fn is_byo_api_key_enabled(&self, app: &AppContext) -> bool {
-        if AuthStateProvider::as_ref(app)
-            .get()
-            .is_anonymous_or_logged_out()
-        {
-            return false;
-        }
-        self.current_workspace()
-            .map(|workspace| workspace.is_byo_api_key_enabled())
-            .unwrap_or(FeatureFlag::SoloUserByok.is_enabled())
+    /// Whether BYO API key is enabled. In Heddle it always is.
+    ///
+    /// Upstream this was an entitlement: anonymous or logged-out users were refused outright,
+    /// and everyone else was checked against their workspace's billing metadata. Both halves are
+    /// meaningless here -- there is no account, so `is_anonymous_or_logged_out()` is permanently
+    /// true, and there is no billing layer to consult.
+    ///
+    /// Leaving the upstream logic in place did real damage rather than merely looking odd,
+    /// because bring-your-own-key is how AI works in this fork at all:
+    ///
+    ///   * the provider API-key editors in AI settings were constructed disabled
+    ///     (`update_editor_interaction_state(.., is_any_ai_enabled && is_byo_enabled && ..)`),
+    ///     so there was no way to type a key in;
+    ///   * on `TeamsChanged`, the "clear stored API keys when BYO is disabled at the billing
+    ///     layer" path would fire and erase a key the user had already saved;
+    ///   * the settings page instead offered "Create an account to use your own API keys",
+    ///     which inverts the truth: an account is precisely what this fork does not have.
+    ///
+    /// So this returns true unconditionally. Nothing is being unlocked that upstream charged
+    /// for -- the keys are the user's own, used against their own provider account.
+    pub fn is_byo_api_key_enabled(&self, _app: &AppContext) -> bool {
+        true
     }
 
     /// Whether the current workspace's managed BYOK/BYOE policy allows members

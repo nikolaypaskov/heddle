@@ -171,7 +171,9 @@ fn match_data_countable_zero_is_not_truthy() {
 
 #[test]
 fn subpage_display_names_are_correct() {
-    assert_eq!(SettingsSection::WarpAgent.to_string(), "Warp Agent");
+    // "Agent", not "Warp Agent": this is the settings nav label a user reads, and AGPL grants
+    // the code rather than the trademark. The variant name is unchanged.
+    assert_eq!(SettingsSection::WarpAgent.to_string(), "Agent");
     assert_eq!(SettingsSection::AgentProfiles.to_string(), "Profiles");
     assert_eq!(SettingsSection::AgentMCPServers.to_string(), "MCP servers");
     assert_eq!(SettingsSection::Knowledge.to_string(), "Knowledge");
@@ -1065,4 +1067,18 @@ fn the_legacy_warpify_page_name_still_parses() {
         SettingsSection::from_str("Heddlify").expect("current spelling parses"),
         SettingsSection::Heddlify
     );
+}
+
+/// Both earlier spellings of the agent page must keep parsing: the name is persisted as the
+/// restored settings pane and accepted by the local-control API, so dropping either would
+/// restore the wrong page for existing users and break existing callers.
+#[test]
+fn earlier_agent_page_names_still_parse() {
+    use std::str::FromStr as _;
+    for name in ["Agent", "Oz", "Warp Agent"] {
+        assert_eq!(
+            SettingsSection::from_str(name).unwrap_or_else(|_| panic!("{name} should parse")),
+            SettingsSection::WarpAgent,
+        );
+    }
 }

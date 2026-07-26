@@ -398,8 +398,6 @@
 ./app/src/settings_view/ai_page.rs	cloud agent
 ./app/src/settings_view/ai_page.rs	cloud agent
 ./app/src/settings_view/ai_page.rs	compare plans
-./app/src/settings_view/ai_page.rs	create an account
-./app/src/settings_view/ai_page.rs	create an account
 ./app/src/settings_view/ai_page.rs	credits
 ./app/src/settings_view/ai_page.rs	credits
 ./app/src/settings_view/ai_page.rs	credits
@@ -417,7 +415,6 @@
 ./app/src/settings_view/ai_page.rs	login
 ./app/src/settings_view/ai_page.rs	login
 ./app/src/settings_view/ai_page.rs	login
-./app/src/settings_view/ai_page.rs	sign up
 ./app/src/settings_view/ai_page.rs	sign-in
 ./app/src/settings_view/ai_page.rs	subscription
 ./app/src/settings_view/ai_page.rs	subscription
@@ -426,9 +423,6 @@
 ./app/src/settings_view/ai_page.rs	subscription
 ./app/src/settings_view/ai_page.rs	subscription
 ./app/src/settings_view/ai_page.rs	subscription
-./app/src/settings_view/ai_page.rs	upgrade
-./app/src/settings_view/ai_page.rs	upgrade
-./app/src/settings_view/ai_page.rs	upgrade
 ./app/src/settings_view/ai_page.rs	upgrade
 ./app/src/settings_view/ai_page.rs	upgrade
 ./app/src/settings_view/ai_page.rs	upgrade

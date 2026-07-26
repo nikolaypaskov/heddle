@@ -668,10 +668,12 @@ fn test_has_any_ai_remaining_true_with_grok_subscription_connected() {
 }
 
 #[test]
-fn test_has_any_ai_remaining_false_with_grok_subscription_but_byo_disabled() {
+fn test_grok_subscription_counts_as_available_ai() {
     App::test((), |mut app| async move {
-        // No BYO policy: the Grok token can't be sent, so it must not count as
-        // available AI.
+        // Upstream gated this on a BYO entitlement, so a connected Grok subscription did not
+        // count as available AI unless the workspace's billing metadata allowed BYO. There is no
+        // billing layer here and BYO is unconditional, so the token can be sent and therefore
+        // does count.
         let (_uid, workspace) = create_test_workspace();
 
         add_user_workspaces_with_workspace(&mut app, workspace);
@@ -692,8 +694,8 @@ fn test_has_any_ai_remaining_false_with_grok_subscription_but_byo_disabled() {
             model.bonus_grants.clear();
 
             assert!(
-                !model.has_any_ai_remaining(ctx),
-                "expected has_any_ai_remaining to be false when a Grok subscription is connected but BYO is disabled",
+                model.has_any_ai_remaining(ctx),
+                "a connected Grok subscription is usable, so it counts as available AI",
             );
         });
     });
@@ -725,11 +727,17 @@ fn test_has_any_ai_remaining_true_with_byo_key_and_no_workspace() {
     });
 }
 
+/// Bring-your-own-key works WITHOUT an account. This inverts the upstream expectation
+/// deliberately.
+///
+/// Upstream refused BYO API keys to anonymous or logged-out users, treating it as a paid
+/// entitlement. Heddle has no accounts, so that predicate is permanently true and the rule
+/// disabled the feature for literally every user -- while AI in this fork is bring-your-own-key
+/// and nothing else. The old test asserted the refusal; keeping it would have pinned the fork's
+/// primary feature in the off position.
 #[test]
-fn test_byo_api_key_disabled_for_anonymous_firebase_user() {
+fn test_byo_api_key_enabled_without_an_account() {
     App::test((), |mut app| async move {
-        let _guard = FeatureFlag::SoloUserByok.override_enabled(true);
-
         app.add_singleton_model(UserWorkspaces::default_mock);
         let request_usage_model = add_request_usage_model_for_anonymous_users(&mut app);
 
@@ -739,18 +747,20 @@ fn test_byo_api_key_disabled_for_anonymous_firebase_user() {
 
         app.read(|ctx| {
             assert!(
-                !UserWorkspaces::as_ref(ctx).is_byo_api_key_enabled(ctx),
-                "expected is_byo_api_key_enabled to be false for anonymous Firebase users even with SoloUserByok enabled",
+                UserWorkspaces::as_ref(ctx).is_byo_api_key_enabled(ctx),
+                "BYO API keys must be available with no account: there is no other way to use AI here",
             );
         });
 
         request_usage_model.update(&mut app, |model, ctx| {
+            // No hosted requests left. The user's own key is the only thing that can serve a
+            // request, and it must be enough.
             model.request_limit_info = RequestLimitInfo::new_for_test(10, 10);
             model.bonus_grants.clear();
 
             assert!(
-                !model.has_any_ai_remaining(ctx),
-                "expected has_any_ai_remaining to be false for anonymous Firebase user even with BYO key and SoloUserByok enabled",
+                model.has_any_ai_remaining(ctx),
+                "a user's own API key must count as available AI without an account",
             );
         });
     });

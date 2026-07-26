@@ -280,7 +280,11 @@ impl Display for SettingsSection {
             SettingsSection::MCPServers => write!(f, "MCP Servers"),
             SettingsSection::Scripting => write!(f, "Scripting"),
             SettingsSection::WarpDrive => write!(f, "Warp Drive"),
-            SettingsSection::WarpAgent => write!(f, "Warp Agent"),
+            // Displayed as "Agent", not "Warp Agent": this is the label in the settings nav,
+            // and AGPL grants the code rather than the trademark. The enum variant keeps its
+            // name because renaming it would churn ~10 unrelated call sites for no user-visible
+            // gain; what a user reads is this string.
+            SettingsSection::WarpAgent => write!(f, "Agent"),
             SettingsSection::AgentProfiles => write!(f, "Profiles"),
             SettingsSection::AgentMCPServers => write!(f, "MCP servers"),
             SettingsSection::Knowledge => write!(f, "Knowledge"),
@@ -383,7 +387,10 @@ impl FromStr for SettingsSection {
             "Heddlify" | "Warpify" => Ok(Self::Heddlify),
             "WarpDrive" | "Warp Drive" => Ok(Self::WarpDrive),
             // This page was called "Oz" at one point, keep for backward compatibility.
-            "Oz" | "Warp Agent" => Ok(Self::WarpAgent),
+            // "Oz" and "Warp Agent" are earlier spellings kept for compatibility: this name is
+            // persisted as the restored settings pane and accepted by the local-control API, so
+            // dropping either would break callers and restore the wrong page.
+            "Agent" | "Oz" | "Warp Agent" => Ok(Self::WarpAgent),
             "Profiles" | "AgentProfiles" => Ok(Self::AgentProfiles),
             "MCP servers" | "AgentMCPServers" => Ok(Self::AgentMCPServers),
             "Knowledge" => Ok(Self::Knowledge),
