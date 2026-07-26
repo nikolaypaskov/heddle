@@ -167,6 +167,27 @@ impl TelemetryApi {
             log::info!("Not writing queued events to disk because telemetry is disabled.");
             return Result::Ok(());
         }
+
+        // Nor write them when there is nowhere to send them, which is always in this build.
+        //
+        // The queue is persisted so it can be flushed on the NEXT launch. With no destination
+        // configured that flush can never happen, so the file only ever grows: a build that
+        // transmits no analytics was still accumulating an analytics queue on disk, in
+        // rudder_telemetry_events.json, indefinitely. Draining the queue without writing keeps
+        // memory bounded and leaves nothing behind.
+        if ChannelState::rudderstack_ugc_destination().root_url.is_empty()
+            && ChannelState::rudderstack_non_ugc_destination()
+                .root_url
+                .is_empty()
+        {
+            let discarded = warpui::telemetry::flush_events().len();
+            if discarded > 0 {
+                log::debug!("Discarded {discarded} queued events: no telemetry destination.");
+            }
+            let _ = std::fs::remove_file(path);
+            return Result::Ok(());
+        }
+
         log::info!("Writing queued events to disk because telemetry is enabled.");
 
         let file = File::create(path)?;

@@ -83,7 +83,11 @@ difflib = { git = "https://github.com/warpdotdev/difflib.git", rev = "114177e7d8
 directories.workspace = true
 dirs.workspace = true
 dunce.workspace = true
-email_address = { git = "https://github.com/warpdotdev/rust-email_address", branch = "main" }
+# Pinned to a revision, not a branch. This was the ONE dependency tracking `branch = "main"`
+# on a Warp-owned repository, so a push to that branch could change what Heddle builds
+# without a commit here. The rev is the one Cargo.lock already resolved, so this pins
+# current behaviour rather than changing it.
+email_address = { git = "https://github.com/warpdotdev/rust-email_address", rev = "b3e5205b4efdc83832f230d8eb6894fd00a9ec32" }
 embed_plist = "1.2"
 enclose = "1.1.8"
 enum-iterator.workspace = true

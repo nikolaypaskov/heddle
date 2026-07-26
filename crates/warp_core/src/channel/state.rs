@@ -53,7 +53,12 @@ pub struct ChannelState {
 impl ChannelState {
     pub fn init() -> Self {
         let channel = Channel::Oss;
-        let app_id = AppId::new("dev", "warp", "WarpOss");
+        // Heddle's identity, not Warp's. Both shipped binaries override this via
+        // `ChannelState::set` (the GUI to Heddle, the TUI to HeddleTui), so this default is what
+        // anything else sees: tests, helper tools, and any future binary that forgets to
+        // configure a channel. Leaving it as "WarpOss" meant those all resolved their data
+        // directory to `dev.warp.WarpOss` -- a Warp-named path holding Heddle's data.
+        let app_id = AppId::new("dev", "heddle", "Heddle");
         Self {
             channel,
             additional_features: Default::default(),

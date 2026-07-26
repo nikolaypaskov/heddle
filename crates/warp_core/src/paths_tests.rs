@@ -10,9 +10,9 @@ fn test_data_dir_path() {
         if #[cfg(target_os = "macos")] {
             assert_eq!(data_dir(), home_dir.join(".heddle-oss"));
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
-            assert_eq!(data_dir(), home_dir.join(".local/share/warp-oss"));
+            assert_eq!(data_dir(), home_dir.join(".local/share/heddle"));
         } else if #[cfg(windows)] {
-            assert_eq!(data_dir(), home_dir.join("AppData\\Roaming\\warp\\WarpOss\\data"));
+            assert_eq!(data_dir(), home_dir.join("AppData\\Roaming\\heddle\\Heddle\\data"));
         } else {
             unimplemented!("Need to update tests for current platform!");
         }
@@ -27,9 +27,9 @@ fn test_config_local_dir_path() {
         if #[cfg(target_os = "macos")] {
             assert_eq!(config_local_dir(), home_dir.join(".heddle-oss"));
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
-            assert_eq!(config_local_dir(), home_dir.join(".config/warp-oss"));
+            assert_eq!(config_local_dir(), home_dir.join(".config/heddle"));
         } else if #[cfg(windows)] {
-            assert_eq!(config_local_dir(), home_dir.join("AppData\\Local\\warp\\WarpOss\\config"));
+            assert_eq!(config_local_dir(), home_dir.join("AppData\\Local\\heddle\\Heddle\\config"));
         } else {
             unimplemented!("Need to update tests for current platform!");
         }
@@ -40,7 +40,7 @@ fn test_config_local_dir_path() {
 fn test_gui_app_id_maps_oss_tui_to_oss_gui() {
     let gui_app_id = gui_app_id_for_channel(Channel::Oss, AppId::new("dev", "warp", "WarpTui"));
 
-    assert_eq!(gui_app_id.to_string(), "dev.warp.WarpOss");
+    assert_eq!(gui_app_id.to_string(), "dev.heddle.Heddle");
 }
 
 #[test]
@@ -52,11 +52,11 @@ fn test_gui_config_and_mcp_paths_resolve_explicit_sources() {
         if #[cfg(target_os = "macos")] {
             assert_eq!(gui_config_dir, home_dir.join(".heddle-oss"));
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
-            assert_eq!(gui_config_dir, home_dir.join(".config/warp-oss"));
+            assert_eq!(gui_config_dir, home_dir.join(".config/heddle"));
         } else if #[cfg(windows)] {
             assert_eq!(
                 gui_config_dir,
-                home_dir.join("AppData\\Local\\warp\\WarpOss\\config")
+                home_dir.join("AppData\\Local\\heddle\\Heddle\\config")
             );
         } else {
             unimplemented!("Need to update tests for current platform!");
@@ -109,11 +109,11 @@ fn test_cache_dir_path() {
     // ChannelState, by default, is configured for Channel::Oss.
     cfg_if::cfg_if! {
         if #[cfg(target_os = "macos")] {
-            assert_eq!(cache_dir(), home_dir.join("Library/Application Support/dev.warp.WarpOss"));
+            assert_eq!(cache_dir(), home_dir.join("Library/Application Support/dev.heddle.Heddle"));
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
             assert_eq!(cache_dir(), home_dir.join(".cache/warp-oss"));
         } else if #[cfg(windows)] {
-            assert_eq!(cache_dir(), home_dir.join("AppData\\Local\\warp\\WarpOss\\cache"));
+            assert_eq!(cache_dir(), home_dir.join("AppData\\Local\\heddle\\Heddle\\cache"));
         } else {
             unimplemented!("Need to update tests for current platform!");
         }
@@ -126,11 +126,11 @@ fn test_state_dir_path() {
     cfg_if::cfg_if! {
         // ChannelState, by default, is configured for Channel::Oss.
         if #[cfg(target_os = "macos")] {
-            assert_eq!(state_dir(), home_dir.join("Library/Application Support/dev.warp.WarpOss"));
+            assert_eq!(state_dir(), home_dir.join("Library/Application Support/dev.heddle.Heddle"));
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
             assert_eq!(state_dir(), home_dir.join(".local/state/warp-oss"));
         } else if #[cfg(windows)] {
-            assert_eq!(state_dir(), home_dir.join("AppData\\Local\\warp\\WarpOss\\data"));
+            assert_eq!(state_dir(), home_dir.join("AppData\\Local\\heddle\\Heddle\\data"));
         } else {
             unimplemented!("Need to update tests for current platform!");
         }
@@ -186,17 +186,59 @@ fn test_project_path_for_warp_dev_app_id() {
 
 #[test]
 fn test_project_path_for_oss_app_id() {
-    let project_dirs = project_dirs_for_app_id(AppId::new("dev", "warp", "WarpOss"), None)
+    let project_dirs = project_dirs_for_app_id(AppId::new("dev", "heddle", "Heddle"), None)
         .expect("should be able to compute project dirs");
     cfg_if::cfg_if! {
         if #[cfg(target_os = "macos")] {
-            assert_eq!(project_dirs.project_path(), "dev.warp.WarpOss");
+            assert_eq!(project_dirs.project_path(), "dev.heddle.Heddle");
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
             assert_eq!(project_dirs.project_path(), "warp-oss");
         } else if #[cfg(windows)] {
-            assert_eq!(project_dirs.project_path(), "warp\\WarpOss");
+            assert_eq!(project_dirs.project_path(), "heddle\\Heddle");
         } else {
             unimplemented!("Need to update tests for current platform!");
         }
     }
+}
+
+/// Heddle must store state in its OWN directory, whether or not Warp is installed.
+///
+/// Upstream nests state inside the app group container. On this fork that resolved only when Warp
+/// happened to be installed -- the container `2BBY89MBSN.dev.warp` exists on those machines and is
+/// owned by the user, so the path was usable even though this bundle no longer requests the
+/// entitlement. The consequence was that one build stored data in two different places depending
+/// on whether a *different product* was present, and the location could move under the user if
+/// they installed or uninstalled Warp later, taking their history with it.
+///
+/// This asserts the property that makes all four of those cases identical: there is no secure
+/// state directory, so every caller falls through to `state_dir()`.
+#[test]
+fn state_never_lives_in_another_vendors_container() {
+    assert!(
+        secure_state_dir().is_none(),
+        "secure_state_dir must be None so state cannot land in Warp's app group container"
+    );
+
+    let dir = state_dir();
+    assert!(
+        !dir.to_string_lossy().contains("Group Containers"),
+        "state_dir must not resolve inside an app group container, got {}",
+        dir.display()
+    );
+    assert!(
+        !dir.to_string_lossy().to_lowercase().contains("dev.warp"),
+        "state_dir must not sit under a Warp-owned path, got {}",
+        dir.display()
+    );
+}
+
+/// The TUI's state directory inherits the same property, since it is derived from the GUI's.
+#[test]
+fn tui_state_also_avoids_the_vendor_container() {
+    let dir = tui_state_dir();
+    assert!(
+        !dir.to_string_lossy().contains("Group Containers"),
+        "tui_state_dir must not resolve inside an app group container, got {}",
+        dir.display()
+    );
 }

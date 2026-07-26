@@ -120,12 +120,15 @@ pub fn data_dir() -> PathBuf {
 /// Returns the GUI application ID for the current channel.
 ///
 /// Most TUI channel binaries use the same application ID as the GUI. The OSS
-/// TUI is the exception: it uses `WarpTui`, while the corresponding GUI uses
-/// `WarpOss`.
+/// TUI is the exception: it uses `HeddleTui`, while the corresponding GUI uses
+/// `Heddle`.
 #[cfg(any(not(target_os = "macos"), test))]
 fn gui_app_id_for_channel(channel: Channel, current_app_id: AppId) -> AppId {
     match channel {
-        Channel::Oss => AppId::new("dev", "warp", "WarpOss"),
+        // Must match the GUI's `AppId` in app/src/bin/oss.rs. It previously said
+        // ("dev", "warp", "WarpOss"), so a TUI resolving the GUI's config path pointed it at a
+        // Warp-named directory.
+        Channel::Oss => AppId::new("dev", "heddle", "Heddle"),
         Channel::Stable
         | Channel::Preview
         | Channel::Dev
@@ -264,23 +267,82 @@ pub fn state_dir() -> PathBuf {
 ///
 /// On macOS, this will use the App Group container directory if available.
 pub fn secure_state_dir() -> Option<PathBuf> {
-    // Do not use the secure state directory in integration tests, which have a temporary home directory instead.
+    // Always None. Heddle keeps its state in its OWN directory.
+    //
+    // Upstream nests state inside the app group container, which on this fork resolved to
+    // `~/Library/Group Containers/2BBY89MBSN.dev.warp/.../dev.heddle.Heddle/` -- Heddle's database
+    // sitting inside *Warp's* Apple team container. It worked only incidentally: the directory
+    // exists on machines that have Warp installed, and is owned by the user, so the path was
+    // usable even though this bundle no longer requests the entitlement. On a machine without
+    // Warp it would not resolve at all, so the same build stored its data in two different places
+    // depending on whether a different product happened to be installed.
+    //
+    // A fork must not put user data inside another vendor's container, and it must not have its
+    // storage location depend on that vendor's presence. Returning None sends every caller to
+    // `state_dir()`, which is Heddle's own `~/Library/Application Support/dev.heddle.Heddle`.
+    //
+    // `migrate_legacy_app_group_state` moves anything already written to the old location.
+    None
+}
+
+/// The pre-migration state directory: Heddle's data inside Warp's app group container.
+///
+/// Returns `None` when nothing is there. Used only by the one-time migration.
+#[cfg(target_os = "macos")]
+pub fn legacy_app_group_state_dir() -> Option<PathBuf> {
+    let app_group_root = app_group_container_path()?;
+    let project_dirs = project_dirs()?;
+    let legacy = app_group_root
+        .join("Library/Application Support")
+        .join(project_dirs.project_path());
+    legacy.is_dir().then_some(legacy)
+}
+
+/// Moves state out of Warp's app group container into Heddle's own directory, once.
+///
+/// Only moves entries that do not already exist at the destination, so it cannot overwrite newer
+/// data, and it is safe to call on every launch. Failures are logged rather than fatal: losing
+/// history is bad, but refusing to start is worse, and the old copy is left in place either way.
+#[cfg(target_os = "macos")]
+pub fn migrate_legacy_app_group_state() {
     if ChannelState::channel() == Channel::Integration {
-        return None;
+        return;
+    }
+    let Some(legacy) = legacy_app_group_state_dir() else {
+        return;
+    };
+    let target = state_dir();
+    if target.as_os_str().is_empty() || target == legacy {
+        return;
+    }
+    if let Err(err) = std::fs::create_dir_all(&target) {
+        log::warn!("Could not create {} for state migration: {err}", target.display());
+        return;
     }
 
-    #[cfg(target_os = "macos")]
-    if let Some(app_group_root) = app_group_container_path() {
-        // The macOS project_path is the bundle ID (i.e. `dev.warp.Warp-Stable`).
-        let project_dirs = project_dirs()?;
-        return Some(
-            app_group_root
-                .join("Library/Application Support")
-                .join(project_dirs.project_path()),
+    let Ok(entries) = std::fs::read_dir(&legacy) else {
+        return;
+    };
+    let mut moved = 0usize;
+    for entry in entries.flatten() {
+        let dest = target.join(entry.file_name());
+        if dest.exists() {
+            continue;
+        }
+        match std::fs::rename(entry.path(), &dest) {
+            Ok(()) => moved += 1,
+            Err(err) => log::warn!(
+                "Could not move {} out of the legacy app group container: {err}",
+                entry.path().display()
+            ),
+        }
+    }
+    if moved > 0 {
+        log::info!(
+            "Moved {moved} state entries out of Warp's app group container into {}",
+            target.display()
         );
     }
-
-    None
 }
 
 /// Returns the path to the directory where non-portable application state
@@ -397,7 +459,7 @@ pub fn app_group_container_path() -> Option<PathBuf> {
         // no usable container and secure_state_dir() returns None, which every caller already
         // handles by falling back to state_dir(). Left in place rather than deleted because it
         // is the only thing documenting what the group was.
-        let group_id = format!("{}.dev.warp", crate::macos::APPLE_TEAM_ID);
+        let group_id = format!("{}.dev.warp", crate::macos::LEGACY_WARP_APP_GROUP_TEAM_ID);
         let group_id = NSString::from_str(&group_id);
         // containerURLForSecurityApplicationGroupIdentifier always returns a value on macOS (unlike iOS).
         // We have to double-check that the path points to a directory we can actually use. In addition to

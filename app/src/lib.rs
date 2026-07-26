@@ -1076,6 +1076,17 @@ fn run_internal(mut launch_mode: LaunchMode) -> Result<()> {
     // cloud-sync behavior for this launch mode.
     ::settings::set_settings_mode(launch_mode.settings_mode());
 
+    // Rescue any state written to Warp's app group container by an earlier build, before anything
+    // opens the database.
+    //
+    // Upstream nests state inside that container, and on this fork it resolved only when Warp
+    // happened to be installed -- so the same build stored data in two different places depending
+    // on whether a different product was present, and the location could shift under the user if
+    // they installed or removed Warp later. `secure_state_dir` now always returns None, so this
+    // moves what is already there into Heddle's own directory.
+    #[cfg(target_os = "macos")]
+    warp_core::paths::migrate_legacy_app_group_state();
+
     let private_preferences = settings::init_private_user_preferences();
     let (public_preferences, startup_toml_parse_error) = settings::init_public_user_preferences();
 

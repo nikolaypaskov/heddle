@@ -703,8 +703,9 @@ if [[ $READ_PASSWORDS_FROM_ENV != true ]]; then
 fi
 
 if [[ $CODESIGN = true ]]; then
-  # TODO - does this need to change per user?  Seems like it's tied to the WARP_NOTARIZATION_PASSWORD password.
-  APPLE_TEAM_ID="2BBY89MBSN"
+  # Heddle's Apple team, not Warp's. This is the team the Developer ID Application certificate
+  # belongs to; signing with 2BBY89MBSN would fail, since that team is not ours.
+  APPLE_TEAM_ID="4STAAHTNCN"
   CODESIGN_KEYCHAIN_NAME="warp-codesign-keychain"
 
   echo "Starting codesigning..."

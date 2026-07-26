@@ -37,9 +37,20 @@ define_settings_group!(GeneralSettings, settings: [
         toml_path: "general.restore_session",
         description: "Whether to restore the previous session when Warp starts up.",
     },
+    // Launching at login is OPT-IN here, where upstream defaulted it on.
+    //
+    // A terminal that adds itself to your login items without asking is the wrong default for a
+    // fork whose entire pitch is that it does nothing behind your back. It also caused real
+    // trouble: the app self-registered whatever path it was launched from, so a build-tree copy
+    // ended up starting at login from a directory that gets deleted on every rebuild.
+    //
+    // Flipping the default also cleans up after itself. `maybe_register_app_as_login_item` calls
+    // `unregisterAndReturnError` when this is false, so anyone who was auto-added without asking
+    // has the entry removed on next launch, while anyone who set `general.login_item = true`
+    // explicitly keeps it -- an explicit value outranks a default.
     add_app_as_login_item: LoginItem {
         type: bool,
-        default: true,
+        default: false,
         supported_platforms: SupportedPlatforms::OR(
             Box::new(SupportedPlatforms::MAC),
             Box::new(SupportedPlatforms::WINDOWS),
@@ -48,7 +59,7 @@ define_settings_group!(GeneralSettings, settings: [
         surface: settings::SettingSurfaces::GUI,
         private: false,
         toml_path: "general.login_item",
-        description: "Whether to launch Warp automatically when you log in.",
+        description: "Whether to launch Heddle automatically when you log in. Off by default.",
     },
     // Records whether the app has been added as a login item.
     // If it has, we don't try to add it again unless the user explicitly

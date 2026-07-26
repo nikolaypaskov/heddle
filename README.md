@@ -28,6 +28,38 @@ $ ./script/heddle/verify-bundled-assets
 PASS: all 34 bundled binary assets match the reviewed manifest.
 ```
 
+## Download
+
+**macOS, Apple Silicon** — signed with a Developer ID and notarized by Apple, so it opens by
+double-click. No quarantine flag to clear, no security warning to click past.
+
+### [⬇ Download the latest release](https://github.com/nikolaypaskov/heddle/releases/latest)
+
+| | |
+|---|---|
+| `Heddle-aarch64-apple-darwin.app.zip` | the app — **start here** |
+| `heddle-aarch64-apple-darwin.tar.gz` | terminal-only frontend (`heddle-tui`), no window |
+
+```bash
+# Verify, extract, run. Use ditto: Finder and unzip can strip the signature,
+# after which macOS refuses to launch the app.
+shasum -a 256 -c Heddle-aarch64-apple-darwin.app.zip.sha256
+ditto -x -k Heddle-aarch64-apple-darwin.app.zip .
+open Heddle.app
+```
+
+**Before you decide it is for you**, two things are true of this build and are not going to
+surprise you later:
+
+- **The built-in agent cannot send requests.** Its transport needs a server, and this build has
+  none. Third-party CLI agents — Claude Code, Codex — *do* work, as local child processes reading
+  credentials from your environment.
+- **Apple Silicon only.** No Intel Mac, no Windows. Linux x86_64 is built by CI but not published
+  as a signed artefact.
+
+Building from source is a supported path and gives you provenance yourself — see
+[Building](#building-from-source-instead) below.
+
 ## At a glance
 
 | Heddle **is** | Heddle **is not** |
@@ -183,9 +215,13 @@ Honest caveats:
   | test fixtures, telemetry event ids | not user-visible |
 
   About 1,100 sit outside tests and telemetry; the user-visible remainder is a few hundred and is
-  being worked down. On Linux and Windows the data directory is still Warp-named, because those
-  platforms derive it from an application id whose default is unchanged — that holds real settings,
-  so it needs a migration rather than a rename.
+  being worked down.
+
+  An earlier version of this section claimed the Linux and Windows data directories were still
+  Warp-named. That was wrong: it was read off test assertions that exercise the crate's default
+  application id rather than the shipped binaries, both of which set their own. The default has
+  since been corrected to match them, so no supported configuration writes to a Warp-named
+  directory.
 - Observed behaviour on a logged-out cold start is below; it is evidence, not proof.
 
 | Unmodified upstream did | Heddle |
