@@ -317,14 +317,23 @@ impl<T: SyncQueueTaskTrait> SyncQueue<T> {
     /// causing receivers to resolve to `Err(Canceled)`. The currently executing task
     /// (if any) is aborted via its `AbortHandle`.
     pub fn cancel_all(&self) {
-        // Abort the currently executing task, if any.
+        // ORDER IS LOAD-BEARING: drain the map BEFORE aborting the running task.
+        //
+        // These are two separate locks, so the processor loop can run between them.
+        // Aborting first frees the loop to take its next id off the channel and
+        // `remove` it from the map while the map is still populated -- so that task
+        // executes and delivers a result, after cancel_all was called. Draining first
+        // means the loop's `remove` finds nothing and skips the task instead.
+        //
+        // Dropping the QueuedTask entries drops their oneshot senders, which is what
+        // resolves the receivers to `Err(Canceled)`.
+        self.task_map.lock().unwrap().clear();
+
+        // Now abort the in-flight task. Anything the loop picks up afterwards is
+        // already gone from the map.
         if let Some(handle) = self.active_task_handle.lock().unwrap().take() {
             handle.abort();
         }
-
-        // Drain all pending tasks from the map. Dropping the QueuedTask entries
-        // drops their oneshot senders, signaling cancellation to receivers.
-        self.task_map.lock().unwrap().clear();
     }
 
     async fn retry_with_backoff<Fut>(
