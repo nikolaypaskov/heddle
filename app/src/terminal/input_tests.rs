@@ -406,17 +406,23 @@ pub async fn add_window_with_bootstrapped_terminal_and_window_id(
 ) -> (WindowId, ViewHandle<TerminalView>) {
     let tips_model = app.add_model(|_| TipsCompleted::default());
 
-    let shell_starter_source = ShellStarter::init(Default::default())
-        .expect("Could not create a shell starter source or wsl name")
-        .to_shell_starter_source()
-        .await
-        .expect("Could not create a shell starter source");
-    let shell_type = shell_starter_source.shell_type();
-
-    let session_info = session_info
-        .unwrap_or_else(SessionInfo::new_for_test)
-        .with_session_type(BootstrapSessionType::Local)
-        .with_shell_type(shell_type);
+    // Only derive the shell type from the host when the caller didn't bring their own
+    // `SessionInfo`. Applying it unconditionally silently discarded `with_shell_type(..)`, so a
+    // test asking for Zsh got whatever shell the machine happened to run -- which is why
+    // `test_histignorespace_support_in_zsh` passed on macOS (zsh) and failed on CI (bash).
+    let session_info = match session_info {
+        Some(session_info) => session_info.with_session_type(BootstrapSessionType::Local),
+        None => {
+            let shell_starter_source = ShellStarter::init(Default::default())
+                .expect("Could not create a shell starter source or wsl name")
+                .to_shell_starter_source()
+                .await
+                .expect("Could not create a shell starter source");
+            SessionInfo::new_for_test()
+                .with_session_type(BootstrapSessionType::Local)
+                .with_shell_type(shell_starter_source.shell_type())
+        }
+    };
     let history_file_commands = history_file_commands.unwrap_or_default();
 
     let (window_id, terminal) = app.add_window(WindowStyle::NotStealFocus, move |ctx| {
@@ -2700,23 +2706,30 @@ fn test_histignorespace_support_in_zsh() {
             assert!(history.commands(session_id).unwrap().is_empty());
         });
 
-        // Record the shell state the session ended up with, for the failure message below.
+        // Assert the session actually got the shell this test asked for, before asserting
+        // anything about its behaviour.
         //
-        // This test constructs a Zsh session with `histignorespace` explicitly, so it should
-        // be host-independent -- but it fails on the CI Linux runner, where the assertion
-        // reports only that " ls" reached history and says nothing about why. The most likely
-        // explanation is that the session's shell is not the one the test asked for, and that
-        // is exactly what this records.
-        let shell_state = terminal.read(&app, |view, ctx| {
+        // `add_window_with_bootstrapped_terminal` used to overwrite the caller's shell type with
+        // the host's, so this test really checked "the machine runs zsh" -- true on macOS, false
+        // on the Linux CI runner, where the bare history assertion below reported only that " ls"
+        // was recorded and said nothing about why. Checking the precondition separately means a
+        // regression here names itself instead of masquerading as a history bug.
+        terminal.read(&app, |view, ctx| {
             let sessions = view.sessions_model();
-            sessions.as_ref(ctx).get(session_id).map(|s| {
-                format!(
-                    "shell_type={:?} options={:?} should_add_command_to_history(\" ls\")={}",
-                    s.shell().shell_type(),
-                    s.shell().options(),
-                    s.shell().should_add_command_to_history(" ls")
-                )
-            })
+            let session = sessions
+                .as_ref(ctx)
+                .get(session_id)
+                .expect("session should exist");
+            assert_eq!(
+                session.shell().shell_type(),
+                ShellType::Zsh,
+                "session should use the shell this test asked for, not the host's"
+            );
+            assert!(
+                !session.shell().should_add_command_to_history(" ls"),
+                "zsh with histignorespace should skip space-prefixed commands; options={:?}",
+                session.shell().options()
+            );
         });
 
         // Run "cd" to populate the history buffer.
@@ -2777,7 +2790,7 @@ fn test_histignorespace_support_in_zsh() {
                     .collect_vec(),
                 vec!["cd"],
                 "a command with a leading space must not reach history under \
-                 zsh histignorespace.\n---- Shell the session actually has ----\n{shell_state:?}"
+                 zsh histignorespace"
             );
         });
     });
