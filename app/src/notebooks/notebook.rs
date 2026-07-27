@@ -242,6 +242,8 @@ pub struct NotebookView {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NotebookEvent {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     RunWorkflow {
         workflow: Arc<WorkflowType>,
         source: WorkflowSource,
@@ -263,6 +265,8 @@ impl From<PaneEvent> for NotebookEvent {
 
 #[derive(Debug, Clone)]
 pub enum NotebookAction {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     Focus,
     ToggleMode,
     Close,
@@ -2236,6 +2240,9 @@ impl TypedActionView for NotebookView {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
+            NotebookAction::ViewInWarpDrive(id) => {
+                ctx.emit(NotebookEvent::ViewInWarpDrive(*id))
+            }
             NotebookAction::Focus => ctx.focus_self(),
             NotebookAction::ToggleMode => self.toggle_mode(ctx),
             NotebookAction::Close => ctx.emit(NotebookEvent::Pane(PaneEvent::Close)),

@@ -210,6 +210,8 @@ impl WorkflowEditorErrorState {
 
 #[derive(Debug, Clone)]
 pub enum WorkflowAction {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     AddArgument,
     ToggleViewMode,
     RunWorkflow,
@@ -230,6 +232,8 @@ pub enum WorkflowAction {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorkflowViewEvent {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     Pane(PaneEvent),
     CreatedWorkflow(SyncId),
     UpdatedWorkflow(SyncId),
@@ -2855,10 +2859,11 @@ impl View for WorkflowView {
                 Container::new(render_breadcrumbs(
                     self.breadcrumbs.clone(),
                     appearance,
-                    // Non-interactive: `ContainingObject::enabled()` is false, so this
-                    // never fires. The trail shows WHERE the object lives; the click used
-                    // to open Warp Drive, which no longer exists.
-                    |_ctx, _app, _breadcrumb| {},
+                    |ctx, _, breadcrumb| {
+                        ctx.dispatch_typed_action(WorkflowAction::ViewInWarpDrive(
+                            breadcrumb.kind.into_item_id(),
+                        ));
+                    },
                 ))
                 .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
                 .with_vertical_margin(vertical_margin / 2.)
@@ -3019,6 +3024,9 @@ impl TypedActionView for WorkflowView {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
+            WorkflowAction::ViewInWarpDrive(id) => {
+                ctx.emit(WorkflowViewEvent::ViewInWarpDrive(*id))
+            }
             WorkflowAction::AddArgument => self.add_argument(ctx),
             WorkflowAction::ToggleViewMode => self.toggle_view_mode(ctx),
             WorkflowAction::CloseUnsavedDialog => self.hide_unsaved_changes_dialog(ctx),

@@ -501,6 +501,8 @@ pub enum Event {
     OpenWorkflowModalWithCommand(String),
     // Tell the workspace to open the workflow for edit.
     OpenCloudWorkflowForEdit(SyncId),
+    // Tell the workspace to reveal an object in the Drive panel. Local navigation.
+    ViewInWarpDrive(WarpDriveItemId),
     // Tell the workspace to open the workflow modal with an unsaved workflow.
     OpenWorkflowModalWithTemporary(Box<Workflow>),
     OpenPromptEditor,

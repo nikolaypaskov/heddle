@@ -230,6 +230,9 @@ fn handle_notebook_event(
             cloud_object_type_and_id,
             new_space,
         } => move_to_space(*cloud_object_type_and_id, *new_space, ctx),
+        NotebookEvent::ViewInWarpDrive(id) => {
+            ctx.emit(crate::pane_group::Event::ViewInWarpDrive(*id))
+        }
         NotebookEvent::Pane(pane_event) => group.handle_pane_event(pane_id, pane_event, ctx),
         NotebookEvent::AttachPlanAsContext(ai_document_id) => {
             ctx.emit(crate::pane_group::Event::AttachPlanAsContext {

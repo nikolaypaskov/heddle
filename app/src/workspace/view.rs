@@ -14823,6 +14823,9 @@ impl Workspace {
                     &OpenWarpDriveObjectSettings::default(),
                     ctx,
                 ),
+            pane_group::Event::ViewInWarpDrive(id) => {
+                self.view_in_and_focus_warp_drive(*id, ctx);
+            }
             pane_group::Event::OpenWorkflowModalWithTemporary(workflow) => {
                 self.open_workflow_with_temporary(*workflow.clone(), ctx)
             }

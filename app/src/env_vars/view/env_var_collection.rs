@@ -303,6 +303,8 @@ pub struct EnvVarCollectionView {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EnvVarCollectionEvent {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     Pane(PaneEvent),
     UpdatedEnvVarCollection(SyncId),
     Invoke(EnvVarCollectionType),
@@ -312,6 +314,8 @@ pub struct VariableRowIndex(pub usize);
 
 #[derive(Debug, Clone)]
 pub enum EnvVarCollectionAction {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     // Core actions
     SaveVariables,
     Invoke,
@@ -1285,10 +1289,13 @@ impl View for EnvVarCollectionView {
                         Container::new(render_breadcrumbs(
                             self.breadcrumbs.clone(),
                             appearance,
-                            // Non-interactive: `ContainingObject::enabled()` is false.
-                            // The trail shows WHERE the collection lives; the click used to
-                            // open Warp Drive, which no longer exists.
-                            |_ctx, _app, _breadcrumb| {},
+                            |ctx, _, breadcrumb| {
+                                ctx.dispatch_typed_action(
+                                    EnvVarCollectionAction::ViewInWarpDrive(
+                                        breadcrumb.kind.into_item_id(),
+                                    ),
+                                );
+                            },
                         ))
                         .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
                         .with_vertical_margin(CORE_VERTICAL_MARGIN / 2.)
@@ -1461,6 +1468,9 @@ impl TypedActionView for EnvVarCollectionView {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
+            EnvVarCollectionAction::ViewInWarpDrive(id) => {
+                ctx.emit(EnvVarCollectionEvent::ViewInWarpDrive(*id))
+            }
             EnvVarCollectionAction::SaveVariables => self.save_env_var_collection(ctx),
             EnvVarCollectionAction::Invoke => self.invoke_env_var_collection(ctx),
             EnvVarCollectionAction::Close => self.close(ctx),

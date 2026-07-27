@@ -183,6 +183,9 @@ fn handle_workflow_event(
     ctx: &mut ViewContext<PaneGroup>,
 ) {
     match event {
+        WorkflowViewEvent::ViewInWarpDrive(id) => {
+            ctx.emit(crate::pane_group::Event::ViewInWarpDrive(*id))
+        }
         WorkflowViewEvent::Pane(pane_event) => group.handle_pane_event(pane_id, pane_event, ctx),
         WorkflowViewEvent::RunWorkflow {
             workflow,

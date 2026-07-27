@@ -64,10 +64,11 @@ impl DetailsBar {
                 render_breadcrumbs(
                     self.breadcrumbs.iter().cloned(),
                     appearance,
-                    // Non-interactive: `ContainingObject::enabled()` is false, so this
-                    // never fires. The trail shows WHERE the object lives; the click used
-                    // to open Warp Drive, which no longer exists.
-                    |_ctx, _app, _breadcrumb| {},
+                    |ctx, _, breadcrumb| {
+                        ctx.dispatch_typed_action(NotebookAction::ViewInWarpDrive(
+                            breadcrumb.kind.into_item_id(),
+                        ));
+                    },
                 ),
             )
             .finish(),
