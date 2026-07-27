@@ -31,6 +31,7 @@ use crate::channel::Channel;
 use crate::features::FeatureFlag;
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::TelemetryEvent;
+use crate::settings::{UpdateConsent, UpdateSettings};
 use crate::workspace::Workspace;
 use crate::{ChannelState, send_telemetry_from_ctx, send_telemetry_sync_from_app_ctx};
 
@@ -248,6 +249,14 @@ impl AutoupdateState {
     /// The caller is responsible for checking that we _should_ check for an update. Generally, the
     /// only caller should be [`Self::try_execute_request`].
     fn check_for_update(&mut self, request_type: RequestType, ctx: &mut ModelContext<Self>) {
+        // Consent first, before any work is scheduled. Read here rather than inside the
+        // spawned task so that declining costs nothing at all -- no task, no stage change,
+        // no error to log on every poll.
+        let consent = *UpdateSettings::as_ref(ctx).check_for_updates;
+        if !consent.should_check() {
+            return;
+        }
+
         let current_date = chrono::Local::now().date_naive();
         let is_daily = self.should_make_daily_request(
             request_type,
@@ -263,13 +272,15 @@ impl AutoupdateState {
         self.stage = AutoupdateStage::CheckingForUpdate;
         ctx.notify();
 
-        let server_api = self.server_api.clone();
+        // No `server_api` here any more: the manifest comes from GitHub over plain HTTPS,
+        // not from Warp's `/client_version` endpoint. The field is still held by the struct
+        // for the download path.
         ctx.spawn(
             async move {
                 let update_id = new_update_id();
                 let channel = ChannelState::channel();
                 log::info!("Checking for update on channel {channel}. Update id is {update_id}");
-                let version = fetch_version(&channel, is_daily, &update_id, server_api)
+                let version = fetch_version(&channel, consent)
                     .await
                     .context("Error checking for new version");
                 report_if_error!(version);
@@ -768,29 +779,27 @@ fn new_update_id() -> String {
 }
 
 /// Fetch the current version on the given channel.
-async fn fetch_version(
-    channel: &Channel,
-    is_daily: bool,
-    update_id: &str,
-    server_api: Arc<ServerApi>,
-) -> Result<VersionInfo> {
-    let versions = fetch_channel_versions(update_id, server_api.clone(), false, is_daily).await?;
+///
+/// The caller must already have checked consent; this asserts it rather than assuming, so a
+/// future call site cannot reach the network by forgetting.
+async fn fetch_version(channel: &Channel, consent: UpdateConsent) -> Result<VersionInfo> {
+    let Some(versions) = fetch_channel_versions(consent).await? else {
+        anyhow::bail!("no update check was permitted");
+    };
 
     let channel_version = match channel {
         Channel::Stable => versions.stable,
         Channel::Preview => versions.preview,
         Channel::Dev => versions.dev,
-        Channel::Integration | Channel::Local | Channel::Oss => {
-            // These channels don't ship release artifacts, so there's no
-            // version to fetch. This branch is normally unreachable because
-            // `AutoupdateState::register` gates the poll loop on the
-            // `Autoupdate` feature flag, but builds (e.g. local wasm bundles)
-            // can end up with `Autoupdate` enabled while running on one of
-            // these channels. Return an error rather than panicking so the
-            // poll loop just logs and bails.
-            anyhow::bail!(
-                "Local, integration, and open-source channel binaries don't support autoupdate"
-            );
+        // Heddle ships on `Oss` and publishes one release, mirrored into all three channel
+        // slots of the manifest. Upstream bailed here because the OSS build had no release
+        // artifacts; this fork does, so reading the stable slot is the correct behaviour
+        // rather than a workaround.
+        Channel::Oss => versions.stable,
+        Channel::Integration | Channel::Local => {
+            // These genuinely ship no release artifacts. Return an error rather than
+            // panicking so the poll loop just logs and bails.
+            anyhow::bail!("Local and integration channel binaries don't support autoupdate");
         }
     };
     let version_info = channel_version.version_info();
