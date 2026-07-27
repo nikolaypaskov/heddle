@@ -73,6 +73,7 @@ pub struct CustomizeUISlide {
     chip_conversation_mouse: MouseStateHandle,
     chip_file_explorer_mouse: MouseStateHandle,
     chip_global_search_mouse: MouseStateHandle,
+    chip_drive_mouse: MouseStateHandle,
     // Buttons
     back_button: button::Button,
     next_button: button::Button,
@@ -108,6 +109,7 @@ impl CustomizeUISlide {
             chip_conversation_mouse: MouseStateHandle::default(),
             chip_file_explorer_mouse: MouseStateHandle::default(),
             chip_global_search_mouse: MouseStateHandle::default(),
+            chip_drive_mouse: MouseStateHandle::default(),
             back_button: button::Button::default(),
             next_button: button::Button::default(),
             scroll_state: ClippedScrollStateHandle::new(),
@@ -313,11 +315,27 @@ impl CustomizeUISlide {
                 })),
             });
 
-            // No Warp Drive chip. Offering it here would invite the user to switch on a panel
-            // that `WarpDriveSettings::is_warp_drive_enabled` refuses to show anyway, since it
-            // requires an account this fork does not have. The `ToolsPanelSubSetting::WarpDrive`
-            // variant and its `show_warp_drive` model field stay: they are still matched
-            // elsewhere in this slide, and removing them is a wider change than this slice.
+            // The Drive chip was dropped from here once, because
+            // `WarpDriveSettings::is_warp_drive_enabled` would refuse to show the panel it
+            // switches on. That refusal was a constant account check, not a property of the
+            // feature; with it removed the panel appears, so offering the chip is honest again.
+            chips.push(ChipSpec {
+                label: "Drive",
+                is_enabled: ui.show_warp_drive,
+                mouse_state: self.chip_drive_mouse.clone(),
+                on_click: Box::new(|ctx, _, _| {
+                    ctx.dispatch_typed_action(CustomizeSlideAction::ToggleToolsSubSetting {
+                        setting: ToolsPanelSubSetting::WarpDrive,
+                    });
+                }),
+                on_hover: Some(Box::new(|is_hovered, ctx, _, _| {
+                    if is_hovered {
+                        ctx.dispatch_typed_action(CustomizeSlideAction::HoverToolsChip {
+                            setting: ToolsPanelSubSetting::WarpDrive,
+                        });
+                    }
+                })),
+            });
         }
 
         render_toggle_card(

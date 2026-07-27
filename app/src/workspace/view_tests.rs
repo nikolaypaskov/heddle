@@ -4322,10 +4322,11 @@ fn test_pin_tab_on_grouped_tab_extracts_then_pins() {
 /// the tools panel with no way back).
 #[test]
 fn test_tools_panel_warp_drive_toggle_updates_available_views() {
-    // Force the non-anonymous path so `is_warp_drive_enabled` follows the
-    // `enable_warp_drive` setting rather than the auth state.
-    let _skip_anon_guard = FeatureFlag::SkipFirebaseAnonymousUser.override_enabled(false);
-
+    // No auth override here, deliberately. This test used to disable
+    // `SkipFirebaseAnonymousUser` so that `is_warp_drive_enabled` would follow the setting
+    // rather than the auth state -- which meant it exercised a path no shipped build takes,
+    // and passed while Drive was in fact invisible to every user. The account term is gone
+    // from that predicate, so the test now runs the same code the app does.
     App::test((), |mut app| async move {
         initialize_app(&mut app);
         let workspace = mock_workspace(&mut app);
