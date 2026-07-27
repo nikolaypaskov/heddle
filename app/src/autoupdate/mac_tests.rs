@@ -28,6 +28,11 @@ fn fake_bundle(dir: &Path, version: &str) -> PathBuf {
     <string>{version}</string>
     <key>CFBundleIdentifier</key>
     <string>dev.heddle.Heddle</string>
+    <!-- Required for `codesign` to treat Contents/MacOS/heddle as the bundle's main
+         executable. Without it codesign sees an unsigned SUBCOMPONENT and refuses, which
+         made the ad-hoc signing helper below fail before it could sign anything. -->
+    <key>CFBundleExecutable</key>
+    <string>heddle</string>
 </dict>
 </plist>
 "#
@@ -114,6 +119,93 @@ async fn a_bundle_carrying_an_unparseable_version_is_refused() {
     assert!(
         verify_bundle_is_newer(&app).await.is_err(),
         "an unparseable bundle version must be refused, not assumed newer"
+    );
+}
+
+/// A bundle carrying a REAL, VALID signature that is not ours: an ad-hoc signature.
+///
+/// This is the case the unsigned fixture cannot express. `codesign -v` succeeds on an ad-hoc
+/// bundle -- it is genuinely signed -- so a check that had lost its
+/// `-R=certificate leaf[subject.OU]` requirement would wave it through. That is exactly the
+/// regression worth guarding, because until 2026-07-26 that requirement named WARP's team
+/// identifier and would have accepted their builds and rejected ours.
+fn adhoc_signed_bundle(dir: &Path, version: &str) -> PathBuf {
+    let app = fake_bundle(dir, version);
+    std::fs::write(
+        app.join("Contents/MacOS/heddle"),
+        "#!/bin/sh\nexit 0\n",
+    )
+    .expect("write executable");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(
+            app.join("Contents/MacOS/heddle"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .expect("chmod");
+    }
+    let out = std::process::Command::new("/usr/bin/codesign")
+        .args(["--force", "--sign", "-"])
+        .arg(&app)
+        .output()
+        .expect("run codesign");
+    assert!(
+        out.status.success(),
+        "ad-hoc signing failed, so this test cannot say anything: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    app
+}
+
+#[tokio::test]
+async fn a_validly_signed_bundle_from_the_wrong_identity_is_rejected() {
+    // The discriminating case. An ad-hoc bundle IS validly signed, so this passes plain
+    // `codesign -v` and fails only because of the Developer ID requirement. Delete that
+    // requirement and this test goes green -- which is what makes it worth having, and what
+    // the unsigned fixture below cannot detect.
+    let dir = tempfile::tempdir().expect("temp dir");
+    let app = adhoc_signed_bundle(dir.path(), "0.3.2");
+
+    // Precondition: the bundle really is signed, so a failure below is about WHO signed it.
+    let plain = std::process::Command::new("/usr/bin/codesign")
+        .arg("-v")
+        .arg(&app)
+        .output()
+        .expect("run codesign");
+    assert!(
+        plain.status.success(),
+        "fixture is not validly signed, so this test would prove nothing: {}",
+        String::from_utf8_lossy(&plain.stderr)
+    );
+
+    assert!(
+        verify_code_signature("bundle", &app).await.is_err(),
+        "a bundle signed by someone other than this project must be rejected"
+    );
+}
+
+#[tokio::test]
+async fn a_signed_but_un_notarized_bundle_is_rejected() {
+    // Notarization is a SEPARATE Apple gate from signing. This bundle carries a valid
+    // signature and was never submitted to Apple, which is the shape of a build signed with a
+    // leaked key.
+    //
+    // BE HONEST ABOUT WHAT THIS DOES NOT COVER. `verify_notarization` requires two things:
+    // that `spctl` exits zero, AND that its assessment says `source=Notarized Developer ID`.
+    // An ad-hoc bundle fails the first, so the second is never exercised here -- verified by
+    // mutation: dropping the `source=` check entirely leaves every test in this file green.
+    //
+    // Covering it needs a bundle Gatekeeper ACCEPTS by some route other than notarization,
+    // which cannot be built without real signing credentials. So this test pins "un-notarized
+    // input is refused" and nothing more. The `source=` assertion is currently unguarded, and
+    // saying so is better than implying a coverage this does not have.
+    let dir = tempfile::tempdir().expect("temp dir");
+    let app = adhoc_signed_bundle(dir.path(), "0.3.2");
+
+    assert!(
+        super::verify_notarization("bundle", &app).await.is_err(),
+        "a signed but un-notarized bundle must not be installed"
     );
 }
 
