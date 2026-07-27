@@ -10,6 +10,13 @@ use crate::terminal::input::tests::{
 use crate::terminal::model::session::SessionInfo;
 use crate::themes::theme::AnsiColorIdentifier;
 
+thread_local! {
+    /// What the session's command discovery actually returned, so a failure can say whether
+    /// the styling logic is wrong or the machine simply reported a different command set.
+    static COMMAND_PROBE: std::cell::RefCell<Option<(usize, bool, bool)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 #[test]
 fn test_decorations_with_multibyte_chars() {
     App::test((), |mut app| async move {
@@ -40,6 +47,18 @@ fn test_decorations_with_multibyte_chars() {
                     // Wait until external commands have been loaded.
                     let session = sessions.get(session_id).expect("session should exist");
                     warpui::r#async::block_on(session.load_external_commands());
+                    // Recorded for the failure message below.
+                    //
+                    // This test styles `echo` as a known command and `echoo` as unknown, and
+                    // "known" here means "present in the session's top-level command list",
+                    // which is discovered from the machine the test runs on. When that
+                    // discovery returns a different set -- as it does on CI -- the assertion
+                    // fails with a wall of TextStyle structs that say nothing about why.
+                    let all: Vec<&str> = session.top_level_commands().collect();
+                    COMMAND_PROBE.with(|p| {
+                        *p.borrow_mut() =
+                            Some((all.len(), all.contains(&"echo"), all.contains(&"echoo")));
+                    });
                 });
             session_id
         });
@@ -87,9 +106,12 @@ fn test_decorations_with_multibyte_chars() {
             ),
             (" hello world".to_string(), Default::default()),
         ];
+        let probe = COMMAND_PROBE.with(|p| *p.borrow());
         assert_eq!(
             text_style_runs, expected,
-            "---- Expected ----\n{expected:#?}\n---- Actual ----\n{text_style_runs:#?}\n"
+            "---- Expected ----\n{expected:#?}\n---- Actual ----\n{text_style_runs:#?}\n\
+             ---- Command discovery on this machine ----\n{probe:?}\n\
+             (total top-level commands, `echo` present, `echoo` present)\n"
         );
     });
 }
