@@ -72,8 +72,12 @@ Warp's paid features ran on Warp's servers. Removing the sign-in screen does not
 machine — **this is not a way to get Warp's paid plan for free.** What you get instead is a terminal
 that works entirely on its own.
 
-Removed: sign-in and accounts, Warp Drive cloud sync, usage analytics, crash reporting, remote
-configuration, billing and upgrade prompts, and every `warp.dev` address.
+Removed: sign-in and accounts, Drive's cloud sync and sharing, usage analytics, crash reporting,
+remote configuration, billing and upgrade prompts, and every `warp.dev` address.
+
+**Drive itself stayed.** Its workflows, notebooks and environment variables are local information,
+so removing the cloud sync it used to travel over did not mean removing the library. It is on by
+default and everything in it lives on your machine.
 
 ## How much of it works today
 
@@ -82,8 +86,9 @@ configuration, billing and upgrade prompts, and every `warp.dev` address.
 | The terminal | ✅ Works |
 | Themes, settings, keyboard shortcuts | ✅ Works |
 | Claude Code, Codex and other CLI agents | ✅ Works |
+| Drive — workflows, notebooks, environment variables | ✅ Works, stored on your machine |
 | Warp's built-in AI agent | ❌ Needs Warp's server |
-| Cloud sync / Warp Drive | ❌ Removed on purpose |
+| Cloud sync and object sharing | ❌ Removed on purpose |
 | Windows, Intel Mac | ❌ Not built |
 
 Heddle is a terminal today, not an AI environment. A replacement agent that talks to a local
