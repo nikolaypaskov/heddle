@@ -77,6 +77,25 @@ fn initialize_app(
     cached_objects: Vec<Box<dyn CloudObject>>,
     cloud_object_server_api_mock: Arc<impl ObjectClient>,
 ) {
+    initialize_app_with_auth(
+        app,
+        cached_objects,
+        cloud_object_server_api_mock,
+        AuthStateProvider::new_for_test,
+    )
+}
+
+/// As [`initialize_app`], but lets the caller choose the auth state.
+///
+/// A Heddle binary has no accounts at all, so `AuthStateProvider::new_logged_out_for_test`
+/// is the state that actually ships. Tests that exercise account-gated predicates need it:
+/// with the logged-in test user those predicates take a branch no real user can reach.
+fn initialize_app_with_auth(
+    app: &mut App,
+    cached_objects: Vec<Box<dyn CloudObject>>,
+    cloud_object_server_api_mock: Arc<impl ObjectClient>,
+    auth_state_provider: fn() -> AuthStateProvider,
+) {
     let team_client_mock = Arc::new(MockTeamClient::new());
     let workspace_client_mock = Arc::new(MockWorkspaceClient::new());
 
@@ -84,7 +103,7 @@ fn initialize_app(
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
-    app.add_singleton_model(|_| AuthStateProvider::new_for_test());
+    app.add_singleton_model(move |_| auth_state_provider());
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
     app.add_singleton_model(AuthManager::new_for_test);
     app.add_singleton_model(|ctx| {
@@ -1983,4 +2002,105 @@ fn active_object_uids_matches_naive_with_empty_model() {
             assert!(active.is_empty());
         });
     });
+}
+
+/// A locally-created object stays editable when there is no account.
+///
+/// `CloudViewModel::object_editability` gates on `is_anonymous_or_logged_out()`, which is
+/// permanently true in a build with no accounts. That is the shape behind four shipped bugs
+/// in this fork: a predicate that becomes constant does not open a capability, it closes one.
+/// Here the gate is harmless -- but only because of the next test.
+#[test]
+fn a_local_object_is_editable_without_an_account() {
+    App::test((), |mut app| async move {
+        initialize_app_with_auth(
+            &mut app,
+            Vec::new(),
+            Arc::new(base_mock_cloud_object_server_api()),
+            AuthStateProvider::new_logged_out_for_test,
+        );
+
+        let notebook_id = SyncId::ServerId(123.into());
+        CloudModel::handle(&app).update(&mut app, |cloud_model, _ctx| {
+            cloud_model.add_object(notebook_id, local_notebook(notebook_id));
+        });
+
+        let editability = CloudViewModel::handle(&app).read(&app, |view_model, ctx| {
+            view_model.object_editability(&notebook_id.uid(), ctx)
+        });
+        assert!(
+            editability.can_edit(),
+            "a locally-created notebook must be editable with no account signed in; \
+             got {editability:?}. If this fails, every notebook, workflow and env-var \
+             collection in the app just became read-only."
+        );
+    });
+}
+
+/// Why the test above holds: `SharedWithMe` must stay disabled.
+///
+/// With it enabled and no account, `owner_to_space()` compares the object's owner against
+/// `AuthState::user_id()`, which is `None`, so no object matches and every one lands in
+/// `Space::Shared`. Shared objects start at `View` access and are raised only by guest ACLs
+/// or a creator uid -- both of which arrive from the server this build never reaches. The
+/// result is that every local object becomes read-only.
+///
+/// This test asserts that failure mode deliberately. It is the mechanism that makes the
+/// dormant account gate in `object_editability` safe, so if someone re-enables the flag,
+/// this test tells them what they just broke and the test above tells them the cost.
+#[test]
+fn enabling_shared_with_me_without_a_server_makes_local_objects_read_only() {
+    let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
+    App::test((), |mut app| async move {
+        initialize_app_with_auth(
+            &mut app,
+            Vec::new(),
+            Arc::new(base_mock_cloud_object_server_api()),
+            AuthStateProvider::new_logged_out_for_test,
+        );
+
+        let notebook_id = SyncId::ServerId(123.into());
+        CloudModel::handle(&app).update(&mut app, |cloud_model, _ctx| {
+            cloud_model.add_object(notebook_id, local_notebook(notebook_id));
+        });
+
+        let (space, editability) = CloudViewModel::handle(&app).read(&app, |view_model, ctx| {
+            (
+                view_model.object_space(&notebook_id.uid(), ctx),
+                view_model.object_editability(&notebook_id.uid(), ctx),
+            )
+        });
+        assert_eq!(
+            space,
+            Some(Space::Shared),
+            "with no account, an owned object cannot be matched to the current user"
+        );
+        assert!(
+            !editability.can_edit(),
+            "this documents the hazard; if it starts passing, SharedWithMe was made safe \
+             without a server and this test should be replaced rather than deleted"
+        );
+    });
+}
+
+/// A notebook owned by the local user, as one created in this build would be.
+fn local_notebook(id: SyncId) -> CloudNotebook {
+    CloudNotebook::new(
+        id,
+        CloudNotebookModel {
+            title: "Local Notebook".to_string(),
+            data: "Hello".to_string(),
+            ai_document_id: None,
+            conversation_id: None,
+        },
+        CloudObjectMetadata::new_from_server(mock_server_metadata()),
+        CloudObjectPermissions {
+            owner: Owner::User {
+                user_uid: UserUid::new(TEST_USER_UID),
+            },
+            guests: Vec::new(),
+            permissions_last_updated_ts: None,
+            anyone_with_link: None,
+        },
+    )
 }
