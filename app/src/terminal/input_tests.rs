@@ -2700,6 +2700,25 @@ fn test_histignorespace_support_in_zsh() {
             assert!(history.commands(session_id).unwrap().is_empty());
         });
 
+        // Record the shell state the session ended up with, for the failure message below.
+        //
+        // This test constructs a Zsh session with `histignorespace` explicitly, so it should
+        // be host-independent -- but it fails on the CI Linux runner, where the assertion
+        // reports only that " ls" reached history and says nothing about why. The most likely
+        // explanation is that the session's shell is not the one the test asked for, and that
+        // is exactly what this records.
+        let shell_state = terminal.read(&app, |view, ctx| {
+            let sessions = view.sessions_model();
+            sessions.as_ref(ctx).get(session_id).map(|s| {
+                format!(
+                    "shell_type={:?} options={:?} should_add_command_to_history(\" ls\")={}",
+                    s.shell().shell_type(),
+                    s.shell().options(),
+                    s.shell().should_add_command_to_history(" ls")
+                )
+            })
+        });
+
         // Run "cd" to populate the history buffer.
         let input = terminal.read(&app, |view, _| view.input().clone());
         input.update(&mut app, |input, ctx| {
@@ -2756,7 +2775,9 @@ fn test_histignorespace_support_in_zsh() {
                     .into_iter()
                     .map(|entry| entry.command.as_str())
                     .collect_vec(),
-                vec!["cd"]
+                vec!["cd"],
+                "a command with a leading space must not reach history under \
+                 zsh histignorespace.\n---- Shell the session actually has ----\n{shell_state:?}"
             );
         });
     });
