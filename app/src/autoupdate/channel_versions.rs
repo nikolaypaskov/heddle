@@ -19,6 +19,24 @@ const MANIFEST_URL: &str =
 /// at a staging manifest.
 pub(super) const LOCAL_MANIFEST_PATH_VAR: &str = "HEDDLE_CHANNEL_VERSIONS_PATH";
 
+/// A client that sends nothing about this machine beyond what HTTPS requires.
+///
+/// Deliberately NOT `http_client::Client`. That wrapper calls `add_warp_http_headers` on
+/// every native request -- `include_warp_http_headers` returns `true` unconditionally off
+/// wasm -- which attaches `x-warp-client-id` and the running app version. Sending a stable
+/// client identifier to GitHub on every launch is precisely what this feature promised not
+/// to do, and using the house client would have done it silently.
+///
+/// The User-Agent is a fixed string with no version in it. Something must be sent, and a
+/// constant reveals only "a Heddle build asked", where a versioned one would tell GitHub
+/// which release each IP is running.
+fn manifest_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent("Heddle")
+        .build()
+        .context("Failed to build the update-check HTTP client")
+}
+
 /// Fetch the release manifest, if the user has agreed to that.
 ///
 /// `Ok(None)` means no check was permitted. That is not a failure, and the caller must not
@@ -48,7 +66,7 @@ pub async fn fetch_channel_versions(consent: UpdateConsent) -> Result<Option<Cha
         ));
     }
 
-    let response = http_client::Client::new()
+    let response = manifest_client()?
         .get(MANIFEST_URL)
         .timeout(FETCH_CHANNEL_VERSIONS_TIMEOUT)
         .send()

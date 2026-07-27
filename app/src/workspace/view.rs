@@ -20661,12 +20661,17 @@ impl Workspace {
             banner_type: WorkspaceBanner::UpdateConsentPrompt,
             severity: BannerSeverity::Warning,
             heading: Some("Check for updates automatically?".to_owned()),
-            // Says exactly what is revealed and to whom. "Reveals your IP address to GitHub
-            // and nothing else" is the honest description of a plain HTTPS GET for a public
-            // release asset: no identifier is sent, and there is no telemetry to send.
-            description: "Heddle can check GitHub for new releases. This reveals your IP \
-                          address to GitHub and nothing else — no identifier, no usage data, \
-                          no telemetry. You can change this any time in Settings."
+            // Say what is actually sent, not what sounds best.
+            //
+            // An earlier draft claimed the request revealed "your IP address and nothing
+            // else — no identifier". That was false: the fetch used `http_client::Client`,
+            // which attaches `x-warp-client-id` and the app version to every native
+            // request. The client is now a bare reqwest with a fixed, version-less
+            // User-Agent, and the wording below describes that rather than an ideal.
+            description: "Heddle can check GitHub for new releases. The request carries no \
+                          identifier, no account and no usage data — GitHub sees your IP \
+                          address and that a Heddle build asked for the release list. You \
+                          can change this any time in Settings."
                 .to_owned(),
             secondary_button: Some(WorkspaceBannerButtonDetails {
                 text: "No".to_owned(),

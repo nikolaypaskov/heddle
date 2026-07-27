@@ -4492,6 +4492,19 @@ fn answering_yes_stops_the_prompt_and_permits_checking() {
                 UpdateSettings::as_ref(ctx).check_for_updates.should_check(),
                 "answering yes must permit the check"
             );
+            // Persisting the answer is not enough: the user just asked to be told about
+            // updates, and the poll loop's own cadence could be hours away. Without this
+            // assertion, deleting the immediate `manually_check_for_update` call would not
+            // fail any test.
+            // `stage` is useless here: requests are queued until `start_polling` runs, so it
+            // stays at its default `NoUpdateAvailable` -- indistinguishable from never having
+            // asked. The queue depth is the real observable, and it goes to zero if the
+            // `manually_check_for_update` call is deleted.
+            assert_eq!(
+                crate::autoupdate::AutoupdateState::as_ref(ctx).pending_request_count(),
+                1,
+                "answering yes must request a check now, not wait for the next poll"
+            );
         });
     });
 }

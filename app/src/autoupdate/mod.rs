@@ -226,6 +226,17 @@ impl AutoupdateState {
         );
     }
 
+    /// How many update checks are queued but not yet executed.
+    ///
+    /// Test-only. Requests are queued until `start_polling` runs, so in a unit test an
+    /// enqueued request is the only observable proof that a check was actually requested --
+    /// `stage` stays at its default `NoUpdateAvailable`, which is indistinguishable from
+    /// never having asked.
+    #[cfg(test)]
+    pub fn pending_request_count(&self) -> usize {
+        self.request_queue.len()
+    }
+
     /// User-initiated check for updates.
     pub fn manually_check_for_update(&mut self, ctx: &mut ModelContext<Self>) {
         self.enqueue_request(RequestType::ManualCheck, ctx);

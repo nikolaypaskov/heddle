@@ -123,3 +123,35 @@ async fn a_missing_manifest_file_is_an_error_not_a_panic() {
     unsafe { std::env::remove_var("HEDDLE_CHANNEL_VERSIONS_PATH") };
     assert!(got.is_err(), "an unreadable manifest must be an error");
 }
+
+/// The manifest fetch must not use the house HTTP client.
+///
+/// `http_client::Client` calls `add_warp_http_headers` on every native request --
+/// `include_warp_http_headers` returns `true` unconditionally off wasm -- attaching
+/// `x-warp-client-id` and the running app version. Sending a stable client identifier to
+/// GitHub on every launch is exactly what the consent copy promises does not happen.
+///
+/// This is a source-level ratchet because the alternative is standing up an HTTP server in a
+/// unit test to inspect headers. It is coarse, but it fails on the one edit that would
+/// reintroduce the problem: swapping the bare reqwest client back for the convenient one.
+#[test]
+fn the_manifest_fetch_does_not_use_the_warp_header_client() {
+    let source = include_str!("channel_versions.rs");
+    // Strip comments so the explanatory prose above the client does not trip its own guard.
+    let code: String = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        !code.contains("http_client::Client"),
+        "the update check must not go through http_client::Client: it attaches \
+         x-warp-client-id and the app version to every native request, which the consent \
+         copy promises it does not"
+    );
+    assert!(
+        code.contains("reqwest::Client::builder"),
+        "the update check should build its own client so the headers it sends are visible \
+         at the call site"
+    );
+}
