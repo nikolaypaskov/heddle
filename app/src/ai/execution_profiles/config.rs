@@ -476,7 +476,7 @@ struct ExecutionProfileFile {
     computer_use_model: Option<String>,
     #[schemars(description = "Optional maximum context window in tokens.")]
     context_window_limit: Option<u32>,
-    #[schemars(description = "Whether plans are automatically synced to Warp Drive.")]
+    #[schemars(description = "Whether plans are automatically saved to Drive.")]
     autosync_plans_to_warp_drive: bool,
     #[schemars(description = "Whether the web-search tool is available.")]
     web_search_enabled: bool,

@@ -279,7 +279,7 @@ impl Display for SettingsSection {
             SettingsSection::Keybindings => write!(f, "Keyboard shortcuts"),
             SettingsSection::MCPServers => write!(f, "MCP Servers"),
             SettingsSection::Scripting => write!(f, "Scripting"),
-            SettingsSection::WarpDrive => write!(f, "Warp Drive"),
+            SettingsSection::WarpDrive => write!(f, "Drive"),
             // Displayed as "Agent", not "Warp Agent": this is the label in the settings nav,
             // and AGPL grants the code rather than the trademark. The enum variant keeps its
             // name because renaming it would churn ~10 unrelated call sites for no user-visible
@@ -385,7 +385,7 @@ impl FromStr for SettingsSection {
             // existing API callers an InvalidParams they never used to get. Same reason "Oz"
             // and "WarpDrive" are still accepted below.
             "Heddlify" | "Warpify" => Ok(Self::Heddlify),
-            "WarpDrive" | "Warp Drive" => Ok(Self::WarpDrive),
+            "Drive" | "WarpDrive" | "Warp Drive" => Ok(Self::WarpDrive),
             // This page was called "Oz" at one point, keep for backward compatibility.
             // "Oz" and "Warp Agent" are earlier spellings kept for compatibility: this name is
             // persisted as the restored settings pane and accepted by the local-control API, so
@@ -1840,13 +1840,10 @@ impl SettingsView {
     fn handle_warp_drive_page_event(
         &mut self,
         event: &warp_drive_page::WarpDriveSettingsPageEvent,
-        ctx: &mut ViewContext<Self>,
+        _ctx: &mut ViewContext<Self>,
     ) {
-        match event {
-            warp_drive_page::WarpDriveSettingsPageEvent::SignUp => {
-                ctx.emit(SettingsViewEvent::SignupAnonymousUser)
-            }
-        }
+        // The Drive page's only event was `SignUp`. Its type is now uninhabited.
+        match *event {}
     }
 
     fn handle_ai_page_event(&mut self, event: &AISettingsPageEvent, ctx: &mut ViewContext<Self>) {

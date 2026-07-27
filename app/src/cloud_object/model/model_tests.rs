@@ -2030,7 +2030,7 @@ fn a_local_object_is_editable_without_an_account() {
         });
         assert!(
             editability.can_edit(),
-            "a locally-created notebook must be editable with no account signed in; \
+            "a locally-created notebook must be editable when there is no account; \
              got {editability:?}. If this fails, every notebook, workflow and env-var \
              collection in the app just became read-only."
         );
