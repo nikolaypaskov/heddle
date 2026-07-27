@@ -1428,23 +1428,63 @@ impl WorkflowModal {
         )
         .finish();
 
-        // The breadcrumb trail that used to head this modal showed which Warp Drive folder
-        // contained the workflow, and clicking a crumb navigated there. With no Drive there is no
-        // containing folder and nowhere to navigate to, so the header is now always the compact
-        // form that the new-workflow case already used.
+        // Two header shapes, as upstream had. When the workflow lives in a folder the trail
+        // is shown on its own row; a new workflow has no folder yet and gets the compact form.
+        //
+        // The crumbs are NOT interactive (`ContainingObject::enabled()` is false). Clicking
+        // one used to open the Warp Drive sidebar, which is gone -- but the folder itself is
+        // local, persisted in this machine's sqlite, so where a workflow lives is worth
+        // showing. An earlier revision removed the whole trail on the reasoning that there was
+        // "nowhere to navigate", which conflated the commercial destination with the useful
+        // information.
+        if let Some(breadcrumbs) = &self.breadcrumbs {
+            let rendered_breadcrumbs = breadcrumb::render_breadcrumbs(
+                breadcrumbs.clone(),
+                appearance,
+                |_ctx, _app, _object| {},
+            );
 
-        Container::new(
-            Flex::row()
-                .with_child(workflow_icon)
-                .with_child(workflow_title_description)
-                .with_child(self.render_header_menu_and_close(appearance))
-                .finish(),
-        )
-        .with_padding_left(MODAL_HORIZONTAL_PADDING)
-        .with_padding_right(MODAL_HORIZONTAL_PADDING)
-        .with_padding_top(MODAL_VERTICAL_PADDING)
-        .with_padding_bottom(MODAL_VERTICAL_PADDING)
-        .finish()
+            Container::new(
+                Flex::column()
+                    .with_child(
+                        Container::new(
+                            Flex::row()
+                                .with_main_axis_size(MainAxisSize::Max)
+                                .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                                .with_child(Shrinkable::new(1., rendered_breadcrumbs).finish())
+                                .with_child(self.render_header_menu_and_close(appearance))
+                                .finish(),
+                        )
+                        .with_vertical_margin(BREADCRUMBS_VERTICAL_MARGIN)
+                        .finish(),
+                    )
+                    .with_child(
+                        Flex::row()
+                            .with_child(workflow_icon)
+                            .with_child(workflow_title_description)
+                            .finish(),
+                    )
+                    .finish(),
+            )
+            .with_padding_left(MODAL_HORIZONTAL_PADDING)
+            .with_padding_right(MODAL_HORIZONTAL_PADDING)
+            .with_padding_top(MODAL_VERTICAL_PADDING)
+            .with_padding_bottom(MODAL_VERTICAL_PADDING)
+            .finish()
+        } else {
+            Container::new(
+                Flex::row()
+                    .with_child(workflow_icon)
+                    .with_child(workflow_title_description)
+                    .with_child(self.render_header_menu_and_close(appearance))
+                    .finish(),
+            )
+            .with_padding_left(MODAL_HORIZONTAL_PADDING)
+            .with_padding_right(MODAL_HORIZONTAL_PADDING)
+            .with_padding_top(MODAL_VERTICAL_PADDING)
+            .with_padding_bottom(MODAL_VERTICAL_PADDING)
+            .finish()
+        }
     }
 
     fn render_content_editor(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {

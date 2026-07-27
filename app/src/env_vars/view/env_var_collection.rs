@@ -1291,6 +1291,32 @@ impl View for EnvVarCollectionView {
 
         content.extend(self.render_trash_banner(access_level, app));
 
+        content.add_child(
+            Align::new(
+                ConstrainedBox::new(
+                    Align::new(
+                        Container::new(render_breadcrumbs(
+                            self.breadcrumbs.clone(),
+                            appearance,
+                            // Non-interactive: `ContainingObject::enabled()` is false.
+                            // The trail shows WHERE the collection lives; the click used to
+                            // open Warp Drive, which no longer exists.
+                            |_ctx, _app, _breadcrumb| {},
+                        ))
+                        .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
+                        .with_vertical_margin(CORE_VERTICAL_MARGIN / 2.)
+                        .finish(),
+                    )
+                    .top_left()
+                    .finish(),
+                )
+                .with_max_width(CORE_MAX_WIDTH)
+                .finish(),
+            )
+            .top_center()
+            .finish(),
+        );
+
         if let TrashStatus::Active = self
             .active_env_var_collection_data
             .as_ref(app)

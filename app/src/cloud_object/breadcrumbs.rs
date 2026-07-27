@@ -19,8 +19,15 @@ impl Breadcrumb for ContainingObject {
         self.name.clone()
     }
 
+    /// Shown, but not interactive.
+    ///
+    /// Which folder an object lives in is genuinely useful local information -- folders are
+    /// persisted in this machine's sqlite database (`upsert_folders`), not on a server. What
+    /// was commercial was the CLICK, which navigated to the Warp Drive sidebar. Removing the
+    /// whole trail took the useful part with the commercial one; disabling interaction keeps
+    /// the location visible without offering a destination that no longer exists.
     fn enabled(&self) -> bool {
-        true
+        false
     }
 }
 

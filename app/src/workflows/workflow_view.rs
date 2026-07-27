@@ -2872,6 +2872,23 @@ impl View for WorkflowView {
         };
 
         let mut row = Flex::row();
+        row.add_child(
+            Shrinkable::new(
+                2.,
+                Container::new(render_breadcrumbs(
+                    self.breadcrumbs.clone(),
+                    appearance,
+                    // Non-interactive: `ContainingObject::enabled()` is false, so this
+                    // never fires. The trail shows WHERE the object lives; the click used
+                    // to open Warp Drive, which no longer exists.
+                    |_ctx, _app, _breadcrumb| {},
+                ))
+                .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
+                .with_vertical_margin(vertical_margin / 2.)
+                .finish(),
+            )
+            .finish(),
+        );
 
         let editability = if FeatureFlag::SharedWithMe.is_enabled() {
             self.editability(app)
