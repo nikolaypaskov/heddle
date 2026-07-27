@@ -101,13 +101,21 @@ Facts that cost time to learn:
   unzip tools strip the signature and macOS then refuses to launch the app.
 - Publish with `--repo <owner>/<name>` **explicitly**. See §6.
 
-Then publish the update manifest **on the same release as the `.app.zip`**, or clients will
-never learn the new version exists:
+Then publish the update manifest **on the same release as the `.app.zip`, and only after it**:
 
 ```bash
+# 1. the payload first
+gh release upload <tag> Heddle-aarch64-apple-darwin.app.zip --repo <owner>/<name>
+# 2. only then the thing that advertises it
 ./script/heddle/generate-release-manifest vX.Y.Z channel_versions.json
 gh release upload <tag> channel_versions.json --repo <owner>/<name> --clobber
 ```
+
+The order is not cosmetic. Clients read `releases/latest/download/`, so a release carrying the
+manifest but not the app tells every running Heddle that a new version exists and then 404s
+when it goes to fetch it — and it keeps doing that until the next release. The release
+workflow enforces the same rule for its own runs: it skips the manifest when no
+`Heddle-*.app.zip` is present, because it builds only the TUI.
 
 The version passed here is the **app** version — the same `vX.Y.Z` given to `--release-tag`,
 which becomes `CFBundleShortVersionString`. It is NOT the git tag: releases have been tagged
