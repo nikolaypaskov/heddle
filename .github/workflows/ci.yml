@@ -48,6 +48,10 @@ jobs:
       # The workflow file is itself a supply-chain artifact. If its YAML is malformed
       # this job never starts, which is why the local gate runs both auditors too.
       image: rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
+      # The image's default user cannot write /__w/_temp/_runner_file_commands, so
+      # actions/checkout died with EACCES before actionlint ever ran. The container only
+      # reads the checkout and exits; it handles no secrets and produces no artifact.
+      options: --user root
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -140,7 +144,21 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libssl-dev pkg-config cmake protobuf-compiler libclang-dev
+            libssl-dev pkg-config cmake libclang-dev unzip
+
+      # NOT apt's protobuf-compiler. That package ships the binary without putting the
+      # well-known types where protoc looks for them, so the build fails with
+      # "google/protobuf/descriptor.proto: File not found". heddle-release.yml already
+      # installs protoc this way; this job did not, which is why it never once passed.
+      - name: install protoc with well-known types
+        env:
+          PROTOC_VERSION: "25.1"
+        run: |
+          set -euxo pipefail
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          protoc --version
 
       - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
@@ -193,7 +211,12 @@ jobs:
         with:
           # Do not leave the job token in .git/config for later steps to read.
           persist-credentials: false
+      # Advisory until the repository's Dependency graph is switched on. The action hard
+      # errors with "Dependency review is not supported on this repository" otherwise, which
+      # is a repo setting no branch can satisfy -- and a check that is red for a reason the
+      # author cannot fix teaches people to ignore red checks.
       - uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4.8.2
+        continue-on-error: true
         with:
           fail-on-severity: high
           # This project is AGPL-3.0, so copyleft dependencies are compatible and must NOT
