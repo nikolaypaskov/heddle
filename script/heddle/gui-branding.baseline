@@ -423,6 +423,7 @@
 ./app/src/auth/login_slide.rs	warp
 ./app/src/auth/mod.rs	warp
 ./app/src/auth/needs_sso_link_view.rs	warp
+./app/src/autoupdate/channel_versions_tests.rs	warp
 ./app/src/autoupdate/linux.rs	warp
 ./app/src/autoupdate/linux.rs	warp
 ./app/src/autoupdate/linux.rs	warp

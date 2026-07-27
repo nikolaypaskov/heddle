@@ -371,12 +371,182 @@ pub(super) async fn download_update_and_cleanup(
     last_successful_update_id: Option<&str>,
     client: &http_client::Client,
 ) -> Result<DownloadReady> {
-    let result =
-        download_and_extract_binary(ChannelState::channel(), version_info, update_id, client).await;
+    let channel = ChannelState::channel();
+    let result = if channel == Channel::Oss {
+        // Heddle publishes a signed, notarized `.app.zip` as a GitHub release asset. The
+        // inherited path below fetches a DMG from Warp's release storage, mounts it and
+        // copies the app out; neither the storage nor the DMG exists here.
+        download_and_extract_app_zip(channel, version_info, update_id).await
+    } else {
+        download_and_extract_binary(channel, version_info, update_id, client).await
+    };
     if result.is_err() {
         cleanup_all_except(last_successful_update_id).await;
     }
     result
+}
+
+/// The Heddle release asset, resolved through GitHub's `latest` redirect.
+///
+/// Using `latest/download/<asset>` rather than a versioned URL is deliberate. Heddle's git
+/// tags are shaped `heddle-v0.3.1-macos-arm64` while its app version is `v0.3.1`, so the
+/// manifest cannot name the tag its asset lives under without publishing both. Asking for
+/// `latest` sidesteps that entirely -- and it is safe precisely because the manifest is NOT
+/// what authorises the install: `verify_bundle_is_newer` reads the version out of the
+/// downloaded bundle afterwards. If a newer release lands between the check and the
+/// download, we install that one, having confirmed it really is newer.
+fn heddle_asset_url() -> String {
+    format!(
+        "https://github.com/nikolaypaskov/heddle/releases/latest/download/Heddle-{}-apple-darwin.app.zip",
+        if cfg!(target_arch = "aarch64") {
+            "aarch64"
+        } else {
+            "x86_64"
+        }
+    )
+}
+
+/// Read `CFBundleShortVersionString` out of a staged bundle.
+///
+/// This is the version that actually ships inside the payload, as opposed to the version a
+/// manifest claims. Everything downstream compares against THIS.
+async fn staged_bundle_version(bundle: &Path) -> Result<String> {
+    let plist = bundle.join("Contents/Info.plist");
+    // `plutil -extract`, not `defaults read`. `defaults` resolves through a caching daemon
+    // and can return a stale value for a path it has seen before -- which, for a check whose
+    // entire job is to compare the version of a file we just wrote to disk, would be a
+    // silent correctness bug rather than an inconvenience.
+    let output = Command::new("/usr/bin/plutil")
+        .arg("-extract")
+        .arg("CFBundleShortVersionString")
+        .arg("raw")
+        .arg("-o")
+        .arg("-")
+        .arg(&plist)
+        .output()
+        .await?;
+    ensure!(
+        output.status.success(),
+        "Could not read CFBundleShortVersionString from {}: {}",
+        plist.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+/// Refuse a staged bundle that is not strictly newer than the running one.
+///
+/// The manifest is untrusted input: it is a file on a host we do not control, and a
+/// signature check cannot tell an old Heddle release from a new one -- an older release is
+/// validly signed and validly notarized. Comparing the manifest's claim was therefore not
+/// enough; a manifest naming `v999.0.0` beside an genuinely-signed older payload would have
+/// passed every check and installed a downgrade. This reads the payload itself.
+async fn verify_bundle_is_newer(bundle: &Path) -> Result<()> {
+    let staged = staged_bundle_version(bundle).await?;
+    let running = ChannelState::app_version()
+        .ok_or_else(|| anyhow!("no version tag in the running build; refusing to update"))?;
+    ensure!(
+        super::is_upgrade(running, &staged),
+        "Staged bundle is version {staged}, which is not newer than the running {running}; \
+         refusing to install"
+    );
+    safe_info!(
+        safe: ("Staged bundle {staged} is newer than the running {running}"),
+        full: ("Staged bundle {staged} is newer than the running {running}")
+    );
+    Ok(())
+}
+
+/// Download Heddle's `.app.zip` release asset, expand it, and verify it.
+async fn download_and_extract_app_zip(
+    channel: Channel,
+    version_info: &VersionInfo,
+    update_id: &str,
+) -> Result<DownloadReady> {
+    let bundle_path = PathBuf::from(get_bundle_path()?);
+    if needs_authorization(bundle_path.as_path()).await.unwrap_or(true) {
+        return Ok(DownloadReady::NeedsAuthorization);
+    }
+
+    let download_dir = get_download_dir(update_id);
+    async_fs::create_dir_all(&download_dir).await?;
+
+    let url = heddle_asset_url();
+    log::info!("Fetching update from {url}");
+    // A bare client, for the same reason the manifest fetch uses one: `http_client::Client`
+    // attaches `x-warp-client-id` and the app version to every native request.
+    let response = reqwest::Client::builder()
+        .user_agent("Heddle")
+        .build()?
+        .get(&url)
+        .timeout(Duration::from_secs(DMG_TIMEOUT_S))
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let zip_path = download_dir.join("Heddle.app.zip");
+    let mut file = async_fs::File::create(&zip_path).await?;
+    futures_lite::io::copy(
+        response
+            .bytes_stream()
+            .map_err(std::io::Error::other)
+            .into_async_read(),
+        &mut file,
+    )
+    .await?;
+    file.sync_data().await?;
+
+    // `ditto`, not a zip library. Expanding a signed .app has to preserve symlinks and
+    // extended attributes; a naive unzip drops them and invalidates the code signature, so
+    // the verification below would fail on a perfectly good download.
+    let expanded = download_dir.join("expanded");
+    let unzip = Command::new("/usr/bin/ditto")
+        .arg("-x")
+        .arg("-k")
+        .arg(&zip_path)
+        .arg(&expanded)
+        .output()
+        .await?;
+    ensure!(
+        unzip.status.success(),
+        "Failed to expand the downloaded update: {}",
+        String::from_utf8_lossy(&unzip.stderr)
+    );
+
+    let staged_app = expanded.join(app_name(channel));
+    ensure!(
+        staged_app.exists(),
+        "Downloaded archive did not contain {}",
+        app_name(channel)
+    );
+
+    // Stage at exactly the path `apply_update` will look for: it recomputes this from the
+    // same `versioned_app_name(channel, version_info.version)`. The name uses the MANIFEST's
+    // version while the payload's real version is checked separately below -- the name only
+    // has to be agreed between these two functions, it is not a trust boundary.
+    let target = download_dir.join(versioned_app_name(channel, &version_info.version));
+    if async_fs::metadata(&target).await.is_ok() {
+        async_fs::remove_dir_all(&target).await?;
+    }
+    async_fs::rename(&staged_app, &target).await?;
+
+    // All three checks, in order, before anything is installed.
+    let executable_path_buf = target.join(executable_path(channel));
+    let verification_start = Instant::now();
+    future::try_zip(
+        verify_code_signature("bundle", &target),
+        verify_code_signature("executable", executable_path_buf.as_path()),
+    )
+    .await?;
+    verify_notarization("bundle", &target).await?;
+    verify_bundle_is_newer(&target).await?;
+
+    log::info!(
+        "Verified the downloaded update in {:?}",
+        verification_start.elapsed()
+    );
+
+    Ok(DownloadReady::Yes)
 }
 
 /// Apply the downloaded update.
@@ -798,3 +968,7 @@ fn executable_path(channel: Channel) -> String {
         executable_name(channel).to_owned()
     }
 }
+
+#[cfg(test)]
+#[path = "mac_tests.rs"]
+mod tests;

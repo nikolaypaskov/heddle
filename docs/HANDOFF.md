@@ -101,6 +101,28 @@ Facts that cost time to learn:
   unzip tools strip the signature and macOS then refuses to launch the app.
 - Publish with `--repo <owner>/<name>` **explicitly**. See §6.
 
+Then publish the update manifest **on the same release as the `.app.zip`**, or clients will
+never learn the new version exists:
+
+```bash
+./script/heddle/generate-release-manifest vX.Y.Z channel_versions.json
+gh release upload <tag> channel_versions.json --repo <owner>/<name> --clobber
+```
+
+The version passed here is the **app** version — the same `vX.Y.Z` given to `--release-tag`,
+which becomes `CFBundleShortVersionString`. It is NOT the git tag: releases have been tagged
+`heddle-v0.3.1-macos-arm64` while the app reports `v0.3.1`. The script refuses anything that
+is not `v?MAJOR.MINOR.PATCH`, because `HeddleVersion::parse` refuses it too and an
+unparseable version means "do not update" — a malformed manifest would silently disable
+updates for everyone who installed that release, with no error anywhere.
+
+The client reads `releases/latest/download/channel_versions.json`, so the manifest must be on
+the release GitHub considers *latest*. It downloads
+`releases/latest/download/Heddle-<arch>-apple-darwin.app.zip` from that same release, then
+reads the version out of the downloaded bundle and refuses to install anything that is not
+strictly newer than what is running — so the manifest tells the client to look, and the
+payload itself is what authorises the install.
+
 ### Gates
 
 ```bash
