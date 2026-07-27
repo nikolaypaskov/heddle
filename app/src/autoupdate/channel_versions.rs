@@ -1,73 +1,72 @@
 use std::env;
 use std::fs::read_to_string;
-use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use channel_versions::ChannelVersions;
-use warp_errors::report_error;
 
-use crate::channel::{Channel, ChannelState};
-use crate::server::server_api::{FETCH_CHANNEL_VERSIONS_TIMEOUT, ServerApi};
+use crate::server::server_api::FETCH_CHANNEL_VERSIONS_TIMEOUT;
+use crate::settings::UpdateConsent;
 
-// Fetches channel versions asynchronously from the Warp server. If the Warp server request fails,
-// then fetches from GCP JSON storage as a fallback.
-pub async fn fetch_channel_versions(
-    nonce: &str,
-    server_api: Arc<ServerApi>,
-    include_changelogs: bool,
-    is_daily: bool,
-) -> Result<ChannelVersions> {
-    if let Ok(path) = env::var("WARP_CHANNEL_VERSIONS_PATH") {
-        // Load channel versions from local filesystem. Used for testing both
-        // autoupdate and changelog behavior.
+/// Where Heddle publishes its release manifest.
+///
+/// GitHub resolves `releases/latest/download/<asset>` to the asset on the current release,
+/// so publishing one extra file per release is the entire infrastructure: no server, no
+/// hostname to operate, no secret to hold.
+const MANIFEST_URL: &str =
+    "https://github.com/nikolaypaskov/heddle/releases/latest/download/channel_versions.json";
+
+/// Points the fetch at a local file instead of GitHub. For tests, and for pointing a build
+/// at a staging manifest.
+const LOCAL_MANIFEST_PATH_VAR: &str = "WARP_CHANNEL_VERSIONS_PATH";
+
+/// Fetch the release manifest, if the user has agreed to that.
+///
+/// `Ok(None)` means no check was permitted. That is not a failure, and the caller must not
+/// treat it as one.
+///
+/// This replaces a fetch that went through Warp's `ServerApi` and fell back to Warp's GCP
+/// release storage. Both are gone with the rest of the backend, and both bailed before
+/// constructing a request once `server_root_url()` and `releases_base_url()` became `None`
+/// -- which is why no Heddle build has ever made an update request.
+///
+/// The consent check is deliberately the FIRST thing here, ahead of the local-path override.
+/// The plan had it the other way round so that tests could exercise parsing without faking
+/// consent, but that ordering lets an environment variable produce a manifest -- and
+/// therefore an update offer -- for a user who was never asked. Consent gates the whole
+/// operation, not just the network hop; tests pass `Enabled` explicitly instead.
+pub async fn fetch_channel_versions(consent: UpdateConsent) -> Result<Option<ChannelVersions>> {
+    if !consent.should_check() {
+        return Ok(None);
+    }
+
+    if let Ok(path) = env::var(LOCAL_MANIFEST_PATH_VAR) {
         let path = shellexpand::tilde(&path);
-        let channel_versions_string = read_to_string::<&str>(&path)?;
-        return serde_json::from_str(channel_versions_string.as_str())
-            .context("Failed to parse channel versions JSON");
+        let raw = read_to_string::<&str>(&path)
+            .with_context(|| format!("Failed to read the manifest at {path}"))?;
+        return Ok(Some(
+            serde_json::from_str(&raw).context("Failed to parse channel versions JSON")?,
+        ));
     }
 
-    let channel_versions = server_api
-        .fetch_channel_versions(include_changelogs, is_daily)
-        .await
-        .context("Failed to retrieve channel versions from Warp server");
-    match channel_versions {
-        channel_versions @ Ok(_) => channel_versions,
-        Err(err) => {
-            match ChannelState::channel() {
-                // Only log an error on Dev and Preview -- if this is failing, its likely to be
-                // failing for all users, and Stable has too many users (this error would flood
-                // our Sentry logs).
-                Channel::Dev | Channel::Preview => report_error!(err),
-                _ => log::warn!(
-                    "Failed to retrieve channel versions from Warp server, falling \
-                back to GCP JSON storage."
-                ),
-            }
-            fetch_channel_versions_from_json_storage(server_api.http_client(), nonce).await
-        }
-    }
-}
-
-// Synchronously fetches updated Warp [`ChannelVersions`] from GCP JSON storage. This will soon
-// be deprecated in favor of retrieving updated channel versions from the Warp Server.
-// Note, in order to run against a test file you can use the "channel_versions_test.json" file
-// and update the file using gsutil cp channel_versions_test.json gs://warp-releases/channel_versions_test.json
-async fn fetch_channel_versions_from_json_storage(
-    client: &http_client::Client,
-    nonce: &str,
-) -> Result<ChannelVersions> {
-    // No autoupdate configuration means no release storage to query. Bail
-    // before constructing a request rather than emitting a malformed URL.
-    let Some(releases_base_url) = ChannelState::releases_base_url() else {
-        anyhow::bail!("no release storage is configured for this build");
-    };
-    log::info!("Fetching channel versions from release storage");
-    let res = client
-        .get(format!("{releases_base_url}/channel_versions.json?r={nonce}").as_str())
+    let response = http_client::Client::new()
+        .get(MANIFEST_URL)
         .timeout(FETCH_CHANNEL_VERSIONS_TIMEOUT)
         .send()
-        .await?;
-    let versions: ChannelVersions = res.json().await?;
-    log::info!("Received channel versions from GCP JSON storage: {versions}");
-    Ok(versions)
+        .await
+        .context("Failed to fetch the release manifest")?;
+
+    let body = response
+        .error_for_status()
+        .context("Release manifest request returned an error status")?
+        .text()
+        .await
+        .context("Failed to read the release manifest body")?;
+
+    Ok(Some(
+        serde_json::from_str(&body).context("Failed to parse channel versions JSON")?,
+    ))
 }
+
+#[cfg(test)]
+#[path = "channel_versions_tests.rs"]
+mod tests;
