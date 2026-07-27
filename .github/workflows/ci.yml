@@ -57,8 +57,12 @@ jobs:
         with:
           # Do not leave the job token in .git/config for later steps to read.
           persist-credentials: false
+      # Named files, not project auto-detection. Inside the container actionlint reports
+      # "no project was found in any parent directories" -- it locates the repo by shelling
+      # out to git, which does not agree about the checkout's ownership. Passing the paths
+      # skips detection entirely and audits exactly what we mean to audit.
       - name: actionlint (syntax + shellcheck)
-        run: actionlint -color
+        run: actionlint -color .github/workflows/*.yml
 
   workflow-security:
     name: workflow security audit

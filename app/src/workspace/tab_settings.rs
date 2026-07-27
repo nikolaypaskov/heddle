@@ -270,6 +270,7 @@ pub enum HeaderToolbarChipSelection {
 // `Default` -> "default"; `Custom` -> {"custom": {"left": [...], "right": [...]}}.
 impl settings_value::SettingsValue for HeaderToolbarChipSelection {
     fn to_file_value(&self) -> serde_json::Value {
+        use settings_value::SettingsValue as _;
         match self {
             Self::Default => serde_json::Value::String("default".to_string()),
             Self::Custom { left, right } => {
@@ -285,6 +286,7 @@ impl settings_value::SettingsValue for HeaderToolbarChipSelection {
 
     fn from_file_value(value: &serde_json::Value) -> Option<Self> {
         use super::header_toolbar_item::HeaderToolbarItemKind;
+        use settings_value::SettingsValue as _;
         match value {
             serde_json::Value::String(s) if s == "default" => Some(Self::Default),
             serde_json::Value::Object(obj) if obj.contains_key("custom") => {

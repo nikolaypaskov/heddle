@@ -138,6 +138,13 @@ jobs:
       - name: Self-test the wasm gate against planted regressions
         run: |
           set -uo pipefail
+          # `-e` OFF, deliberately and load-bearing. GitHub runs `run:` under `bash -e`, and
+          # `set -uo pipefail` does not turn that off. This step's whole purpose is to CAPTURE
+          # a non-zero exit from the gate -- so `out="$(...)"` aborted the script the instant
+          # the gate did its job, before `status=$?` was ever read. The step produced no
+          # output and failed, every time, which is why this self-test has never once run.
+          # Each plant checks its own status explicitly below.
+          set +e
 
           # Assert the gate rejects a plant for the RIGHT reason. Accepting any nonzero
           # status would let exit 2 (infrastructure failure) or an unrelated diagnostic
