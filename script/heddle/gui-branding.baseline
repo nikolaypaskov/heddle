@@ -2719,7 +2719,6 @@
 ./crates/warp_logging/src/rotation_tests.rs	warp
 ./crates/warp_logging/src/rotation_tests.rs	warp
 ./crates/warp_logging/src/wasm.rs	warp
-./crates/warp_multi_agent_client/src/lib.rs	warp
 ./crates/warp_search_core/src/searcher_tests.rs	warp
 ./crates/warp_search_core/src/searcher_tests.rs	warp
 ./crates/warp_search_core/src/searcher_tests.rs	warp
