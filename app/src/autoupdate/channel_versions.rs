@@ -17,7 +17,7 @@ const MANIFEST_URL: &str =
 
 /// Points the fetch at a local file instead of GitHub. For tests, and for pointing a build
 /// at a staging manifest.
-const LOCAL_MANIFEST_PATH_VAR: &str = "WARP_CHANNEL_VERSIONS_PATH";
+pub(super) const LOCAL_MANIFEST_PATH_VAR: &str = "HEDDLE_CHANNEL_VERSIONS_PATH";
 
 /// Fetch the release manifest, if the user has agreed to that.
 ///

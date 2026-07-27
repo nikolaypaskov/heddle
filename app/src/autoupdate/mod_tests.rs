@@ -601,15 +601,15 @@ use super::is_upgrade;
 fn only_a_strictly_greater_version_is_an_upgrade() {
     assert!(
         is_upgrade("v0.3.1", "v0.3.2"),
-        "0.3.2 over 0.3.1 is an upgrade"
+        "0.3.2 must be newer than 0.3.1"
     );
     assert!(
         is_upgrade("v0.3.1", "v0.4.0"),
-        "0.4.0 over 0.3.1 is an upgrade"
+        "0.4.0 must be newer than 0.3.1"
     );
     assert!(
         is_upgrade("v0.9.0", "v0.10.0"),
-        "0.10.0 over 0.9.0 is an upgrade"
+        "0.10.0 must be newer than 0.9.0"
     );
     // The running version comes from CFBundleShortVersionString, which has no `v` prefix,
     // while the manifest's does. The mixed form is the one that actually ships.

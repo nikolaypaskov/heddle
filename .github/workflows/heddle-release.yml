@@ -198,6 +198,48 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # The update manifest. `releases/latest/download/channel_versions.json` is what a
+      # running Heddle asks for, and GitHub resolves it to whichever release is current --
+      # so this one file is the whole update infrastructure. No server, no hostname to
+      # operate, no key to hold.
+      - name: Generate the release manifest
+        env:
+          # Interpolated through the environment, never directly into the run: block.
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Heddle ships one channel. All three slots point at the same release so the
+          # manifest keeps the shape `crates/channel_versions` expects, and so a future
+          # channel split needs no format change.
+          jq -n --arg v "$RELEASE_TAG" '{
+            dev:     { version: $v },
+            preview: { version: $v },
+            stable:  { version: $v }
+          }' > dist/channel_versions.json
+          cat dist/channel_versions.json
+
+      - name: Assert the manifest matches the tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # A manifest disagreeing with its own tag would offer users a version that is not
+          # the one attached to this release. Three releases already shipped claiming to be
+          # 0.1.0 because a version string was generated in one place and trusted in
+          # another; this asserts rather than trusts.
+          published="$(jq -r .stable.version dist/channel_versions.json)"
+          if [ "$published" != "$RELEASE_TAG" ]; then
+            echo "::error::manifest says $published, tag is $RELEASE_TAG"
+            exit 1
+          fi
+          # The client parses MAJOR.MINOR.PATCH with an optional leading `v` and refuses
+          # anything else, treating an unparseable version as "do not update". A tag that
+          # cannot be parsed would silently disable updates for everyone who installs it.
+          if ! printf '%s' "$published" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::tag $published is not vMAJOR.MINOR.PATCH; HeddleVersion::parse would reject it"
+            exit 1
+          fi
+
       - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
@@ -205,9 +247,11 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 --clobber
+            gh release upload "$RELEASE_TAG" \
+              dist/*.tar.gz dist/*.sha256 dist/channel_versions.json --clobber
           else
-            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 \
+            gh release create "$RELEASE_TAG" \
+              dist/*.tar.gz dist/*.sha256 dist/channel_versions.json \
               --title "Heddle $RELEASE_TAG" \
               --notes-file docs/RELEASE_NOTES.md
           fi

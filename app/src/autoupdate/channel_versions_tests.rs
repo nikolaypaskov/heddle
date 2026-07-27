@@ -1,7 +1,7 @@
 //! Tests for the manifest fetch.
 //!
 //! Every case runs with NO network. The two "no consent" cases deliberately leave
-//! `WARP_CHANNEL_VERSIONS_PATH` unset: if the consent gate were removed, they would fall
+//! `HEDDLE_CHANNEL_VERSIONS_PATH` unset: if the consent gate were removed, they would fall
 //! through to a real HTTPS request to github.com and fail (or hang) rather than passing
 //! quietly. That is the point -- the assertion is backed by the absence of a local fallback,
 //! not just by an `is_none()` check.
@@ -17,7 +17,7 @@ const MANIFEST: &str = r#"{
   "stable":  { "version": "v0.3.2" }
 }"#;
 
-/// Write a manifest to a temp file and point `WARP_CHANNEL_VERSIONS_PATH` at it for the
+/// Write a manifest to a temp file and point `HEDDLE_CHANNEL_VERSIONS_PATH` at it for the
 /// duration of `body`.
 ///
 /// The env var is process-wide, so these tests are `#[serial]`. `cargo-nextest` runs each
@@ -29,16 +29,16 @@ fn with_manifest<T>(json: &str, body: impl FnOnce() -> T) -> T {
     std::fs::write(&path, json).expect("write manifest");
     // SAFETY: sets one process-wide variable and removes it before returning. Guarded by
     // `#[serial]` so no other test observes it.
-    unsafe { std::env::set_var("WARP_CHANNEL_VERSIONS_PATH", &path) };
+    unsafe { std::env::set_var("HEDDLE_CHANNEL_VERSIONS_PATH", &path) };
     let out = body();
-    unsafe { std::env::remove_var("WARP_CHANNEL_VERSIONS_PATH") };
+    unsafe { std::env::remove_var("HEDDLE_CHANNEL_VERSIONS_PATH") };
     out
 }
 
 /// Asserts the env var is not set, so a fetch would have to reach the network.
 fn assert_no_local_manifest_configured() {
     assert!(
-        std::env::var("WARP_CHANNEL_VERSIONS_PATH").is_err(),
+        std::env::var("HEDDLE_CHANNEL_VERSIONS_PATH").is_err(),
         "this test proves nothing if a local manifest is configured: the fetch would read \
          the file instead of attempting a request"
     );
@@ -115,11 +115,11 @@ async fn a_missing_manifest_file_is_an_error_not_a_panic() {
     // SAFETY: process-wide, removed immediately; guarded by `#[serial]`.
     unsafe {
         std::env::set_var(
-            "WARP_CHANNEL_VERSIONS_PATH",
+            "HEDDLE_CHANNEL_VERSIONS_PATH",
             "/nonexistent/heddle/channel_versions.json",
         )
     };
     let got = fetch_channel_versions(UpdateConsent::Enabled).await;
-    unsafe { std::env::remove_var("WARP_CHANNEL_VERSIONS_PATH") };
+    unsafe { std::env::remove_var("HEDDLE_CHANNEL_VERSIONS_PATH") };
     assert!(got.is_err(), "an unreadable manifest must be an error");
 }
