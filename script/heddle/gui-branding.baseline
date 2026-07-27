@@ -557,6 +557,7 @@
 ./app/src/features.rs	warp
 ./app/src/features.rs	warp
 ./app/src/features.rs	warp
+./app/src/features.rs	warp
 ./app/src/integration_testing/agent_mode/assertions.rs	warp
 ./app/src/integration_testing/assertions.rs	warp
 ./app/src/integration_testing/notebook/assertion.rs	warp

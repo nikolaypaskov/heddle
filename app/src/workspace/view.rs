@@ -688,6 +688,8 @@ pub enum WorkspaceBanner {
     InvalidSettings,
     /// to ask, once, whether Heddle may check GitHub for new releases
     UpdateConsentPrompt,
+    /// to report that a newer version exists, before anything is downloaded
+    UpdateOffered,
 }
 
 impl WorkspaceBanner {
@@ -709,6 +711,9 @@ impl WorkspaceBanner {
             // have no way to stop being asked. Both answers are on the banner itself, and
             // either one is final.
             Self::UpdateConsentPrompt => false,
+            // Dismissible. The user has been told; the next poll tells them again. Forcing
+            // the notice to stay is pressure, and this feature notifies rather than pressures.
+            Self::UpdateOffered => true,
         }
     }
 }
@@ -7513,6 +7518,14 @@ impl Workspace {
                 AutoupdateStage::Updating { new_version, .. } => menu_items.push(
                     MenuItemFields::new(format!("Updating to ({})", new_version.version))
                         .with_disabled(true)
+                        .into_item(),
+                ),
+                AutoupdateStage::UpdateOffered { new_version, .. } => menu_items.push(
+                    // "Download" rather than "Install": nothing has been fetched yet, and the
+                    // label is the only thing telling the user which of those they are about
+                    // to start.
+                    MenuItemFields::new(format!("Download update ({})", new_version.version))
+                        .with_on_select_action(WorkspaceAction::DownloadOfferedUpdate)
                         .into_item(),
                 ),
                 AutoupdateStage::UnableToUpdateToNewVersion { .. } => menu_items.push(
@@ -20670,8 +20683,9 @@ impl Workspace {
             // User-Agent, and the wording below describes that rather than an ideal.
             description: "Heddle can check GitHub for new releases. The request carries no \
                           identifier, no account and no usage data — GitHub sees your IP \
-                          address and that a Heddle build asked for the release list. You \
-                          can change this any time in Settings."
+                          address and that a Heddle build asked for the release list. \
+                          Downloading an update is a separate step you choose. You can change \
+                          this any time in Settings."
                 .to_owned(),
             secondary_button: Some(WorkspaceBannerButtonDetails {
                 text: "No".to_owned(),
@@ -20693,6 +20707,28 @@ impl Workspace {
     fn render_autoupdate_banner_element(&self, app: &AppContext) -> Option<WorkspaceBannerFields> {
         if FeatureFlag::Autoupdate.is_enabled() {
             match autoupdate::get_update_state(app) {
+                // The notice, before anything has been downloaded. Dismissible: the user has
+                // been told, and the next poll will tell them again if they ignore it.
+                AutoupdateStage::UpdateOffered { new_version, .. } => {
+                    Some(WorkspaceBannerFields {
+                        banner_type: WorkspaceBanner::UpdateOffered,
+                        severity: BannerSeverity::Warning,
+                        heading: None,
+                        description: format!(
+                            "Heddle {} is available. Downloading it fetches the application \
+                             from GitHub.",
+                            new_version.version
+                        ),
+                        secondary_button: None,
+                        button: Some(WorkspaceBannerButtonDetails {
+                            text: "Download".to_string(),
+                            action: WorkspaceAction::DownloadOfferedUpdate,
+                            variant: BannerButtonVariant::Outlined,
+                            icon: None,
+                            more_info_button_action: None,
+                        }),
+                    })
+                }
                 AutoupdateStage::UnableToUpdateToNewVersion { new_version }
                     if !self.autoupdate_unable_to_update_banner_dismissed =>
                 {
@@ -21041,6 +21077,7 @@ impl Workspace {
             // Not dismissible (`is_dismissible` returns false), so this is unreachable. It
             // must stay a no-op rather than recording an answer: dismissing is not consent.
             WorkspaceBanner::UpdateConsentPrompt => {}
+            WorkspaceBanner::UpdateOffered => {}
         }
         ctx.notify();
     }
@@ -23480,6 +23517,11 @@ impl TypedActionView for Workspace {
             }
             FocusLeftPanel => self.focus_left_panel(ctx),
             FocusRightPanel => self.focus_right_panel(ctx),
+            DownloadOfferedUpdate => {
+                AutoupdateState::handle(ctx).update(ctx, |autoupdate, ctx| {
+                    autoupdate.download_offered_update(ctx);
+                });
+            }
             SetUpdateConsent(answer) => {
                 let answer = *answer;
                 UpdateSettings::handle(ctx).update(ctx, |settings, ctx| {

@@ -113,6 +113,8 @@ pub fn handle_experiment_change(app: &mut AppContext) {
 pub enum MainPageAction {
     Relaunch,
     DownloadUpdate,
+    /// Start downloading an update the user has been offered and accepted.
+    DownloadOfferedUpdate,
     CheckForUpdate,
     ToggleSettingsSync,
     Upgrade {
@@ -193,6 +195,11 @@ impl TypedActionView for MainSettingsPageView {
             }
             MainPageAction::DownloadUpdate => {
                 autoupdate::manually_download_new_version(ctx);
+            }
+            MainPageAction::DownloadOfferedUpdate => {
+                autoupdate::AutoupdateState::handle(ctx).update(ctx, |autoupdate, ctx| {
+                    autoupdate.download_offered_update(ctx);
+                });
             }
             MainPageAction::CheckForUpdate => {
                 ctx.emit(MainSettingsPageEvent::CheckForUpdate);
@@ -790,6 +797,18 @@ impl VersionInfoWidget {
                             color: faded_text_color,
                         }),
                         None,
+                    ),
+                    // Offered, nothing fetched yet. The call to action starts the download,
+                    // which is a separate decision from installing it.
+                    AutoupdateStage::UpdateOffered { .. } => (
+                        Some(StatusContent {
+                            text: "Update available",
+                            color: ansi_red,
+                        }),
+                        Some(CallToActionContent {
+                            text: "Download update",
+                            action: MainPageAction::DownloadOfferedUpdate,
+                        }),
                     ),
                     AutoupdateStage::UpdateReady { .. } => (
                         Some(StatusContent {

@@ -669,3 +669,71 @@ fn an_absent_or_unparseable_cutoff_is_never_past_current() {
         "v0.2026.07.26.18.00.stable_01"
     )));
 }
+
+// ── The notice comes before the download ────────────────────────────────────────────────
+//
+// Codex's review found that discovering a newer version called `download_new_update`
+// immediately, so enabling update CHECKS silently enabled update DOWNLOADS -- roughly 100 MB
+// of application fetched before the user had been told anything, while the consent copy
+// described a request for the release list. These pin the two events apart.
+
+#[test]
+fn a_newer_version_is_offered_and_not_downloaded() {
+    App::test((), |mut app| async move {
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        let autoupdate_state = initialize_app(&mut app);
+
+        app.update_model(&autoupdate_state, |autoupdate, ctx| {
+            ChannelState::set_app_version(Some("v0.3.1"));
+            let version = make_version_info("v0.3.2", false /* is_rollback */);
+            let result = autoupdate.should_update(version.clone(), "update1".to_string());
+            assert!(
+                matches!(result, UpdateReady::CanDownload { .. }),
+                "a newer version must be downloadable"
+            );
+
+            autoupdate.on_update_check_complete(
+                RequestType::ManualCheck,
+                "update1".to_string(),
+                Ok(version),
+                false,
+                ctx,
+            );
+        });
+
+        app.read_model(&autoupdate_state, |autoupdate, _| {
+            assert!(
+                matches!(autoupdate.stage, AutoupdateStage::UpdateOffered { .. }),
+                "finding an update must OFFER it, not start fetching it; got {:?}",
+                autoupdate.stage
+            );
+            assert!(
+                !matches!(autoupdate.stage, AutoupdateStage::DownloadingUpdate),
+                "no download may begin before the user asks for one"
+            );
+        });
+    });
+}
+
+#[test]
+fn downloading_an_update_nobody_was_offered_does_nothing() {
+    // Guards the stray-dispatch case: a `DownloadOfferedUpdate` action arriving in any other
+    // state must not start a fetch out of nowhere.
+    App::test((), |mut app| async move {
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        let autoupdate_state = initialize_app(&mut app);
+
+        app.update_model(&autoupdate_state, |autoupdate, ctx| {
+            autoupdate.stage = AutoupdateStage::NoUpdateAvailable;
+            autoupdate.download_offered_update(ctx);
+        });
+
+        app.read_model(&autoupdate_state, |autoupdate, _| {
+            assert!(
+                matches!(autoupdate.stage, AutoupdateStage::NoUpdateAvailable),
+                "with nothing offered, asking to download must be a no-op; got {:?}",
+                autoupdate.stage
+            );
+        });
+    });
+}

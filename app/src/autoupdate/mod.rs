@@ -53,6 +53,18 @@ pub enum AutoupdateStage {
     CheckingForUpdate,
     /// The new version is being downloaded.
     DownloadingUpdate,
+    /// A newer version exists and has been reported to the user, but nothing has been
+    /// downloaded yet.
+    ///
+    /// This state exists so that "we found an update" and "we fetched ~100 MB of application"
+    /// are separate events with the user's decision between them. Upstream went straight from
+    /// the version check to `download_new_update`, which meant enabling update checks silently
+    /// enabled update DOWNLOADS -- and the consent text this fork shows describes a request
+    /// for the release list, not for the release.
+    UpdateOffered {
+        new_version: VersionInfo,
+        update_id: String,
+    },
     /// An update exists but the user does not have authorization to install it.
     UnableToUpdateToNewVersion { new_version: VersionInfo },
     /// An update has been downloaded and is ready for relaunch.
@@ -422,9 +434,13 @@ impl AutoupdateState {
                 new_version,
                 update_id,
             }) => {
-                self.download_new_update(update_id.clone(), request_type, new_version.clone(), ctx);
-                // We report the update status after attempting to download the update.
-                return;
+                // Offer it; do not fetch it. `download_offered_update` runs when the user
+                // acts on the notice.
+                self.stage = AutoupdateStage::UpdateOffered {
+                    new_version: new_version.clone(),
+                    update_id: update_id.clone(),
+                };
+                ctx.emit(AutoupdateStateEvent::UpdateAvailable);
             }
             Ok(UpdateReady::Yes {
                 new_version,
@@ -469,6 +485,22 @@ impl AutoupdateState {
         };
 
         self.on_check_complete(update_available, request_type, ctx);
+    }
+
+    /// Begin downloading the update the user was offered.
+    ///
+    /// Only valid from `UpdateOffered`: this is the user acting on the notice, so there is
+    /// always something already offered. Doing nothing in any other state keeps a stray
+    /// dispatch from starting a download out of nowhere.
+    pub fn download_offered_update(&mut self, ctx: &mut ModelContext<Self>) {
+        let AutoupdateStage::UpdateOffered {
+            new_version,
+            update_id,
+        } = self.stage.clone()
+        else {
+            return;
+        };
+        self.download_new_update(update_id, RequestType::ManualCheck, new_version, ctx);
     }
 
     fn download_new_update(

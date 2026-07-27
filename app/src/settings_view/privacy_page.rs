@@ -1711,8 +1711,9 @@ impl SettingsWidget for UpdateChecksWidget {
                     .paragraph(
                         "Heddle checks GitHub for new releases. The request carries no \
                          identifier, no account and no usage data — GitHub sees your IP \
-                         address and that a Heddle build asked for the release list. With \
-                         this off, Heddle makes no network request of its own."
+                         address and that a Heddle build asked for the release list. \
+                         Downloading an update is a separate step you choose. With this off, \
+                         Heddle makes no network request of its own."
                             .to_owned(),
                     )
                     .with_style(UiComponentStyles {
