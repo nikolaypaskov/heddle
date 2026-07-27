@@ -131,7 +131,26 @@ jobs:
   # ── splitting them would rebuild 1.5M lines per job.
   rust:
     name: rust battery
-    runs-on: ubuntu-latest
+    # Trusted code builds on the self-hosted runner (voltron/roles/heddle_runner);
+    # untrusted code does not. `pull_request.head.repo.fork` is the trust boundary:
+    #
+    #   fork PR          -> fork == true  -> ubuntu-latest
+    #   same-repo PR     -> fork == false -> voltron-linux   (branch needs write access)
+    #   push to master   -> event has no  -> voltron-linux
+    #   workflow_dispatch   pull_request     voltron-linux   (dispatch needs write access)
+    #
+    # heddle is a PUBLIC repo and the runner sits on a home network alongside real
+    # services, so a fork PR must never land there. Everything that does reach it
+    # required write access to this repo first.
+    #
+    # This keys on the fork flag rather than on `event_name == 'push'`, because
+    # `on.push` here is restricted to master: branch pushes raise no push event at
+    # all, so a push-only condition would leave every PR -- the checks that gate
+    # merges -- on the 4-core hosted runner and buy almost nothing.
+    #
+    # Only this job is routed. The rest are seconds-to-minutes and several run in
+    # containers; leaving them hosted keeps the change small and the fallback obvious.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'voltron-linux' }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -164,7 +183,13 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      # Hosted runners only. The self-hosted builder keeps CARGO_HOME and its _work
+      # directory on local disk between jobs, so target/ is already warm; running this
+      # there would upload and download multi-GB archives over a home connection to
+      # restore a cache that never left. `runner.environment` is 'github-hosted' or
+      # 'self-hosted', set by the runner itself rather than inferred from the label.
+      - if: runner.environment == 'github-hosted'
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           key: heddle-ci
 
