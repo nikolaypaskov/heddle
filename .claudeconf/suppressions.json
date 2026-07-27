@@ -94,5 +94,11 @@
     "file": ".claudeconf/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "A URI literal used by semantic-selection tests."
+  },
+  {
+    "fingerprint": "ce2b3c3744b8e914",
+    "file": ".claudeconf/trufflehog-exclude.txt",
+    "rule": "trufflehog-exclude",
+    "rationale": "Packaged release artifacts: copies of the built binary, so findings duplicate the source. 290 MB per scan with brotli decode errors on compressed Mach-O sections."
   }
 ]

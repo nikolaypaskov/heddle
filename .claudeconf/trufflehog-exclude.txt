@@ -48,3 +48,8 @@ app/src/ai/agent_sdk/driver/git_credentials_tests\.rs$
 crates/websocket/src/proxy_tests\.rs$
 app/src/terminal/input_tests\.rs$
 crates/warp_core/src/semantic_selection/mod_tests\.rs$
+
+# Packaged release artifacts. These are copies of the built binary, so scanning them
+# re-reports whatever the source already contains -- at 290 MB a run, with brotli decode
+# errors as the scanner tries to walk compressed Mach-O sections. Build output, like target/.
+^dist/
