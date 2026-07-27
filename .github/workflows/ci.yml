@@ -1,0 +1,259 @@
+# Heddle quality + security harness — CI tier.
+#
+# Gate ≡ CI (constitution §1): this runs the same milestone set as `lefthook run gate`,
+# so anything that can only fail at full scope fails locally first, not here for the
+# first time. The one deliberate exception is the Codex review gate, which needs local
+# credentials CI does not have; it is a local pre-merge step and its absence here is a
+# recorded decision, not an oversight.
+#
+# This complements the existing heddle-privacy-gate.yml (endpoint/asset/supply-chain
+# scans) rather than replacing it. That workflow remains the authoritative privacy check.
+#
+# Supply chain: every `uses:` is pinned to a full 40-character commit SHA and every
+# container image to an immutable @sha256: digest. Tags are mutable and can be repointed
+# at malicious code — not hypothetical (tj-actions/changed-files, CVE-2025-30066).
+# Trailing comments record the human-readable versions for Dependabot to bump.
+#
+# Note there is no `curl ... | sh` here. Fetching an installer over the network and
+# piping it to a shell is the exact pattern this project removed from `script/bootstrap`,
+# and .claudeconf/rules/heddle.yaml fails the build on it — a CI file that did it anyway
+# would be the harness exempting itself from its own rule.
+
+name: ci
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege. Escalate per-job only where a job genuinely needs more.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Fast, no-toolchain checks. These fail in seconds, so they run first rather than
+  # ── waiting behind a multi-minute Rust build.
+  workflow-audit:
+    name: workflow audit
+    runs-on: ubuntu-latest
+    container:
+      # The workflow file is itself a supply-chain artifact. If its YAML is malformed
+      # this job never starts, which is why the local gate runs both auditors too.
+      image: rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
+      # The image's default user cannot write /__w/_temp/_runner_file_commands, so
+      # actions/checkout died with EACCES before actionlint ever ran. The container only
+      # reads the checkout and exits; it handles no secrets and produces no artifact.
+      options: --user root
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config for later steps to read.
+          persist-credentials: false
+      # Named files, not project auto-detection. Inside the container actionlint reports
+      # "no project was found in any parent directories" -- it locates the repo by shelling
+      # out to git, which does not agree about the checkout's ownership. Passing the paths
+      # skips detection entirely and audits exactly what we mean to audit.
+      - name: actionlint (syntax + shellcheck)
+        run: actionlint -color .github/workflows/*.yml
+
+  workflow-security:
+    name: workflow security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config for later steps to read.
+          persist-credentials: false
+      - name: zizmor
+        # From PyPI at a pinned version — no fetch-and-execute.
+        run: pipx run zizmor==1.27.0 --persona=regular .github/workflows/
+
+  suppressions:
+    name: suppression ledger
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # The check diffs against the merge base, so it needs history, not a shallow clone.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: check for unledgered suppressions
+        run: ./script/heddle/check-suppressions
+
+  secret-scan:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config for later steps to read.
+          persist-credentials: false
+      # Whole-tree scan. The exclude file is REGEXES and must exclude .git/ —
+      # actions/checkout injects the runner's ephemeral token into .git/config, which a
+      # scanner flags on every single run.
+      - name: trufflehog (whole tree)
+        uses: docker://trufflesecurity/trufflehog@sha256:aa821cf4ace8861c7d096d83818cdf7bb9719028a52d37a52eaad44086a52577 # 3.96.0
+        with:
+          args: >-
+            filesystem /github/workspace
+            --no-update --no-verification --fail
+            --exclude-paths /github/workspace/.claudeconf/trufflehog-exclude.txt
+
+  sast:
+    name: SAST
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep@sha256:bdf7013b2c3634a487671158da77c554f531742326b543a9464d2adf6c433ac8 # 1.171.0
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config for later steps to read.
+          persist-credentials: false
+      # Vendored, pinned, offline ruleset. Never --config auto: that makes results depend
+      # on the registry's current state and stops being reproducible.
+      - name: semgrep
+        run: |
+          set -euo pipefail
+          # ERROR-severity rules block.
+          semgrep scan --error --quiet --metrics=off --severity=ERROR --config .claudeconf/rules/ app crates
+          # WARNING-severity rules report; see lefthook.yml for why they do not block.
+          semgrep scan --quiet --metrics=off --config .claudeconf/rules/ app crates || true
+
+  # ── The Rust battery. One job so the compile cache is shared across milestones;
+  # ── splitting them would rebuild 1.5M lines per job.
+  rust:
+    name: rust battery
+    # Trusted code builds on the self-hosted runner (voltron/roles/heddle_runner);
+    # untrusted code does not. `pull_request.head.repo.fork` is the trust boundary:
+    #
+    #   fork PR          -> fork == true  -> ubuntu-latest
+    #   same-repo PR     -> fork == false -> voltron-linux   (branch needs write access)
+    #   push to master   -> event has no  -> voltron-linux
+    #   workflow_dispatch   pull_request     voltron-linux   (dispatch needs write access)
+    #
+    # heddle is a PUBLIC repo and the runner sits on a home network alongside real
+    # services, so a fork PR must never land there. Everything that does reach it
+    # required write access to this repo first.
+    #
+    # This keys on the fork flag rather than on `event_name == 'push'`, because
+    # `on.push` here is restricted to master: branch pushes raise no push event at
+    # all, so a push-only condition would leave every PR -- the checks that gate
+    # merges -- on the 4-core hosted runner and buy almost nothing.
+    #
+    # Only this job is routed. The rest are seconds-to-minutes and several run in
+    # containers; leaving them hosted keeps the change small and the fallback obvious.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'voltron-linux' }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config for later steps to read.
+          persist-credentials: false
+
+      - name: install the pinned toolchain
+        # rust-toolchain.toml pins the version; `rustup show` installs exactly that.
+        run: rustup show
+
+      - name: install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libssl-dev pkg-config cmake libclang-dev unzip
+
+      # NOT apt's protobuf-compiler. That package ships the binary without putting the
+      # well-known types where protoc looks for them, so the build fails with
+      # "google/protobuf/descriptor.proto: File not found". heddle-release.yml already
+      # installs protoc this way; this job did not, which is why it never once passed.
+      - name: install protoc with well-known types
+        env:
+          PROTOC_VERSION: "25.1"
+        run: |
+          set -euxo pipefail
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          protoc --version
+
+      # Hosted runners only. The self-hosted builder keeps CARGO_HOME and its _work
+      # directory on local disk between jobs, so target/ is already warm; running this
+      # there would upload and download multi-GB archives over a home connection to
+      # restore a cache that never left. `runner.environment` is 'github-hosted' or
+      # 'self-hosted', set by the runner itself rather than inferred from the label.
+      - if: runner.environment == 'github-hosted'
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+        with:
+          key: heddle-ci
+
+      - name: install pinned cargo tools
+        run: |
+          set -euo pipefail
+          cargo install cargo-nextest --version 0.9.140 --locked
+          cargo install cargo-deny --version 0.20.2 --locked
+
+      # format is ADVISORY at every tier (constitution §2) — it reports, never blocks.
+      - name: format check (advisory)
+        run: cargo fmt --all -- --check
+        continue-on-error: true
+
+      - name: lint
+        run: cargo clippy --locked -p warp -p warp_core -p warp_tui -p onboarding
+
+      - name: typecheck
+        run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding
+
+      # `cargo test` alone covers only the workspace DEFAULT MEMBERS, and warp_core is
+      # not one of them — four failures hid behind that for a long time. Name the crates.
+      #
+      # `--no-fail-fast` because this suite had never run on Linux until today, and it is
+      # turning up host-dependent tests one at a time. Stopping at the first failure means one
+      # ~25-minute cycle per test, and no way to tell whether the next fix is the last. Running
+      # to completion costs a slower red build and buys the whole list at once; a green build
+      # is unaffected, since nothing is failing to keep going past.
+      - name: unit
+        run: cargo nextest run --locked --no-fail-fast -p warp -p warp_core -p warp_tui -p onboarding
+
+      # Drives the BUILT binary as a subprocess. Unattended: no TTY, no credentials,
+      # no network.
+      - name: e2e
+        run: cargo nextest run --locked -p warp_tui --test '*'
+
+      - name: build
+        run: cargo build --locked -p warp_tui --bin heddle-tui
+
+      # Advisory: a new advisory against a transitive dependency should be visible without
+      # blocking every unrelated change. deny.toml records why each existing one is accepted.
+      - name: dependency audit (advisory)
+        run: cargo deny check advisories bans sources licenses
+        continue-on-error: true
+
+  # Blocks newly-introduced vulnerable dependencies on PRs. Needs a public repo or GHAS;
+  # guarded so it skips cleanly rather than failing if the repository is ever made private.
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config for later steps to read.
+          persist-credentials: false
+      # Advisory until the repository's Dependency graph is switched on. The action hard
+      # errors with "Dependency review is not supported on this repository" otherwise, which
+      # is a repo setting no branch can satisfy -- and a check that is red for a reason the
+      # author cannot fix teaches people to ignore red checks.
+      - uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4.8.2
+        continue-on-error: true
+        with:
+          fail-on-severity: high
+          # This project is AGPL-3.0, so copyleft dependencies are compatible and must NOT
+          # be denied here. deny.toml carries the real licence allowlist.
+          comment-summary-in-pr: on-failure

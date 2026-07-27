@@ -22,14 +22,15 @@ pub enum CommandPaletteItemAction {
     AcceptBinding {
         binding: Arc<CommandBinding>,
     },
+    /// Reveal the object in the Drive panel. Local navigation through `CloudModel`.
+    ViewInWarpDrive {
+        id: CloudObjectTypeAndId,
+    },
     ExecuteWorkflow {
         id: SyncId,
     },
     OpenNotebook {
         id: SyncId,
-    },
-    ViewInWarpDrive {
-        id: CloudObjectTypeAndId,
     },
     InvokeEnvironmentVariables {
         id: SyncId,
@@ -91,6 +92,12 @@ impl CommandPaletteItemAction {
             CommandPaletteItemAction::AcceptBinding { binding } => ItemSummary::Action {
                 binding_id: binding.id,
             },
+            CommandPaletteItemAction::ViewInWarpDrive { id } => match id {
+                CloudObjectTypeAndId::Notebook(_)
+                | CloudObjectTypeAndId::Folder(_)
+                | CloudObjectTypeAndId::GenericStringObject { .. } => ItemSummary::CloudObject,
+                CloudObjectTypeAndId::Workflow(id) => ItemSummary::Workflow { id: *id },
+            },
             CommandPaletteItemAction::OpenNotebook { id } => ItemSummary::Notebook { id: *id },
             CommandPaletteItemAction::ExecuteWorkflow { id } => ItemSummary::Workflow { id: *id },
             CommandPaletteItemAction::InvokeEnvironmentVariables { id } => {
@@ -116,12 +123,6 @@ impl CommandPaletteItemAction {
             CommandPaletteItemAction::OpenLaunchConfiguration { .. } => {
                 ItemSummary::LaunchConfiguration
             }
-            CommandPaletteItemAction::ViewInWarpDrive { id } => match id {
-                CloudObjectTypeAndId::Notebook(_)
-                | CloudObjectTypeAndId::Folder(_)
-                | CloudObjectTypeAndId::GenericStringObject { .. } => ItemSummary::CloudObject,
-                CloudObjectTypeAndId::Workflow(id) => ItemSummary::Workflow { id: *id },
-            },
             CommandPaletteItemAction::OpenFile {
                 path,
                 project_directory,

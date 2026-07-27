@@ -111,7 +111,7 @@ fn test_cache_dir_path() {
         if #[cfg(target_os = "macos")] {
             assert_eq!(cache_dir(), home_dir.join("Library/Application Support/dev.heddle.Heddle"));
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
-            assert_eq!(cache_dir(), home_dir.join(".cache/warp-oss"));
+            assert_eq!(cache_dir(), home_dir.join(".cache/heddle"));
         } else if #[cfg(windows)] {
             assert_eq!(cache_dir(), home_dir.join("AppData\\Local\\heddle\\Heddle\\cache"));
         } else {
@@ -128,7 +128,7 @@ fn test_state_dir_path() {
         if #[cfg(target_os = "macos")] {
             assert_eq!(state_dir(), home_dir.join("Library/Application Support/dev.heddle.Heddle"));
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
-            assert_eq!(state_dir(), home_dir.join(".local/state/warp-oss"));
+            assert_eq!(state_dir(), home_dir.join(".local/state/heddle"));
         } else if #[cfg(windows)] {
             assert_eq!(state_dir(), home_dir.join("AppData\\Local\\heddle\\Heddle\\data"));
         } else {
@@ -192,7 +192,10 @@ fn test_project_path_for_oss_app_id() {
         if #[cfg(target_os = "macos")] {
             assert_eq!(project_dirs.project_path(), "dev.heddle.Heddle");
         } else if #[cfg(any(target_os = "linux", target_os = "freebsd"))] {
-            assert_eq!(project_dirs.project_path(), "warp-oss");
+            // Linux ignores the qualifier and organization entirely: the project path is just
+            // the lowercased application name. `AppId::new("dev", "heddle", "Heddle")` therefore
+            // yields "heddle", not the pre-rename "warp-oss".
+            assert_eq!(project_dirs.project_path(), "heddle");
         } else if #[cfg(windows)] {
             assert_eq!(project_dirs.project_path(), "heddle\\Heddle");
         } else {

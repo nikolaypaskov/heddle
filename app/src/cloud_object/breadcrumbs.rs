@@ -19,6 +19,14 @@ impl Breadcrumb for ContainingObject {
         self.name.clone()
     }
 
+    /// Interactive: clicking a crumb reveals the object in the Drive panel.
+    ///
+    /// This returned `false` for a while, on the reasoning that the click "offered a
+    /// destination that no longer exists". The destination does exist and is entirely local
+    /// -- `WorkspaceView::view_in_warp_drive` opens the left panel, expands ancestors through
+    /// the local `CloudModel`, and scrolls the row into view. It only looked absent because
+    /// `is_warp_drive_enabled` was gated on an account check that could never pass, so the
+    /// panel never rendered. Folders themselves are rows in this machine's sqlite database.
     fn enabled(&self) -> bool {
         true
     }

@@ -1,6 +1,5 @@
 pub mod cloud_action_confirmation_dialog;
 mod cloud_object_naming_dialog;
-pub mod cloud_object_styling;
 pub mod drive_helpers;
 pub mod empty_trash_confirmation_dialog;
 pub mod export;
@@ -11,7 +10,6 @@ pub mod items;
 pub mod panel;
 pub mod settings;
 pub mod sharing;
-pub mod workflows;
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -132,7 +130,7 @@ pub fn write_has_auto_opened_welcome_folder_to_user_defaults(app: &mut AppContex
     settings_value::SettingsValue,
 )]
 #[schemars(
-    description = "Sort order for Warp Drive items.",
+    description = "Sort order for Drive items.",
     rename_all = "snake_case"
 )]
 pub enum DriveSortOrder {

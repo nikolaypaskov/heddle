@@ -20,8 +20,10 @@ on:
         required: true
         type: string
 
+# Least privilege by default. Only the job that creates the release needs write, and it
+# escalates for itself; a top-level `contents: write` handed that power to every job.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: heddle-release-${{ github.ref }}
@@ -55,9 +57,11 @@ jobs:
       # accepts a tag input but builds whatever the default branch points at,
       # attaching a binary to a different tag's source archive. Under AGPL that
       # is a Corresponding Source mismatch, not just untidiness.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           ref: ${{ inputs.tag || github.ref }}
+          # Do not leave the job token in .git/config.
+          persist-credentials: false
 
       - name: Install Rust toolchain
         run: rustup show
@@ -94,9 +98,14 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: heddle-release-${{ matrix.target }}
+      # No build cache on the release path, deliberately.
+      #
+      # `save-if: false` would stop this workflow POISONING the shared cache, but not
+      # stop it CONSUMING a cache another workflow poisoned -- and what this job produces
+      # is a signed, notarized binary that the release notes make provenance claims
+      # about. A release build starts cold so that what ships is built only from the
+      # committed source. The cost is a slower release build, which is the right trade
+      # for the one workflow whose output users install.
 
       - name: Build release binary
         # GIT_RELEASE_TAG is read via option_env! in warp_core, so the binary can report its own
@@ -165,19 +174,26 @@ jobs:
           tar -xzf "dist/${name}.tar.gz" -C "$workdir"
           ./script/heddle/verify-no-warp-endpoints "$workdir/${name}/heddle-tui"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: heddle-${{ matrix.target }}
           path: dist/*.tar.gz*
 
   publish:
+    # This job creates the GitHub release, so it needs write. Scoped here rather
+    # than at the top level, where it would apply to the build jobs too.
+    permissions:
+      contents: write
     name: Publish release
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config.
+          persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           path: dist
           merge-multiple: true

@@ -10,7 +10,7 @@ use warpui::{
 };
 
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::drive::workflows::enum_creation_dialog::WorkflowEnumData;
+use crate::workflows::args::enum_creation_dialog::WorkflowEnumData;
 use crate::editor::{
     EditOrigin, EditorView, Event as EditorEvent, PropagateAndNoOpNavigationKeys,
     SingleLineEditorOptions, TextOptions,

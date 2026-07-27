@@ -103,7 +103,7 @@ use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ObjectUid, SyncId};
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{
-    AnonymousUserSignupEntrypoint, PaletteSource, SharingDialogSource, TelemetryEvent,
+    AnonymousUserSignupEntrypoint, PaletteSource, TelemetryEvent,
 };
 use crate::session_management::SessionNavigationData;
 use crate::settings::{AISettings, DefaultSessionMode, PaneSettings};
@@ -501,13 +501,8 @@ pub enum Event {
     OpenWorkflowModalWithCommand(String),
     // Tell the workspace to open the workflow for edit.
     OpenCloudWorkflowForEdit(SyncId),
-    // Tell the workspace to open the share dialog for the given drive object. The share dialog will
-    // open in the index. If the invitee email is provided, it will be added to the share dialog.
-    OpenDriveObjectShareDialog {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-    },
+    // Tell the workspace to reveal an object in the Drive panel. Local navigation.
+    ViewInWarpDrive(WarpDriveItemId),
     // Tell the workspace to open the workflow modal with an unsaved workflow.
     OpenWorkflowModalWithTemporary(Box<Workflow>),
     OpenPromptEditor,
@@ -568,7 +563,6 @@ pub enum Event {
     FocusPaneInWorkspace {
         locator: PaneViewLocator,
     },
-    ViewInWarpDrive(WarpDriveItemId),
     MoveToSpace {
         cloud_object_type_and_id: CloudObjectTypeAndId,
         space: Space,

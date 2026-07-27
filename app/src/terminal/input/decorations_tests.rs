@@ -10,6 +10,13 @@ use crate::terminal::input::tests::{
 use crate::terminal::model::session::SessionInfo;
 use crate::themes::theme::AnsiColorIdentifier;
 
+thread_local! {
+    /// What the session's command discovery actually returned, so a failure can say whether
+    /// the styling logic is wrong or the machine simply reported a different command set.
+    static COMMAND_PROBE: std::cell::RefCell<Option<(usize, bool, bool)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 #[test]
 fn test_decorations_with_multibyte_chars() {
     App::test((), |mut app| async move {
@@ -37,9 +44,39 @@ fn test_decorations_with_multibyte_chars() {
             terminal_view
                 .sessions_model()
                 .update(ctx, |sessions, _ctx| {
-                    // Wait until external commands have been loaded.
                     let session = sessions.get(session_id).expect("session should exist");
-                    warpui::r#async::block_on(session.load_external_commands());
+                    // Name the command set instead of discovering it from this machine.
+                    //
+                    // `load_external_commands()` runs a shell against the real PATH, so what
+                    // counts as a "known command" depended on the host. That made this test
+                    // pass on macOS and fail on CI: Linux discovers MORE commands (2826 vs
+                    // 2182) but not `echo`, because `echo` is a bash builtin and the loader
+                    // filters to `type -t == "file"`. macOS returning it at all is the
+                    // anomaly; Linux excluding it is the documented behaviour.
+                    //
+                    // The command names are invented for the same reason. `echo` was not
+                    // safe even when injected: it is also reachable through the completer's
+                    // file-path fallback, since the test sets the working directory to
+                    // /usr/bin. So removing `echo` from this list did NOT make it unknown,
+                    // and the test stayed host-dependent. A name no machine can supply
+                    // cannot be resolved by any fallback, which is what makes this
+                    // deterministic rather than merely tidier.
+                    //
+                    // The subject is unchanged: byte offsets across multibyte text, with one
+                    // known command and one unknown.
+                    session.set_external_commands(["heddlecmd"]);
+                    // Recorded for the failure message below.
+                    //
+                    // This test styles `echo` as a known command and `echoo` as unknown, and
+                    // "known" here means "present in the session's top-level command list",
+                    // which is discovered from the machine the test runs on. When that
+                    // discovery returns a different set -- as it does on CI -- the assertion
+                    // fails with a wall of TextStyle structs that say nothing about why.
+                    let all: Vec<&str> = session.top_level_commands().collect();
+                    COMMAND_PROBE.with(|p| {
+                        *p.borrow_mut() =
+                            Some((all.len(), all.contains(&"heddlecmd"), all.contains(&"heddlecmdd")));
+                    });
                 });
             session_id
         });
@@ -49,7 +86,7 @@ fn test_decorations_with_multibyte_chars() {
         input
             .update(&mut app, |input, ctx| {
                 input.clear_buffer_and_reset_undo_stack(ctx);
-                input.user_insert("echo 'multibyte: שלום עולם'\nechoo hello world", ctx);
+                input.user_insert("heddlecmd 'multibyte: שלום עולם'\nheddlecmdd hello world", ctx);
 
                 // Trigger input decoration computation instead of waiting for the
                 // debounced stream to trigger.
@@ -77,19 +114,22 @@ fn test_decorations_with_multibyte_chars() {
 
         let expected = &[
             (
-                "echo".to_string(),
+                "heddlecmd".to_string(),
                 TextStyle::new().with_syntax_color(command_color),
             ),
             (" 'multibyte: שלום עולם'\n".to_string(), Default::default()),
             (
-                "echoo".to_string(),
+                "heddlecmdd".to_string(),
                 TextStyle::new().with_error_underline_color(error_underline_color),
             ),
             (" hello world".to_string(), Default::default()),
         ];
+        let probe = COMMAND_PROBE.with(|p| *p.borrow());
         assert_eq!(
             text_style_runs, expected,
-            "---- Expected ----\n{expected:#?}\n---- Actual ----\n{text_style_runs:#?}\n"
+            "---- Expected ----\n{expected:#?}\n---- Actual ----\n{text_style_runs:#?}\n\
+             ---- Command discovery on this machine ----\n{probe:?}\n\
+             (total top-level commands, `heddlecmd` present, `heddlecmdd` present)\n"
         );
     });
 }

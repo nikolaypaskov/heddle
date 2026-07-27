@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+#
+# Fail when a change ADDS a suppression that no human has approved.
+#
+# A suppression is anything that silences a control: `#[allow(...)]` on a clippy lint,
+# `nosemgrep`, `trufflehog:ignore`, a new `ignore` entry in deny.toml, a new line in the
+# trufflehog exclude file. Each is sometimes the right call -- and each is also the
+# easiest way for an agent, or a hurried human, to turn a red gate green without fixing
+# anything.
+#
+# The approval path: add the suppression AND a matching entry to
+# .claudeconf/suppressions.json in the same change. Because the ledger sits on the
+# protected surface (CODEOWNERS), a code-owner review of that change IS the recorded
+# sign-off. The check cannot be turned green by re-running it.
+#
+# Removing suppressions never fails.
+#
+# Honest limits: this diffs against a merge base, so it sees what a change ADDS, not what
+# was already there. The existing `#[allow]`s in this tree predate the ledger and are not
+# retroactively approved -- they are grandfathered by the baseline, not blessed.
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+
+LEDGER=".claudeconf/suppressions.json"
+[[ -f "$LEDGER" ]] || { echo "error: $LEDGER not found" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 2; }
+
+BASE="${1:-}"
+if [[ -z "$BASE" ]]; then
+  # Default to the merge base with the default branch; fall back to HEAD~1 on a fresh
+  # branch, and to an empty diff when neither exists (a first commit).
+  if git rev-parse --verify --quiet master >/dev/null 2>&1; then
+    BASE="$(git merge-base HEAD master 2>/dev/null || echo "")"
+  fi
+  [[ -z "$BASE" ]] && BASE="$(git rev-parse --verify --quiet HEAD~1 || echo "")"
+fi
+
+if [[ -z "$BASE" ]]; then
+  echo "OK: no merge base to diff against; nothing to check."
+  exit 0
+fi
+
+python3 - "$BASE" <<'PY'
+import hashlib, json, re, subprocess, sys
+
+base = sys.argv[1]
+ledger = json.load(open(".claudeconf/suppressions.json"))
+approved = {e["fingerprint"] for e in ledger}
+
+# Tokens that silence a control. Deliberately narrow: broad patterns would flag ordinary
+# code and train people to ignore this check.
+TOKENS = re.compile(
+    r"#\[allow\(|#!\[allow\(|nosemgrep|trufflehog:ignore|"
+    r"expect\(clippy::|#\[expect\(",
+)
+WATCHED_CONFIG = ("deny.toml", ".claudeconf/trufflehog-exclude.txt", ".clippy.toml")
+
+# This script must contain the very tokens it forbids in order to search for them, so it
+# excludes itself -- the same exemption the supply-chain gate needs for the same reason.
+# A checker that reports itself trains people to ignore it.
+SELF = "script/heddle/check-suppressions"
+
+diff = subprocess.run(["git", "diff", "--unified=0", base, "--"],
+                      capture_output=True, text=True).stdout
+
+offenders, current = [], None
+for line in diff.splitlines():
+    if line.startswith("+++ b/"):
+        current = line[6:]
+    elif line.startswith("+") and not line.startswith("+++") and current and current != SELF:
+        body = line[1:]
+        is_token = bool(TOKENS.search(body))
+        is_cfg = current in WATCHED_CONFIG and body.strip() and not body.strip().startswith("#")
+        if is_token or is_cfg:
+            fp = hashlib.sha256(f"{current}\0{body.strip()}".encode()).hexdigest()[:16]
+            if fp not in approved:
+                offenders.append((fp, current, body.strip()[:88]))
+
+if not offenders:
+    print("OK: no unledgered suppressions added.")
+    sys.exit(0)
+
+print(f"FAIL: {len(offenders)} suppression(s) added without a ledger entry.\n")
+for fp, f, body in offenders:
+    print(f"  {f}")
+    print(f"    {body}")
+    print(f"    fingerprint: {fp}\n")
+print("Each of these silences a check. If it is the right call, add it to")
+print(".claudeconf/suppressions.json in THIS change with a rationale:\n")
+print(json.dumps([{"fingerprint": o[0], "file": o[1], "rule": "<which check>",
+                   "rationale": "<why silencing it is correct>"} for o in offenders], indent=2))
+sys.exit(1)
+PY

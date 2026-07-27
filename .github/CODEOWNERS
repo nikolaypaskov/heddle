@@ -1,0 +1,39 @@
+# Control-plane ownership (claudeconf constitution §4.7.1).
+#
+# These paths are the ones that can WEAKEN the harness: change a gate, silence a scanner,
+# widen an exclude, or repoint a pinned tool. Everything here requires review by someone
+# other than the change author.
+#
+# CONFIGURED, NOT ENFORCED. This file alone changes nothing. GitHub only requires these
+# reviews once a branch ruleset on `master` is set to: require review from code owners,
+# dismiss stale approvals on new pushes, require approval of the most recent push, and
+# allow no bypass actors. Until those four are set, this file is documentation.
+#
+# The default owner is the repository owner because this project currently has one
+# maintainer. A single-maintainer CODEOWNERS cannot deliver "review by someone else" --
+# that limit is real and is not fixed by this file.
+
+*                                   @nikolaypaskov
+
+# ── CI and the workflow audit configuration ───────────────────────────────────────
+/.github/workflows/                 @nikolaypaskov
+/.github/dependabot.yml             @nikolaypaskov
+/.github/CODEOWNERS                 @nikolaypaskov
+
+# ── The harness itself ────────────────────────────────────────────────────────────
+/lefthook.yml                       @nikolaypaskov
+/.claudeconf/                       @nikolaypaskov
+
+# ── Pinned tool configs: changing these changes what the gates actually check ──────
+/rust-toolchain.toml                @nikolaypaskov
+/.rustfmt.toml                      @nikolaypaskov
+/.clippy.toml                       @nikolaypaskov
+/deny.toml                          @nikolaypaskov
+/Cargo.lock                         @nikolaypaskov
+
+# ── Heddle's own privacy gates and their recorded baselines ───────────────────────
+# A baseline edit can make a removed commercial surface look like it was never there.
+/script/heddle/                     @nikolaypaskov
+
+# ── The agent's own permission surface ────────────────────────────────────────────
+/.claude/settings.json              @nikolaypaskov

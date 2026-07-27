@@ -90,11 +90,24 @@ use crate::{
     AgentNotificationsModel, GlobalResourceHandlesProvider, ObjectActions, experiments, workspace,
 };
 pub(crate) fn initialize_app(app: &mut App) {
+    initialize_app_with_auth(app, AuthStateProvider::new_for_test)
+}
+
+/// As [`initialize_app`], but lets the caller choose the auth state.
+///
+/// The default fixture installs `AuthStateProvider::new_for_test`, which reports a signed-in
+/// user with credentials. No Heddle build is ever in that state, so any test of a predicate
+/// that reads auth must pass `new_logged_out_for_test` here or it is testing a branch that
+/// does not ship.
+pub(crate) fn initialize_app_with_auth(
+    app: &mut App,
+    auth_state_provider: fn() -> AuthStateProvider,
+) {
     initialize_settings_for_tests(app);
 
     // Add the necessary singleton models to the App
     app.add_singleton_model(|_ctx| ServerApiProvider::new_for_test());
-    app.add_singleton_model(|_| AuthStateProvider::new_for_test());
+    app.add_singleton_model(move |_| auth_state_provider());
     app.add_singleton_model(AppTelemetryContextProvider::new_context_provider);
     app.add_singleton_model(AuthManager::new_for_test);
     app.add_singleton_model(|_ctx| PtySpawner::new_for_test());
@@ -4322,12 +4335,25 @@ fn test_pin_tab_on_grouped_tab_extracts_then_pins() {
 /// the tools panel with no way back).
 #[test]
 fn test_tools_panel_warp_drive_toggle_updates_available_views() {
-    // Force the non-anonymous path so `is_warp_drive_enabled` follows the
-    // `enable_warp_drive` setting rather than the auth state.
-    let _skip_anon_guard = FeatureFlag::SkipFirebaseAnonymousUser.override_enabled(false);
+    // Reproduce the SHIPPED configuration, which took three tries to get right.
+    //
+    // `is_warp_drive_enabled` used to be `enable_warp_drive && !is_anonymous_or_logged_out`,
+    // and that second term made Drive invisible to every real user. For this test to have
+    // caught it, two things must both hold, and each was missing at some point:
+    //
+    //   1. `SkipFirebaseAnonymousUser` must be ON. It is in the app's default cargo features,
+    //      but `FLAG_STATES` initialises to all-false and `init_feature_flags()` never runs in
+    //      unit tests -- so the account term was inert here no matter what. The original test
+    //      overrode this flag to FALSE, which was already the test default and therefore did
+    //      nothing; it read as protection while providing none.
+    //   2. Auth must be LOGGED OUT. The shared fixture installs `new_for_test`, a signed-in
+    //      user with credentials -- a state no Heddle build is ever in.
+    //
+    // Mutation-checked: restore the `&& !is_anonymous_or_logged_out` term and this test fails.
+    let _skip_anon_guard = FeatureFlag::SkipFirebaseAnonymousUser.override_enabled(true);
 
     App::test((), |mut app| async move {
-        initialize_app(&mut app);
+        initialize_app_with_auth(&mut app, AuthStateProvider::new_logged_out_for_test);
         let workspace = mock_workspace(&mut app);
 
         // Warp Drive is enabled by default, so it is an available tools-panel

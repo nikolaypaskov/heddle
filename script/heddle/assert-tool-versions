@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+#
+# Assert that every GLOBALLY-installed tool the hooks invoke by bare name is the version
+# the manifest pins.
+#
+# Why this exists: a manifest pin is a CLAIM, not a control. A hook that runs `semgrep`
+# executes whatever version happens to be on the machine's PATH -- so a harness can
+# record 1.171.0 and silently execute something else, with different rules and different
+# findings. This closes that gap by parsing each tool's own --version output and failing
+# on a mismatch, or on output it cannot parse.
+#
+# What it is NOT: binary provenance. It proves the executing binary REPORTS the recorded
+# version; it does not verify a checksum or signature. Checksum/Sigstore-pinned
+# provisioning is the stronger control and is not implemented here.
+#
+# Cargo-based tools (rustfmt, clippy, cargo check, cargo build) are pinned by
+# rust-toolchain.toml, which rustup enforces, so they are checked against that file
+# rather than the manifest.
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+
+MANIFEST=".claudeconf/manifest.json"
+[[ -f "$MANIFEST" ]] || { echo "error: $MANIFEST not found" >&2; exit 2; }
+
+command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 2; }
+
+STATUS=0
+
+# Read a pinned version out of the manifest without needing jq.
+pinned() {
+  python3 - "$1" <<'PY'
+import json, sys
+key = sys.argv[1]
+m = json.load(open(".claudeconf/manifest.json"))
+if key in m["milestones"]:
+    print(m["milestones"][key].get("version", ""))
+elif key == "hookRunner":
+    print(m["hookRunner"]["version"])
+else:
+    for a in m["ci"]["auditors"]:
+        if a["tool"] == key:
+            print(a["version"]); break
+    else:
+        print("")
+PY
+}
+
+check() {
+  local label="$1" cmd="$2" want="$3"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "FAIL: $label — '$cmd' is not on PATH; the hook that calls it would exit 127"
+    STATUS=1
+    return
+  fi
+  # Take the first semver-looking token from the tool's own version output.
+  local got
+  got="$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+  if [[ -z "$got" ]]; then
+    echo "FAIL: $label — could not parse a version from '$cmd --version'"
+    STATUS=1
+  elif [[ "$got" != "$want" ]]; then
+    echo "FAIL: $label — manifest pins $want, PATH has $got"
+    STATUS=1
+  else
+    printf '  ok  %-14s %s\n' "$label" "$got"
+  fi
+}
+
+echo "Asserting global tool versions against $MANIFEST..."
+check semgrep    semgrep    "$(pinned sast)"
+check trufflehog trufflehog "$(pinned secret-scan)"
+check lefthook   lefthook   "$(pinned hookRunner)"
+check actionlint actionlint "$(pinned actionlint)"
+check zizmor     zizmor     "$(pinned zizmor)"
+
+# cargo-nextest and cargo-deny are invoked as cargo subcommands.
+for pair in "cargo-nextest:unit:nextest" "cargo-deny:dependency-audit:deny"; do
+  IFS=: read -r label key sub <<<"$pair"
+  want="$(pinned "$key")"
+  got="$(cargo "$sub" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+  if [[ -z "$got" ]]; then
+    echo "FAIL: $label — could not parse a version from 'cargo $sub --version'"; STATUS=1
+  elif [[ "$got" != "$want" ]]; then
+    echo "FAIL: $label — manifest pins $want, PATH has $got"; STATUS=1
+  else
+    printf '  ok  %-14s %s\n' "$label" "$got"
+  fi
+done
+
+# The Rust toolchain is pinned by rust-toolchain.toml, which rustup enforces.
+TOOLCHAIN="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' rust-toolchain.toml | head -1)"
+RUSTC="$(rustc --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+if [[ "$TOOLCHAIN" != "$RUSTC" ]]; then
+  echo "FAIL: rust toolchain — rust-toolchain.toml pins $TOOLCHAIN, rustc reports $RUSTC"
+  STATUS=1
+else
+  printf '  ok  %-14s %s\n' "rust" "$RUSTC"
+fi
+
+if [[ "$STATUS" -eq 0 ]]; then
+  echo "OK: every pinned tool on PATH matches the manifest."
+else
+  echo
+  echo "A mismatch means the harness is not running what it records. Install the pinned"
+  echo "version, or re-run the claudeconf skill to record a deliberate upgrade."
+fi
+exit "$STATUS"

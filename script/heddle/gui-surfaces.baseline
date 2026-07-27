@@ -12,30 +12,19 @@
 ./app/src/ai/agent_sdk/artifact_upload.rs	cloud agent
 ./app/src/ai/agent_sdk/artifact_upload_tests.rs	cloud agent
 ./app/src/ai/agent_sdk/artifact_upload_tests.rs	cloud agent
-./app/src/ai/agent_sdk/common.rs	warp drive
 ./app/src/ai/agent_sdk/driver.rs	log in
 ./app/src/ai/agent_sdk/driver.rs	login
 ./app/src/ai/agent_sdk/driver.rs	subscription
 ./app/src/ai/agent_sdk/driver.rs	subscription
 ./app/src/ai/agent_sdk/driver.rs	subscription
 ./app/src/ai/agent_sdk/driver.rs	subscription
-./app/src/ai/agent_sdk/driver.rs	warp drive
 ./app/src/ai/agent_sdk/driver/error_classification.rs	credits
 ./app/src/ai/agent_sdk/driver/error_classification.rs	log in
 ./app/src/ai/agent_sdk/driver/error_classification.rs	login
 ./app/src/ai/agent_sdk/driver/error_classification.rs	login
-./app/src/ai/agent_sdk/driver/error_classification.rs	warp drive
-./app/src/ai/agent_sdk/driver/error_classification.rs	warp drive
-./app/src/ai/agent_sdk/driver/error_classification.rs	warp drive
-./app/src/ai/agent_sdk/driver/error_classification.rs	warp drive
 ./app/src/ai/agent_sdk/driver/error_classification.rs	your account
 ./app/src/ai/agent_sdk/driver/harness/codex.rs	billing
 ./app/src/ai/agent_sdk/driver/harness/codex.rs	login
-./app/src/ai/agent_sdk/environment.rs	warp drive
-./app/src/ai/agent_sdk/environment.rs	warp drive
-./app/src/ai/agent_sdk/environment.rs	warp drive
-./app/src/ai/agent_sdk/environment.rs	warp drive
-./app/src/ai/agent_sdk/environment.rs	warp drive
 ./app/src/ai/agent_sdk/mod.rs	credits
 ./app/src/ai/agent_sdk/mod.rs	log in
 ./app/src/ai/agent_sdk/mod.rs	log in
@@ -45,12 +34,6 @@
 ./app/src/ai/agent_sdk/telemetry.rs	login
 ./app/src/ai/agent_sdk/telemetry.rs	logout
 ./app/src/ai/agent_tips.rs	credits
-./app/src/ai/agent_tips.rs	warp drive
-./app/src/ai/agent_tips.rs	warp drive
-./app/src/ai/ai_document_view.rs	warp drive
-./app/src/ai/ai_document_view.rs	warp drive
-./app/src/ai/ai_document_view.rs	warp drive
-./app/src/ai/ai_document_view.rs	warp drive
 ./app/src/ai/aws_credentials.rs	log in
 ./app/src/ai/aws_credentials.rs	login
 ./app/src/ai/aws_credentials.rs	login
@@ -58,7 +41,6 @@
 ./app/src/ai/aws_credentials_tests.rs	log in
 ./app/src/ai/aws_credentials_tests.rs	login
 ./app/src/ai/aws_credentials_tests.rs	login
-./app/src/ai/blocklist/action_model/execute/read_documents.rs	warp drive
 ./app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs	cloud agent
 ./app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs	cloud agent
 ./app/src/ai/blocklist/agent_view/agent_input_footer/mod.rs	log in
@@ -97,12 +79,6 @@
 ./app/src/ai/cloud_agent_config/mod.rs	cloud agent
 ./app/src/ai/conversation_details_panel.rs	credits
 ./app/src/ai/conversation_details_panel.rs	credits
-./app/src/ai/document/ai_document_model.rs	warp drive
-./app/src/ai/document/ai_document_model.rs	warp drive
-./app/src/ai/document/ai_document_model.rs	warp drive
-./app/src/ai/document/ai_document_model.rs	warp drive
-./app/src/ai/execution_profiles/config.rs	warp drive
-./app/src/ai/execution_profiles/editor/ui_helpers.rs	warp drive
 ./app/src/ai/execution_profiles/profiles_tests.rs	logged out
 ./app/src/ai/execution_profiles/profiles_tests.rs	login
 ./app/src/ai/execution_profiles/profiles_tests.rs	login
@@ -244,17 +220,6 @@
 ./app/src/drive/index.rs	subscription
 ./app/src/drive/index.rs	upgrade
 ./app/src/drive/index.rs	view plans
-./app/src/drive/index.rs	warp drive
-./app/src/drive/index.rs	warp drive
-./app/src/drive/index.rs	warp drive
-./app/src/drive/mod.rs	warp drive
-./app/src/drive/settings.rs	warp drive
-./app/src/drive/settings.rs	warp drive
-./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/workflows/ai_assist.rs	credits
 ./app/src/experiments/login_layer.rs	login
 ./app/src/integration_testing/assertions.rs	subscription
 ./app/src/integration_testing/assertions.rs	subscription
@@ -265,7 +230,6 @@
 ./app/src/integration_testing/warp_drive/assertion.rs	warp drive
 ./app/src/lib.rs	logged out
 ./app/src/local_control/handlers/app_state.rs	warp drive
-./app/src/local_control/handlers/metadata.rs	warp drive
 ./app/src/login_item/macos.rs	login
 ./app/src/login_item/macos.rs	login
 ./app/src/login_item/macos.rs	login
@@ -277,7 +241,6 @@
 ./app/src/login_item/windows_tests.rs	login
 ./app/src/login_item/windows_tests.rs	login
 ./app/src/notebooks/notebook/details_bar.rs	sign in
-./app/src/pane_group/pane/view/header/sharing.rs	sign in
 ./app/src/remote_server/server_model.rs	subscribe
 ./app/src/remote_server/server_model.rs	subscribe
 ./app/src/remote_server/server_model.rs	subscribe
@@ -423,9 +386,6 @@
 ./app/src/settings_view/ai_page.rs	your account
 ./app/src/settings_view/appearance_page.rs	warp drive
 ./app/src/settings_view/appearance_page.rs	warp drive
-./app/src/settings_view/appearance_page.rs	warp drive
-./app/src/settings_view/appearance_page.rs	warp drive
-./app/src/settings_view/execution_profile_view.rs	warp drive
 ./app/src/settings_view/features_page.rs	log out
 ./app/src/settings_view/features_page.rs	login
 ./app/src/settings_view/features_page.rs	login
@@ -452,22 +412,11 @@
 ./app/src/settings_view/mcp_servers_page.rs	logged out
 ./app/src/settings_view/mcp_servers_page.rs	logged out
 ./app/src/settings_view/mod.rs	warp drive
-./app/src/settings_view/mod.rs	warp drive
 ./app/src/settings_view/platform_page.rs	cloud agent
 ./app/src/settings_view/privacy_page.rs	log in
 ./app/src/settings_view/privacy_page.rs	logout
-./app/src/settings_view/privacy_page.rs	warp drive
 ./app/src/settings_view/update_environment_form_tests.rs	login
 ./app/src/settings_view/update_environment_form_tests.rs	login
-./app/src/settings_view/warp_drive_page.rs	create an account
-./app/src/settings_view/warp_drive_page.rs	sign up
-./app/src/settings_view/warp_drive_page.rs	sign up
-./app/src/settings_view/warp_drive_page.rs	warp drive
-./app/src/settings_view/warp_drive_page.rs	warp drive
-./app/src/settings_view/warp_drive_page.rs	warp drive
-./app/src/settings_view/warp_drive_page.rs	warp drive
-./app/src/settings_view/warp_drive_page.rs	warp drive
-./app/src/settings_view/warp_drive_page.rs	warp drive
 ./app/src/settings_view/warp_drive_page.rs	warp drive
 ./app/src/tab.rs	cloud agent
 ./app/src/terminal/cli_agent_sessions/plugin_manager/codex.rs	upgrade
@@ -510,9 +459,6 @@
 ./app/src/terminal/view/action.rs	login
 ./app/src/terminal/view/action.rs	login
 ./app/src/terminal/view/action.rs	login
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs	warp drive
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs	warp drive
-./app/src/terminal/view/docker_sandbox/mod.rs	warp drive
 ./app/src/terminal/view/init_environment/mod.rs	cloud agent
 ./app/src/terminal/view/init_project/mod.rs	cloud agent
 ./app/src/terminal/view/inline_banner/anonymous_user_ai_sign_up.rs	create an account
@@ -542,8 +488,7 @@
 ./app/src/util/git_tests.rs	login
 ./app/src/util/git_tests.rs	login
 ./app/src/util/git_tests.rs	login
-./app/src/wasm_nux_dialog.rs	warp drive
-./app/src/workflows/aliases.rs	warp drive
+./app/src/workflows/args/ai_assist.rs	credits
 ./app/src/workflows/categories.rs	upgrade
 ./app/src/workflows/workflow_view.rs	sign in
 ./app/src/workspace/bonus_grant_notification_model.rs	credits
@@ -552,7 +497,6 @@
 ./app/src/workspace/mod.rs	login
 ./app/src/workspace/mod.rs	login
 ./app/src/workspace/mod.rs	login
-./app/src/workspace/mod.rs	warp drive
 ./app/src/workspace/view.rs	cloud agent
 ./app/src/workspace/view.rs	login
 ./app/src/workspace/view.rs	login
@@ -562,8 +506,6 @@
 ./app/src/workspace/view.rs	sign up
 ./app/src/workspace/view.rs	sign up
 ./app/src/workspace/view.rs	upgrade
-./app/src/workspace/view.rs	warp drive
-./app/src/workspace/view.rs	warp drive
 ./app/src/workspace/view.rs	warp drive
 ./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs	billing
 ./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs	billing
@@ -587,7 +529,6 @@
 ./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs	upgrade
 ./app/src/workspace/view/cloud_agent_capacity_modal/mod.rs	upgrade
 ./app/src/workspace/view/global_search/view.rs	upgrade
-./app/src/workspace/view/left_panel.rs	warp drive
 ./app/src/workspace/view_tests.rs	warp drive
 ./app/src/workspace/view_tests.rs	warp drive
 ./app/src/workspace/view_tests.rs	warp drive
@@ -606,7 +547,6 @@
 ./app/src/workspaces/team.rs	credits
 ./app/src/workspaces/team.rs	subscription
 ./app/src/workspaces/user_workspaces_tests.rs	logged-out
-./crates/ai/src/agent/citation.rs	warp drive
 ./crates/ai/src/aws_credentials.rs	log in
 ./crates/ai/src/geap_credentials.rs	signed in
 ./crates/ai/src/grok_subscription/oauth.rs	login
@@ -630,7 +570,6 @@
 ./crates/integration/src/test/video_recording.rs	log in
 ./crates/local_control/src/protocol_tests.rs	login
 ./crates/mcp/src/oauth.rs	login
-./crates/onboarding/src/lib.rs	warp drive
 ./crates/onboarding/src/telemetry.rs	log in
 ./crates/onboarding/src/telemetry.rs	log in
 ./crates/onboarding/src/telemetry.rs	login
@@ -674,7 +613,6 @@
 ./crates/warp_core/src/ui/icons.rs	credits
 ./crates/warp_files/src/lib.rs	subscribe
 ./crates/warp_files/src/lib.rs	subscribe
-./crates/warp_search_core/src/data_source.rs	warp drive
 ./crates/warp_server_auth/src/auth_state.rs	login
 ./crates/warp_server_auth/src/auth_state.rs	login
 ./crates/warp_server_auth/src/auth_state.rs	login

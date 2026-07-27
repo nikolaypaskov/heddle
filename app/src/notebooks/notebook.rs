@@ -53,7 +53,6 @@ use crate::cloud_object::{CloudObject, CloudObjectEventEntrypoint, ObjectType, O
 use crate::drive::drive_helpers::has_feature_gated_anonymous_user_reached_notebook_limit;
 use crate::drive::export::ExportManager;
 use crate::drive::items::WarpDriveItemId;
-use crate::drive::sharing::ShareableObject;
 use crate::drive::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
 use crate::editor::{
     EditOrigin, EditorView, Event as EditorEvent, InteractionState, PropagateAndNoOpNavigationKeys,
@@ -72,7 +71,7 @@ use crate::server::cloud_objects::update_manager::{FetchSingleObjectOption, Upda
 use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::server::telemetry::{
     CloudObjectTelemetryMetadata, NotebookActionEvent, NotebookTelemetryMetadata,
-    SharingDialogSource, TelemetryCloudObjectType, TelemetryEvent,
+    TelemetryCloudObjectType, TelemetryEvent,
 };
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
@@ -243,21 +242,17 @@ pub struct NotebookView {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NotebookEvent {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     RunWorkflow {
         workflow: Arc<WorkflowType>,
         source: WorkflowSource,
     },
     EditWorkflow(SyncId),
-    ViewInWarpDrive(WarpDriveItemId),
     Pane(PaneEvent),
     MoveToSpace {
         cloud_object_type_and_id: CloudObjectTypeAndId,
         new_space: Space,
-    },
-    OpenDriveObjectShareDialog {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
     },
     AttachPlanAsContext(AIDocumentId),
 }
@@ -270,6 +265,8 @@ impl From<PaneEvent> for NotebookEvent {
 
 #[derive(Debug, Clone)]
 pub enum NotebookAction {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(WarpDriveItemId),
     Focus,
     ToggleMode,
     Close,
@@ -278,7 +275,6 @@ pub enum NotebookAction {
     ResetFontSize,
     ConflictResolutionBannerRefreshClicked,
     FocusTerminalInput,
-    ViewInWarpDrive(WarpDriveItemId),
     ContextMenu(ContextMenuAction), // right click context menu
     MoveToSpace {
         cloud_object_type_and_id: CloudObjectTypeAndId,
@@ -587,10 +583,7 @@ impl NotebookView {
                     .id()
                     .and_then(SyncId::into_server)
                 {
-                    self.pane_configuration.update(ctx, |pane_config, ctx| {
-                        pane_config
-                            .set_shareable_object(Some(ShareableObject::WarpDriveObject(id)), ctx);
-                    })
+                    let _ = id;
                 }
             }
             ActiveNotebookDataEvent::TrashStatusChanged | ActiveNotebookDataEvent::MovedToSpace => {
@@ -1195,10 +1188,6 @@ impl NotebookView {
         });
     }
 
-    fn view_in_warp_drive(&mut self, id: WarpDriveItemId, ctx: &mut ViewContext<Self>) {
-        ctx.emit(NotebookEvent::ViewInWarpDrive(id));
-    }
-
     fn move_to_team_owner(
         &mut self,
         cloud_object_type_and_id: CloudObjectTypeAndId,
@@ -1585,21 +1574,11 @@ impl NotebookView {
     pub fn load(
         &mut self,
         notebook: CloudNotebook,
-        settings: &OpenWarpDriveObjectSettings,
+        _settings: &OpenWarpDriveObjectSettings,
         ctx: &mut ViewContext<Self>,
     ) -> SpawnedFutureHandle {
         self.set_title(&notebook.model().title, ctx);
         self.set_content(&notebook, ctx);
-
-        if let Some(server_id) = notebook.id.into_server() {
-            self.pane_configuration
-                .update(ctx, |pane_configuration, ctx| {
-                    pane_configuration.set_shareable_object(
-                        Some(ShareableObject::WarpDriveObject(server_id)),
-                        ctx,
-                    );
-                });
-        }
 
         self.active_notebook_data.update(ctx, |data, ctx| {
             data.open_existing(notebook.id, ctx);
@@ -1663,23 +1642,6 @@ impl NotebookView {
             }
         });
         self.update_breadcrumbs(ctx);
-        if let Some(invitee_email) = settings.invitee_email.clone() {
-            let object_id_to_share = settings
-                .focused_folder_id
-                .map(|id| CloudObjectTypeAndId::Folder(SyncId::ServerId(id)))
-                .unwrap_or(CloudObjectTypeAndId::Notebook(notebook.id));
-            ctx.emit(NotebookEvent::OpenDriveObjectShareDialog {
-                cloud_object_type_and_id: object_id_to_share,
-                invitee_email: Some(invitee_email),
-                source: SharingDialogSource::InviteeRequest,
-            });
-        } else if let Some(focused_folder_id) = settings.focused_folder_id.map(SyncId::ServerId) {
-            self.view_in_warp_drive(
-                WarpDriveItemId::Object(CloudObjectTypeAndId::Folder(focused_folder_id)),
-                ctx,
-            );
-        }
-
         ctx.notify();
         baton_future
     }
@@ -2278,6 +2240,9 @@ impl TypedActionView for NotebookView {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
+            NotebookAction::ViewInWarpDrive(id) => {
+                ctx.emit(NotebookEvent::ViewInWarpDrive(*id))
+            }
             NotebookAction::Focus => ctx.focus_self(),
             NotebookAction::ToggleMode => self.toggle_mode(ctx),
             NotebookAction::Close => ctx.emit(NotebookEvent::Pane(PaneEvent::Close)),
@@ -2289,7 +2254,6 @@ impl TypedActionView for NotebookView {
             NotebookAction::ResetFontSize => {
                 self.apply_font_size_to_setting(NotebookFontSize::default_value(), ctx)
             }
-            NotebookAction::ViewInWarpDrive(id) => self.view_in_warp_drive(*id, ctx),
             NotebookAction::FocusTerminalInput => {
                 ctx.emit(NotebookEvent::Pane(PaneEvent::FocusActiveSession))
             }
@@ -2374,7 +2338,7 @@ impl BackingView for NotebookView {
 
     fn render_header_content(
         &self,
-        _ctx: &view::HeaderRenderContext<'_>,
+        _ctx: &view::HeaderRenderContext,
         app: &AppContext,
     ) -> view::HeaderContent {
         view::HeaderContent::simple(self.pane_configuration.as_ref(app).title())

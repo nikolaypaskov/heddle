@@ -3539,7 +3539,7 @@ impl SettingsWidget for ToolsPanelStateScopeWidget {
     type View = AppearanceSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "left tools panel open closed across tabs file tree project explorer global search warp drive conversation list"
+        "left tools panel open closed across tabs file tree project explorer global search drive warp drive conversation list"
     }
 
     fn render(
@@ -3708,7 +3708,7 @@ impl SettingsWidget for ToolsPanelWarpDriveWidget {
     type View = AppearanceSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "tools panel tabs warp drive left panel visibility"
+        "tools panel tabs drive warp drive left panel visibility"
     }
 
     fn render(
@@ -3718,7 +3718,7 @@ impl SettingsWidget for ToolsPanelWarpDriveWidget {
         app: &AppContext,
     ) -> Box<dyn Element> {
         render_body_item::<AppearancePageAction>(
-            "Warp Drive".to_string(),
+            "Drive".to_string(),
             None,
             LocalOnlyIconState::Hidden,
             ToggleState::Enabled,
@@ -3732,7 +3732,7 @@ impl SettingsWidget for ToolsPanelWarpDriveWidget {
                     evt_ctx.dispatch_typed_action(AppearancePageAction::ToggleToolsPanelWarpDrive);
                 })
                 .finish(),
-            Some("Show the Warp Drive tab in the tools panel.".to_string()),
+            Some("Show the Drive tab in the tools panel.".to_string()),
         )
     }
 }

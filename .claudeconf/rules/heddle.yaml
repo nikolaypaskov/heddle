@@ -1,0 +1,144 @@
+# Heddle SAST ruleset.
+#
+# Source:  hand-authored in this repository
+# License: AGPL-3.0-or-later (same as the project)
+# Ref:     n/a — not vendored from a third-party pack
+#
+# BE HONEST ABOUT WHAT THIS IS. This is a SEED, not comprehensive analysis. Nine rules
+# cannot cover a 1.5M-line codebase, and a green run here is not a security guarantee.
+# It is a deterministic, offline tripwire for the specific mistakes this project has
+# actually made, plus a few generic ones. For real coverage, vendor a curated pack at a
+# pinned commit or add CodeQL at the CI tier.
+#
+# Rules are written as AST patterns where possible. `pattern-regex` bypasses semgrep's
+# analysis engine and amounts to grep — used here only where the target genuinely is a
+# literal (a hardcoded credential shape).
+
+rules:
+  # ── The defect class that cost this project the most ──────────────────────────────
+  - id: heddle-account-gate-predicate
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Capability gated on an account predicate. This fork has no accounts, so this
+      predicate is CONSTANT -- the capability does not become free, it becomes
+      permanently off, silently. Three shipped bugs came from exactly this shape
+      (AI disabled at 312 call sites, BYOK erasing saved keys, onboarding completing
+      with AI off). Read what the predicate returns here before leaving it.
+    pattern-either:
+      - pattern: $X.is_anonymous_or_logged_out()
+      - pattern: $X.is_logged_in()
+    paths:
+      exclude:
+        - "*_tests.rs"
+        - "*_test.rs"
+        - "tests/"
+
+  # ── Endpoint / credential reintroduction ──────────────────────────────────────────
+  - id: heddle-warp-endpoint-literal
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      A warp.dev endpoint literal. This fork reaches no Warp server, and the byte-level
+      scanner (script/heddle/verify-no-warp-endpoints) fails the build on these. Remove
+      it rather than silencing this rule.
+    pattern-regex: '"https?://[^"]*warp\.dev'
+    paths:
+      exclude:
+        # Test files, which do not ship. Both rules fire on fixtures that exercise
+        # URL-derivation and secret-REDACTION logic -- a test asserting that
+        # derive_http_origin_from_ws_url("https://app.warp.dev") returns None needs that
+        # literal to be a meaningful test. The authoritative control for shipped code is
+        # the byte-level scan of the built binary (script/heddle/verify-no-warp-endpoints),
+        # which sees what actually ships and is unaffected by this scoping.
+        - "*_tests.rs"
+        - "*_test.rs"
+        - "tests/"
+
+  - id: heddle-google-api-key-literal
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      A Google API key literal. Warp's Firebase key was published in this repository's
+      history; do not reintroduce it or any other. If this is a redaction TEST fixture,
+      it belongs in the files the scanner excludes, not in new code.
+    pattern-regex: 'AIza[0-9A-Za-z_-]{35}'
+    paths:
+      exclude:
+        # Test files, which do not ship. Both rules fire on fixtures that exercise
+        # URL-derivation and secret-REDACTION logic -- a test asserting that
+        # derive_http_origin_from_ws_url("https://app.warp.dev") returns None needs that
+        # literal to be a meaningful test. The authoritative control for shipped code is
+        # the byte-level scan of the built binary (script/heddle/verify-no-warp-endpoints),
+        # which sees what actually ships and is unaffected by this scoping.
+        - "*_tests.rs"
+        - "*_test.rs"
+        - "tests/"
+
+  # ── Generic Rust correctness/safety, high signal only ─────────────────────────────
+  - id: heddle-unwrap-on-env-var
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      `env::var(..).unwrap()` panics when the variable is unset. In a terminal this
+      surfaces as a crash on launch in whatever environment happens to lack it. Prefer
+      a default or a handled error.
+    pattern-either:
+      - pattern: std::env::var($X).unwrap()
+      - pattern: env::var($X).unwrap()
+    paths:
+      exclude:
+        - "*_tests.rs"
+        - "*_test.rs"
+        - "tests/"
+        # build.rs runs at COMPILE time on a developer's machine, where a missing
+        # CARGO_MANIFEST_DIR means the build is already broken. This rule is about
+        # runtime panics in the shipped binary.
+        - "build.rs"
+
+  - id: heddle-command-without-sanitized-input
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Shell invocation via `sh -c` with an interpolated string. If any part comes from
+      untrusted input this is command injection. Pass arguments as a vector to the
+      program directly instead of composing a shell string.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              Command::new("sh").arg("-c").arg(format!(...))
+          - pattern: |
+              Command::new("bash").arg("-c").arg(format!(...))
+
+  - id: heddle-disabled-tls-verification
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      TLS certificate verification disabled. This silently turns every HTTPS connection
+      into an unauthenticated one.
+    pattern-either:
+      - pattern: $X.danger_accept_invalid_certs(true)
+      - pattern: $X.danger_accept_invalid_hostnames(true)
+
+  - id: heddle-world-writable-permissions
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      World-writable file mode. Any local user can modify this file; if it holds
+      settings or credentials that is a privilege-escalation path.
+    pattern-either:
+      - pattern: PermissionsExt::from_mode(0o777)
+      - pattern: PermissionsExt::from_mode(0o666)
+      - pattern: $P.set_mode(0o777)
+      - pattern: $P.set_mode(0o666)
+
+  # ── Harness integrity ─────────────────────────────────────────────────────────────
+  - id: heddle-fetch-and-execute
+    languages: [bash]
+    severity: ERROR
+    message: >-
+      Fetching a script over the network and piping it to an interpreter. This is how
+      `script/bootstrap` and `script/run` came to execute code from a Warp-owned
+      repository at an unpinned branch on every run. If a tool genuinely must be
+      installed this way, do it in a container image, not in a developer-facing script.
+    pattern-regex: '(curl|wget)[^|\n]*\|[[:space:]]*(sudo[[:space:]]+)?(ba)?sh'

@@ -6,7 +6,6 @@ use futures::Future;
 use itertools::Itertools;
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::{Vector2F, vec2f};
-use url::Url;
 use warp_core::context_flag::ContextFlag;
 use warp_core::settings::Setting;
 use warp_core::ui::theme::color::internal_colors;
@@ -48,8 +47,7 @@ use super::items::ai_fact_collection::WarpDriveAIFactCollection;
 use super::items::item::{ItemStates, WarpDriveRow, tools_panel_menu_direction};
 use super::items::mcp_server_collection::WarpDriveMCPServerCollection;
 use super::settings::WarpDriveSettings;
-use super::sharing::dialog::{SharingDialog, SharingDialogEvent};
-use super::sharing::{ContentEditability, ShareableObject};
+use super::sharing::ContentEditability;
 use super::{CloudObjectTypeAndId, DriveObjectType, DriveSortOrder};
 use crate::ai::document::ai_document_model::AIDocumentId;
 use crate::ai::facts::{AIFact, AIMemory};
@@ -79,18 +77,13 @@ use crate::server::cloud_objects::update_manager::{
 use crate::server::ids::{ClientId, ObjectUid, ServerId, SyncId};
 use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::{
-    AnonymousUserSignupEntrypoint, SharingDialogSource, TelemetryEvent,
+    AnonymousUserSignupEntrypoint, TelemetryEvent,
 };
 use crate::settings::SharedObjectLimitBannerSettings;
-use crate::settings::app_installation_detection::{
-    UserAppInstallDetectionSettings, UserAppInstallStatus,
-};
 use crate::ui_components::blended_colors;
 use crate::ui_components::buttons::{highlight, icon_button};
 use crate::ui_components::icons::{ICON_DIMENSIONS, Icon};
 use crate::ui_components::menu_button::{MenuDirection, icon_button_with_context_menu};
-#[cfg(target_family = "wasm")]
-use crate::uri::web_intent_parser::open_url_on_desktop;
 use crate::util::color::coloru_with_opacity;
 use crate::view_components::{Dropdown, DropdownItem};
 use crate::workflows::{CloudWorkflow, WorkflowViewMode};
@@ -100,7 +93,7 @@ use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::WorkspaceUid;
 use crate::{ObjectActions, send_telemetry_from_ctx};
 
-const WARP_DRIVE_TITLE: &str = "Warp Drive";
+const WARP_DRIVE_TITLE: &str = "Drive";
 
 // Team zero state consts
 const HINT_HORIZONTAL_PADDING: f32 = 18.;
@@ -272,16 +265,11 @@ pub enum DriveIndexAction {
     CopyObjectToClipboard(CloudObjectTypeAndId),
     CopyWorkflowId(CloudObjectTypeAndId),
     DuplicateObject(CloudObjectTypeAndId),
-    CopyObjectLinkToClipboard(String),
-    OpenObjectLinkOnDesktop(Url),
     ExportObject(CloudObjectTypeAndId),
     ToggleNewAssetsMenu(Space),
     ToggleSortingMenu,
     ToggleItemOverflowMenu {
         space: Space,
-        warp_drive_item_id: WarpDriveItemId,
-    },
-    ToggleShareDialog {
         warp_drive_item_id: WarpDriveItemId,
     },
     ToggleSpaceOverflowMenu {
@@ -527,13 +515,11 @@ pub struct DriveIndex {
     /// default, should get the menu fields on open, example: + button to add notebook)
     menu: ViewHandle<Menu<DriveIndexAction>>,
 
-    sharing_dialog: ViewHandle<SharingDialog>,
     /// Variant of the index, determines whether base Warp Drive or trash is viewed.
     index_variant: DriveIndexVariant,
     /// If None, the context menu is closed. Otherwise, this contains the ID of the object it's open on.
     menu_object_id_if_open: Option<WarpDriveItemId>,
     /// If Some, the share dialog is open for the given object.
-    share_dialog_open_for_object: Option<WarpDriveItemId>,
     sections: Vec<DriveIndexSection>,
     /// Selected represents an object that is open in the active pane
     selected: Option<WarpDriveItemId>,
@@ -966,10 +952,6 @@ impl DriveIndex {
             ctx.notify();
         });
 
-        let sharing_dialog = ctx.add_typed_action_view(|ctx| SharingDialog::new(None, ctx));
-        ctx.subscribe_to_view(&sharing_dialog, |me, _, event, ctx| {
-            me.handle_sharing_dialog_event(event, ctx);
-        });
 
         let workspace_dropdown = ctx.add_typed_action_view(|ctx| {
             let mut dropdown = Dropdown::new(ctx);
@@ -1015,7 +997,6 @@ impl DriveIndex {
         Self {
             window_id: ctx.window_id(),
             menu,
-            sharing_dialog,
             index_variant: DriveIndexVariant::MainIndex,
             menu_object_id_if_open: None,
             sections: Default::default(),
@@ -1038,7 +1019,6 @@ impl DriveIndex {
             ordered_items: Default::default(),
             has_initialized_sections: Default::default(),
             num_errored_objects: Default::default(),
-            share_dialog_open_for_object: None,
             should_show_personal_object_limit_status: true,
             workspace_dropdown,
             ai_fact_collection,
@@ -1186,19 +1166,6 @@ impl DriveIndex {
             if !*via_select_item {
                 ctx.emit(DriveIndexEvent::FocusWarpDrive);
                 self.reset_focused_index_in_warp_drive(false, ctx);
-            }
-        }
-    }
-
-    fn handle_sharing_dialog_event(
-        &mut self,
-        event: &SharingDialogEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            SharingDialogEvent::Close => {
-                self.share_dialog_open_for_object = None;
-                ctx.notify();
             }
         }
     }
@@ -1919,7 +1886,6 @@ impl DriveIndex {
             false, /* can_move */
             !self.menu_items(&space, &warp_drive_item_id, app).is_empty(),
             false,
-            false, /* share_dialog_open */
             is_selected,
             is_focused,
             false, /* sync_queue_is_dequeueing */
@@ -1955,7 +1921,6 @@ impl DriveIndex {
             false, /* can_move */
             !self.menu_items(&space, &warp_drive_item_id, app).is_empty(),
             false,
-            false, /* share_dialog_open */
             is_selected,
             is_focused,
             false, /* sync_queue_is_dequeueing */
@@ -2677,10 +2642,7 @@ impl DriveIndex {
         let warp_drive_item_id = WarpDriveItemId::Object(row_object_id);
         let access_level = CloudViewModel::as_ref(app).access_level(&row_object_id.uid(), app);
 
-        let share_dialog_open = self.share_dialog_open_for_object == Some(warp_drive_item_id);
-        // If the share dialog is open, we don't want to open the menu for the same object.
-        let menu_open =
-            self.menu_object_id_if_open == Some(warp_drive_item_id) && !share_dialog_open;
+        let menu_open = self.menu_object_id_if_open == Some(warp_drive_item_id);
         let can_move = self.online_only_operation_allowed(&row_object_id, app)
             && matches!(self.index_variant, DriveIndexVariant::MainIndex)
             && access_level.can_move_drive();
@@ -2703,7 +2665,6 @@ impl DriveIndex {
             can_move,
             !self.menu_items(&space, &warp_drive_item_id, app).is_empty(),
             menu_open,
-            share_dialog_open,
             is_selected,
             is_focused,
             SyncQueue::as_ref(app).is_dequeueing(),
@@ -2728,13 +2689,6 @@ impl DriveIndex {
                 ConstrainedBox::new(self.cloud_object_naming_dialog.render(appearance, app))
                     .with_max_width(CLOUD_OBJECT_DIALOG_WIDTH)
                     .finish(),
-                row_position_id.as_str(),
-                app,
-            );
-        } else if share_dialog_open {
-            self.add_dialog_to_stack(
-                &mut stack,
-                ChildView::new(&self.sharing_dialog).finish(),
                 row_position_id.as_str(),
                 app,
             );
@@ -2979,7 +2933,7 @@ impl DriveIndex {
                 if mouse_state.is_hovered() {
                     let tooltip = appearance
                         .ui_builder()
-                        .tool_tip(String::from("Syncing Warp Drive"));
+                        .tool_tip(String::from("Syncing Drive"));
 
                     stack.add_positioned_overlay_child(
                         tooltip.build().finish(),
@@ -3992,7 +3946,7 @@ impl DriveIndex {
             .with_cross_axis_alignment(CrossAxisAlignment::Start)
             .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
             .with_child(
-                Text::new_inline("Warp Drive".to_string(), appearance.ui_font_family(), 14.)
+                Text::new_inline("Drive".to_string(), appearance.ui_font_family(), 14.)
                     .with_color(theme.main_text_color(background_color).into())
                     .with_style(Properties {
                         weight: warpui::fonts::Weight::Bold,
@@ -4528,29 +4482,6 @@ impl DriveIndex {
                     }
                 }
 
-                if let Some(object) = object
-                    && let Some(object_link) = object.object_link()
-                {
-                    menu_items.push(
-                        MenuItemFields::new("Copy link")
-                            .with_on_select_action(DriveIndexAction::CopyObjectLinkToClipboard(
-                                object_link,
-                            ))
-                            .with_icon(Icon::Link)
-                            .into_item(),
-                    );
-                    if editability.can_edit() {
-                        menu_items.push(
-                            MenuItemFields::new("Share")
-                                .with_on_select_action(DriveIndexAction::ToggleShareDialog {
-                                    warp_drive_item_id: *warp_drive_item_id,
-                                })
-                                .with_icon(Icon::Share)
-                                .into_item(),
-                        );
-                    }
-                }
-
                 if !FeatureFlag::SharedWithMe.is_enabled() || editability.can_edit() {
                     menu_items.push(
                         MenuItemFields::new(IMPORT_LABEL)
@@ -4757,44 +4688,6 @@ impl DriveIndex {
                     | ObjectType::GenericStringObject(GenericStringObjectFormat::Json(
                         JsonObjectType::EnvVarCollection,
                     )) => {
-                        if let Some(object_link) = object.object_link() {
-                            menu_items.push(
-                                MenuItemFields::new("Copy link")
-                                    .with_on_select_action(
-                                        DriveIndexAction::CopyObjectLinkToClipboard(object_link),
-                                    )
-                                    .with_icon(Icon::Link)
-                                    .into_item(),
-                            );
-                        }
-                        if editability.can_edit() {
-                            menu_items.push(
-                                MenuItemFields::new("Share")
-                                    .with_on_select_action(DriveIndexAction::ToggleShareDialog {
-                                        warp_drive_item_id: *warp_drive_item_id,
-                                    })
-                                    .with_icon(Icon::Share)
-                                    .into_item(),
-                            );
-                        }
-                        if !warpui::platform::is_mobile_device()
-                            && !ContextFlag::HideOpenOnDesktopButton.is_enabled()
-                            && *UserAppInstallDetectionSettings::as_ref(app)
-                                .user_app_installation_detected
-                                .value()
-                                == UserAppInstallStatus::Detected
-                            && let Some(object_link) = object.object_link()
-                            && let Ok(url) = Url::parse(&object_link)
-                        {
-                            menu_items.push(
-                                MenuItemFields::new("Open on Desktop")
-                                    .with_on_select_action(
-                                        DriveIndexAction::OpenObjectLinkOnDesktop(url),
-                                    )
-                                    .with_icon(Icon::Laptop)
-                                    .into_item(),
-                            );
-                        }
                         // Only allow duplicate if in Personal space, or Team space when online
                         if matches!(space, Space::Personal)
                             || (self.is_online(app) && matches!(space, Space::Team { .. }))
@@ -4947,43 +4840,6 @@ impl DriveIndex {
 
         self.menu_object_id_if_open = Some(*warp_drive_item_id);
         ctx.focus(&self.menu);
-        ctx.notify();
-    }
-
-    pub fn toggle_share_dialog(
-        &mut self,
-        warp_drive_item_id: &WarpDriveItemId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let WarpDriveItemId::Object(cloud_object_type_and_id) = warp_drive_item_id else {
-            return;
-        };
-
-        if self.auth_state.is_anonymous_or_logged_out() {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                auth_manager.attempt_login_gated_feature(
-                    "Share Object",
-                    AuthViewVariant::ShareRequirementCloseable,
-                    ctx,
-                )
-            });
-            return;
-        }
-
-        self.reset_menus(ctx);
-        if let Some(server_id) = cloud_object_type_and_id.server_id() {
-            self.share_dialog_open_for_object = Some(*warp_drive_item_id);
-            self.sharing_dialog.update(ctx, |sharing_dialog, ctx| {
-                sharing_dialog.set_target(Some(ShareableObject::WarpDriveObject(server_id)), ctx);
-                if let Some(invitee_email) = invitee_email {
-                    sharing_dialog.add_invitee_email(invitee_email, ctx);
-                }
-                sharing_dialog.report_open(source, ctx);
-            });
-            ctx.focus(&self.sharing_dialog);
-        }
         ctx.notify();
     }
 
@@ -5163,8 +5019,7 @@ impl View for DriveIndex {
 
         // Disable WD Vim keybindings when a dialog is open
         // because it interferes with the ability to type all letters.
-        if self.cloud_object_naming_dialog.is_open() || self.share_dialog_open_for_object.is_some()
-        {
+        if self.cloud_object_naming_dialog.is_open() {
             context.set.insert("DisableDriveIndexVimKeybindings");
         }
 
@@ -5673,22 +5528,6 @@ impl TypedActionView for DriveIndex {
                     }
                 }
             }
-            DriveIndexAction::CopyObjectLinkToClipboard(link) => {
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::ObjectLinkCopied { link: link.clone() },
-                    ctx
-                );
-                ctx.clipboard()
-                    .write(ClipboardContent::plain_text(link.to_owned()));
-            }
-            #[cfg(target_family = "wasm")]
-            DriveIndexAction::OpenObjectLinkOnDesktop(url) => {
-                open_url_on_desktop(url);
-            }
-            #[cfg(not(target_family = "wasm"))]
-            DriveIndexAction::OpenObjectLinkOnDesktop(_) => {
-                // No-op when not on wasm
-            }
             DriveIndexAction::InvokeEnvVarCollectionInSubshell(id) => {
                 ctx.emit(DriveIndexEvent::InvokeEnvVarCollectionInSubshell(*id))
             }
@@ -5703,14 +5542,6 @@ impl TypedActionView for DriveIndex {
                 UserWorkspaces::handle(ctx).update(ctx, move |user_workspaces, ctx| {
                     user_workspaces.generate_stripe_billing_portal_link(*team_uid, ctx);
                 });
-            }
-            DriveIndexAction::ToggleShareDialog { warp_drive_item_id } => {
-                self.toggle_share_dialog(
-                    warp_drive_item_id,
-                    None,
-                    SharingDialogSource::DriveIndex,
-                    ctx,
-                );
             }
             DriveIndexAction::SignupAnonymousUser => {
                 let entrypoint = AnonymousUserSignupEntrypoint::SignUpButton;

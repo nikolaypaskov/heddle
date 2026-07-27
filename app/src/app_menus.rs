@@ -69,6 +69,7 @@ pub fn menu_bar(ctx: &mut AppContext) -> MenuBar {
         make_new_tab_menu(ctx),
         make_new_blocks_menu(ctx),
         make_new_ai_menu(ctx),
+        make_new_drive_menu(ctx),
         make_new_window_menu(),
         make_new_help_menu(),
     ])
@@ -570,18 +571,31 @@ fn make_new_blocks_menu(ctx: &AppContext) -> Menu {
     Menu::new("Blocks", items)
 }
 
-// The "Drive" menu is gone with the rest of Warp Drive. Every item it held -- new personal
-// workflow/notebook/prompt/env-vars, toggle and search Drive, the AI-fact and MCP-server
-// collections -- addressed cloud objects on Warp's servers, which this build does not talk to.
-//
-// The bindings behind them are already inert: they are gated on `flags::ENABLE_WARP_DRIVE`,
-// which `WarpDriveSettings::is_warp_drive_enabled` never sets here because the fork has no
-// account and `is_anonymous_or_logged_out()` is therefore always true. The menu itself was NOT
-// gated, so it kept rendering a whole top-level menu of items that could not do anything.
-//
-// Local workflows are a different feature and are untouched: they load from `.warp/workflows`
-// in a project and from the config directory (app/src/workflows/local_workflows.rs), never
-// through Drive.
+/// The "Drive" menu: create local objects, and open or search the Drive panel.
+///
+/// This menu was deleted once, on the reasoning that its items "addressed cloud objects on
+/// Warp's servers" and that the bindings behind them were "already inert". The second half
+/// was true and the first was not. They were inert because
+/// `WarpDriveSettings::is_warp_drive_enabled` ANDed the user's setting with an account check
+/// that can never pass here -- a bug, not a property of the feature. The items themselves
+/// create workflows, notebooks, prompts and env-var collections in the LOCAL sqlite store.
+///
+/// With that account term removed the items work, so the menu is back.
+fn make_new_drive_menu(ctx: &AppContext) -> Menu {
+    let items = vec![
+        updateable_custom_item_without_checkmark(CustomAction::NewPersonalWorkflow, ctx),
+        updateable_custom_item_without_checkmark(CustomAction::NewPersonalNotebook, ctx),
+        updateable_custom_item_without_checkmark(CustomAction::NewPersonalAIPrompt, ctx),
+        updateable_custom_item_without_checkmark(CustomAction::NewPersonalEnvVars, ctx),
+        MenuItem::Separator,
+        updateable_custom_item_without_checkmark(CustomAction::ToggleWarpDrive, ctx),
+        updateable_custom_item_without_checkmark(CustomAction::SearchDrive, ctx),
+        updateable_custom_item_without_checkmark(CustomAction::OpenAIFactCollection, ctx),
+        updateable_custom_item_without_checkmark(CustomAction::OpenMCPServerCollection, ctx),
+    ];
+
+    Menu::new("Drive", items)
+}
 
 /// Returns [`MenuItem`]s that aid debugging to be included in the Block menu.
 fn block_menu_debug_items() -> Vec<MenuItem> {

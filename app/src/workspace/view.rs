@@ -247,8 +247,6 @@ use crate::drive::export::ExportManager;
 use crate::drive::import::modal::{ImportModal, ImportModalEvent};
 use crate::drive::items::WarpDriveItemId;
 use crate::drive::settings::{WarpDriveSettings, WarpDriveSettingsChangedEvent};
-use crate::drive::workflows::arguments::ArgumentsState;
-use crate::drive::workflows::modal::{WorkflowModal, WorkflowModalEvent};
 use crate::drive::{
     CloudObjectTypeAndId, DriveObjectType, DrivePanel, DrivePanelEvent, OpenWarpDriveObjectSettings,
 };
@@ -315,7 +313,7 @@ use crate::server::telemetry::{
     AddTabWithShellSource, AnonymousUserSignupEntrypoint, CloseTarget, EnvVarTelemetryMetadata,
     FileTreeSource, KnowledgePaneEntrypoint, LaunchConfigUiLocation,
     MCPServerCollectionPaneEntrypoint, NotificationsTurnedOnSource, OpenedWarpAISource,
-    PaletteSource, SharingDialogSource, TabRenameEvent, TierLimitHitEvent, WarpDriveSource,
+    PaletteSource, TabRenameEvent, TierLimitHitEvent, WarpDriveSource,
 };
 use crate::session_management::{SessionNavigationData, SessionSource, TabNavigationData};
 use crate::settings::cloud_preferences::CloudPreferencesSettings;
@@ -365,6 +363,7 @@ use crate::terminal::block_list_viewport::InputMode;
 use crate::terminal::cli_agent_sessions::plugin_manager::{PluginModalKind, plugin_manager_for};
 use crate::terminal::cli_agent_sessions::{CLIAgentSessionsModel, CLIAgentSessionsModelEvent};
 use crate::terminal::general_settings::GeneralSettings;
+use crate::terminal::heddlify::settings::HeddlifySettings;
 #[cfg(not(target_family = "wasm"))]
 use crate::terminal::input::slash_commands::fork_button_action;
 use crate::terminal::input::{Input, MenuPositioning};
@@ -401,7 +400,6 @@ use crate::terminal::view::{
     NOTIFICATIONS_TROUBLESHOOT_URL, OnboardingIntention, OnboardingVersion, SyncEvent,
     SyncInputType, TerminalAction,
 };
-use crate::terminal::heddlify::settings::HeddlifySettings;
 use crate::terminal::{self, BlockListSettings, SizeInfo, TerminalModel, TerminalView};
 use crate::themes::theme::{AnsiColorIdentifier, RespectSystemTheme, ThemeKind};
 use crate::themes::theme_chooser::{ThemeChooser, ThemeChooserEvent, ThemeChooserMode};
@@ -451,6 +449,8 @@ use crate::view_components::{
 #[cfg(target_family = "wasm")]
 use crate::wasm_nux_dialog::WasmNUXDialog;
 use crate::window_settings::{WindowSettings, WindowSettingsChangedEvent, ZoomLevel};
+use crate::workflows::args::arguments::ArgumentsState;
+use crate::workflows::args::modal::{WorkflowModal, WorkflowModalEvent};
 use crate::workflows::manager::{WorkflowManager, WorkflowOpenSource};
 use crate::workflows::workflow::Workflow;
 use crate::workflows::{
@@ -7570,42 +7570,6 @@ impl Workspace {
             })
     }
 
-    /// Triggers the drive sharing onboarding block.
-    fn check_and_trigger_drive_sharing_onboarding_block(
-        &mut self,
-        object_id: CloudObjectTypeAndId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if self.auth_state.is_anonymous_or_logged_out() {
-            return;
-        }
-
-        if *WarpDriveSettings::as_ref(ctx)
-            .sharing_onboarding_block_shown
-            .value()
-        {
-            return;
-        }
-
-        if let Some(terminal_view_handle) = self.active_session_view(ctx) {
-            let terminal_view_id = terminal_view_handle.id();
-
-            // Don't show onboarding block while agent is actively streaming
-            let is_agent_in_progress = BlocklistAIHistoryModel::handle(ctx)
-                .as_ref(ctx)
-                .active_conversation(terminal_view_id)
-                .is_some_and(|conversation| conversation.status().is_in_progress());
-
-            if is_agent_in_progress {
-                return;
-            }
-
-            terminal_view_handle.update(ctx, |terminal_view, ctx| {
-                terminal_view.insert_drive_sharing_onboarding_block(object_id, ctx);
-            });
-        }
-    }
-
     fn check_and_trigger_telemetry_banner_for_existing_users(
         &mut self,
         ctx: &mut ViewContext<Self>,
@@ -7824,17 +7788,6 @@ impl Workspace {
                     root_view,
                     "root_view:handle_pane_navigation_event",
                     &locator,
-                );
-            }
-            // If the was an invitee email, open the share dialog as well after focusing the pane.
-            if let Some(invitee_email) = settings.invitee_email.clone()
-                && let NotebookSource::Existing(sync_id) = source
-            {
-                self.open_object_sharing_settings(
-                    CloudObjectTypeAndId::from_id_and_type(*sync_id, ObjectType::Notebook),
-                    Some(invitee_email),
-                    SharingDialogSource::InviteeRequest,
-                    ctx,
                 );
             }
         } else if default_to_new_pane {
@@ -10629,6 +10582,9 @@ impl Workspace {
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
+            WorkflowModalEvent::ViewInWarpDrive(id) => {
+                self.view_in_and_focus_warp_drive(*id, ctx);
+            }
             WorkflowModalEvent::Close => {
                 self.current_workspace_state.is_workflow_modal_open = false;
                 ctx.notify();
@@ -10642,9 +10598,6 @@ impl Workspace {
             WorkflowModalEvent::UpdatedWorkflow(workflow_id) => {
                 // If saved workflow id matches the one that is currently displayed, then refresh workflow info box + input
                 self.maybe_refresh_workflow_info_box_and_input(workflow_id, ctx);
-            }
-            WorkflowModalEvent::ViewInWarpDrive(id) => {
-                self.view_in_and_focus_warp_drive(*id, ctx);
             }
         }
     }
@@ -14140,15 +14093,15 @@ impl Workspace {
 
                 self.invoke_environment_variables(env_var_collection.clone(), false, ctx);
             }
+            CommandPaletteEvent::ViewInWarpDrive { id } => {
+                self.view_in_and_focus_warp_drive(WarpDriveItemId::Object(*id), ctx);
+            }
             CommandPaletteEvent::OpenNotebook { id } => self.open_notebook(
                 &NotebookSource::Existing(*id),
                 &OpenWarpDriveObjectSettings::default(),
                 ctx,
                 true,
             ),
-            CommandPaletteEvent::ViewInWarpDrive { id } => {
-                self.view_in_and_focus_warp_drive(WarpDriveItemId::Object(*id), ctx);
-            }
             #[allow(unused_variables)]
             CommandPaletteEvent::OpenFile {
                 path,
@@ -14253,23 +14206,6 @@ impl Workspace {
                 update_fn(warp_drive, ctx);
             });
         });
-    }
-
-    /// View an object in Warp Drive and open its sharing settings.
-    fn open_object_sharing_settings(
-        &mut self,
-        object_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.view_in_warp_drive(WarpDriveItemId::Object(object_id), ctx);
-        self.update_warp_drive_view(ctx, |warp_drive, ctx| {
-            warp_drive.reset_and_open_to_main_index(ctx);
-            warp_drive.open_object_sharing_settings(object_id, invitee_email, source, ctx);
-        });
-
-        ctx.notify();
     }
 
     fn move_to_drive_space(
@@ -14893,6 +14829,9 @@ impl Workspace {
                     &OpenWarpDriveObjectSettings::default(),
                     ctx,
                 ),
+            pane_group::Event::ViewInWarpDrive(id) => {
+                self.view_in_and_focus_warp_drive(*id, ctx);
+            }
             pane_group::Event::OpenWorkflowModalWithTemporary(workflow) => {
                 self.open_workflow_with_temporary(*workflow.clone(), ctx)
             }
@@ -15128,9 +15067,6 @@ impl Workspace {
             pane_group::Event::FocusPaneInWorkspace { locator } => {
                 // Focus an existing pane by its locator (used when avoiding duplicate file panes during undo close pane)
                 self.focus_pane(*locator, ctx);
-            }
-            pane_group::Event::ViewInWarpDrive(id) => {
-                self.view_in_and_focus_warp_drive(*id, ctx);
             }
             // If focused pane contains an object, then set selected state in WD to that object
             pane_group::Event::PaneFocused => {
@@ -15593,18 +15529,6 @@ impl Workspace {
             }
             pane_group::Event::AnonymousUserSignup => {
                 self.initiate_user_signup(AnonymousUserSignupEntrypoint::RenotificationBlock, ctx);
-            }
-            pane_group::Event::OpenDriveObjectShareDialog {
-                cloud_object_type_and_id,
-                invitee_email,
-                source,
-            } => {
-                self.open_object_sharing_settings(
-                    *cloud_object_type_and_id,
-                    invitee_email.clone(),
-                    *source,
-                    ctx,
-                );
             }
             pane_group::Event::OpenPalette {
                 mode,
@@ -16616,18 +16540,18 @@ impl Workspace {
         if self.is_readonly_shared_session_active(ctx) {
             return;
         }
-        if self.auth_state.is_anonymous_or_logged_out()
-            && workflow.as_workflow().is_agent_mode_workflow()
-        {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                auth_manager.attempt_login_gated_feature(
-                    "Run Agent Mode Workflow",
-                    AuthViewVariant::RequireLoginCloseable,
-                    ctx,
-                )
-            });
-            return;
-        }
+        // No account gate on running a workflow.
+        //
+        // This used to return early for logged-out users running an Agent Mode workflow,
+        // and pop a login prompt. In a build with no accounts `is_anonymous_or_logged_out()`
+        // is permanently true, so the branch was unconditional: running an Agent Mode
+        // workflow was impossible, and the prompt offered a login that can never complete.
+        //
+        // This is the same defect class as `is_any_ai_enabled`, `is_byo_api_key_enabled`
+        // and `apply_onboarding_settings` -- remove accounts and the predicate becomes a
+        // constant, so the capability does not become free, it becomes permanently off.
+        // Running a workflow is local: it writes into the terminal input below. Nothing on
+        // this path needs a server, and the user's own API key is what powers the agent.
         if let Some(terminal_view_handle) =
             self.focus_terminal_input(workflow.object_id(), fallback_behavior, ctx)
         {
@@ -16965,19 +16889,21 @@ impl Workspace {
                                         .as_ref(ctx)
                                         .contains_ai_document(&ai_doc_id, ctx)
                                 }) {
-                                    new_toast = DismissibleToast::success(
-                                        "Plan saved locally".to_string(),
-                                    )
-                                    .with_object_id(object_id_clone)
-                                    .with_link(
-                                        ToastLink::new("View".to_string()).with_onclick_action(
-                                            WorkspaceAction::ViewObjectInWarpDrive(
-                                                WarpDriveItemId::Object(
-                                                    CloudObjectTypeAndId::Notebook(notebook.id),
-                                                ),
-                                            ),
-                                        ),
-                                    );
+                                    new_toast =
+                                        DismissibleToast::success("Plan saved locally".to_string())
+                                            .with_object_id(object_id_clone)
+                                            .with_link(
+                                                ToastLink::new("View".to_string())
+                                                    .with_onclick_action(
+                                                        WorkspaceAction::ViewObjectInWarpDrive(
+                                                            WarpDriveItemId::Object(
+                                                                CloudObjectTypeAndId::Notebook(
+                                                                    notebook.id,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                            );
                                 } else {
                                     return;
                                 }
@@ -17129,21 +17055,6 @@ impl Workspace {
             }
         }
 
-        // If this was a successful personal object creation, then potentially show the sharing
-        // onboarding block.
-        if result.success_type == OperationSuccessType::Success
-            && matches!(result.operation, ObjectOperation::Create { .. })
-            && let Some(created_object) = result
-                .server_id
-                .and_then(|id| CloudModel::as_ref(ctx).get_by_uid(&id.uid()))
-            && created_object.space(ctx) == Space::Personal
-            && created_object.renders_in_warp_drive()
-        {
-            self.check_and_trigger_drive_sharing_onboarding_block(
-                created_object.cloud_object_type_and_id(),
-                ctx,
-            );
-        }
     }
 
     fn restore_previous_workspace_state(&mut self, ctx: &mut ViewContext<Self>) {
@@ -18929,7 +18840,7 @@ impl Workspace {
                     {
                         ToolPanelView::ProjectExplorer => "Project explorer",
                         ToolPanelView::GlobalSearch { .. } => "Global search",
-                        ToolPanelView::WarpDrive => "Warp Drive",
+                        ToolPanelView::WarpDrive => "Drive",
                         ToolPanelView::ConversationListView => "Agent conversations",
                     }
                 } else {
@@ -18983,7 +18894,7 @@ impl Workspace {
             {
                 ToolPanelView::ProjectExplorer => "Project explorer",
                 ToolPanelView::GlobalSearch { .. } => "Global search",
-                ToolPanelView::WarpDrive => "Warp Drive",
+                ToolPanelView::WarpDrive => "Drive",
                 ToolPanelView::ConversationListView => "Agent conversations",
             }
         } else {
@@ -23490,15 +23401,6 @@ impl TypedActionView for Workspace {
             CopySharedSessionLinkFromTab { tab_index } => {
                 self.copy_shared_session_link_from_tab(*tab_index, ctx)
             }
-            OpenSharedSessionQrCode { session_id } => {
-                use terminal::shared_session::manager::Manager;
-                let manager = Manager::as_ref(ctx);
-                if let Some(terminal_view) = manager.shared_view_by_session_id(session_id, ctx) {
-                    terminal_view.update(ctx, |view, ctx| {
-                        view.open_shared_session_qr_code(ctx);
-                    });
-                }
-            }
             AddWindow => {
                 ctx.dispatch_global_action("root_view:open_new", ());
             }
@@ -23516,9 +23418,6 @@ impl TypedActionView for Workspace {
             ViewObjectInWarpDrive(item_id) => {
                 // Focus newly created object in WD
                 self.view_in_and_focus_warp_drive(*item_id, ctx);
-            }
-            OpenObjectSharingSettings { object_id, source } => {
-                self.open_object_sharing_settings(*object_id, None, *source, ctx);
             }
             UndoTrash(cloud_object_type_and_id) => {
                 self.update_warp_drive_view(ctx, |warp_drive, ctx| {

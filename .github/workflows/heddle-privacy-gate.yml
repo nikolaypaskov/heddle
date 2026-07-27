@@ -36,11 +36,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           # The self-test recovers a deleted file from history to prove the gate rejects the real
           # artifact, not just a synthetic one. A shallow clone has no history to recover it from.
           fetch-depth: 0
+          # Do not leave the job token in .git/config.
+          persist-credentials: false
 
       - name: Self-test the supply-chain gate
         run: ./script/heddle/verify-warp-supply-chain-selftest
@@ -54,7 +56,10 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config.
+          persist-credentials: false
 
       - name: Install Rust toolchain
         run: rustup show   # installs the version pinned by rust-toolchain.toml
@@ -82,7 +87,7 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           key: heddle-privacy-gate
 
@@ -133,6 +138,13 @@ jobs:
       - name: Self-test the wasm gate against planted regressions
         run: |
           set -uo pipefail
+          # `-e` OFF, deliberately and load-bearing. GitHub runs `run:` under `bash -e`, and
+          # `set -uo pipefail` does not turn that off. This step's whole purpose is to CAPTURE
+          # a non-zero exit from the gate -- so `out="$(...)"` aborted the script the instant
+          # the gate did its job, before `status=$?` was ever read. The step produced no
+          # output and failed, every time, which is why this self-test has never once run.
+          # Each plant checks its own status explicitly below.
+          set +e
 
           # Assert the gate rejects a plant for the RIGHT reason. Accepting any nonzero
           # status would let exit 2 (infrastructure failure) or an unrelated diagnostic
@@ -200,7 +212,10 @@ jobs:
     # the GUI still renders upstream's sign-in, Warp Drive and upgrade surfaces because the
     # de-commercialization slices removed backend plumbing and never audited view code.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Do not leave the job token in .git/config.
+          persist-credentials: false
 
       - name: Install Rust toolchain
         run: rustup show   # installs the version pinned by rust-toolchain.toml
@@ -223,7 +238,7 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           key: heddle-gui-surface
 

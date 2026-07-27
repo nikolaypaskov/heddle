@@ -3,18 +3,31 @@ use virtual_fs::VirtualFS;
 
 use super::*;
 
-// Tests that events with UGC are not persisted to desk.
+/// Nothing is persisted, and no queue file is left behind.
+///
+/// Upstream this function wrote the pending event batch to disk so it could be flushed on
+/// the next launch, filtering out events containing user-generated content. This build has
+/// no telemetry destination, so that flush can never happen -- the file would only ever
+/// grow. `flush_and_persist_events_at_path` therefore discards the batch and removes any
+/// file a previous build left.
+///
+/// This test previously asserted upstream's behaviour (open the file, expect exactly the
+/// non-UGC event). It was failing after that change and the failure was NOT noticed,
+/// because `cargo test` reported it among a dozen genuine test-isolation failures that
+/// were dismissed as pre-existing. Running each test in its own process separates the
+/// two: the isolation failures disappear and this one stands alone.
 #[test]
-fn test_persist_events_doesnt_include_ugc_events() {
+fn test_persist_events_writes_nothing_and_leaves_no_file() {
     let telemetry_api = TelemetryApi::new();
 
     VirtualFS::test(
-        "test_persist_events_doesnt_include_ugc_events",
+        "test_persist_events_writes_nothing_and_leaves_no_file",
         |dirs, _sandbox| {
-            // Add one event without UGC
             let user_id = Some("user".into());
             let anonymous_id = "anonymous_id".to_owned();
 
+            // One event with user-generated content and one without: neither should reach
+            // disk, so the UGC distinction no longer changes the outcome.
             warpui::telemetry::record_event(
                 user_id.clone(),
                 anonymous_id.clone(),
@@ -37,16 +50,40 @@ fn test_persist_events_doesnt_include_ugc_events() {
 
             telemetry_api
                 .flush_and_persist_events_at_path(10, PrivacySettingsSnapshot::mock(), &file_path)
-                .expect("Should be able to persist events");
+                .expect("persisting should succeed even though it writes nothing");
 
-            let file_content: Vec<RudderBatchMessage> =
-                serde_json::from_reader(File::open(file_path).expect("Failed to open file"))
-                    .expect("Failed to parse file");
+            assert!(
+                !file_path.exists(),
+                "a telemetry queue file was written to {}. This build transmits no \
+                 analytics, so a persisted queue can never be flushed and would grow \
+                 without bound.",
+                file_path.display()
+            );
+        },
+    );
+}
 
-            assert_eq!(file_content.len(), 1);
+/// And a file left by an earlier build is removed rather than inherited.
+#[test]
+fn test_persist_events_removes_a_pre_existing_queue_file() {
+    let telemetry_api = TelemetryApi::new();
 
-            let track = file_content[0].unwrap_track();
-            assert_eq!(track.event, "non UGC event name");
+    VirtualFS::test(
+        "test_persist_events_removes_a_pre_existing_queue_file",
+        |dirs, _sandbox| {
+            let file_path = dirs.root().join("rudderstack");
+            std::fs::write(&file_path, b"[]").expect("failed to plant a queue file");
+            assert!(file_path.exists(), "planted file should exist before the call");
+
+            telemetry_api
+                .flush_and_persist_events_at_path(10, PrivacySettingsSnapshot::mock(), &file_path)
+                .expect("persisting should succeed");
+
+            assert!(
+                !file_path.exists(),
+                "a queue file left by an earlier build survived. Anyone upgrading from a \
+                 build that persisted events keeps that file forever otherwise."
+            );
         },
     );
 }
