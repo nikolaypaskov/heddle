@@ -1,6 +1,8 @@
 mod changelog;
 mod channel_versions;
 pub mod heddle_version;
+
+use self::heddle_version::HeddleVersion;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "macos")]
@@ -12,7 +14,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ::channel_versions::{ParsedVersion, VersionInfo};
+use ::channel_versions::VersionInfo;
 use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, FixedOffset, NaiveDate};
 use rand::Rng as _;
@@ -337,24 +339,27 @@ impl AutoupdateState {
             download.version.update_by = version.update_by;
         }
 
-        if version.version == current_version {
-            log::info!("Already up to date with {}", version.version);
+        // Monotonicity. This is the ONLY thing standing between a user and being walked back
+        // to a build with a known bug: an older Heddle release is validly signed and validly
+        // notarized, so both Apple checks pass on a downgrade. `is_upgrade` fails closed, so
+        // an unparseable version on either side also stops here.
+        //
+        // This replaces `is_current_version_ahead_of_latest_version`, which was not merely
+        // weaker but inert: it parsed with `ParsedVersion::try_from`, whose regex matches
+        // upstream's dated scheme and rejects `v0.3.1`. Every call returned `Err`, the
+        // `if let Ok(true)` never matched, and the guard never ran.
+        //
+        // Upstream's `is_rollback` escape hatch is deliberately gone with it. It existed so
+        // Warp could walk users back off a bad release; keeping it would mean the manifest
+        // could authorise a downgrade, which is exactly the hole monotonicity closes.
+        if !is_upgrade(current_version, &version.version) {
+            log::info!(
+                "Not updating: {} is not newer than the running {}",
+                version.version,
+                current_version
+            );
             UpdateReady::No
         } else {
-            if let Ok(true) =
-                self.is_current_version_ahead_of_latest_version(&version, current_version)
-            {
-                let is_rollback = version.is_rollback.unwrap_or(false);
-                if !is_rollback {
-                    log::info!(
-                        "Current version ({}) is ahead of version in channel versions({}), not updating",
-                        current_version,
-                        version.version
-                    );
-                    return UpdateReady::No;
-                }
-            }
-
             // We should update - the only thing left to do is check if this version is already
             // downloaded.
             match &self.downloaded_update {
@@ -381,18 +386,6 @@ impl AutoupdateState {
                 }
             }
         }
-    }
-
-    /// Returns whether the current version is ahead of the version reported by the server as the "latest" version
-    /// in channel versions.
-    fn is_current_version_ahead_of_latest_version(
-        &self,
-        new_version: &VersionInfo,
-        current_version: &str,
-    ) -> Result<bool> {
-        let current_version = ParsedVersion::try_from(current_version)?;
-        let new_version = ParsedVersion::try_from(new_version.version.as_str())?;
-        Ok(current_version > new_version)
     }
 
     fn on_update_check_complete(
@@ -763,10 +756,7 @@ pub fn get_update_state(app: &AppContext) -> AutoupdateStage {
     AutoupdateState::as_ref(app).stage.clone()
 }
 
-fn get_curr_parsed_version() -> Option<ParsedVersion> {
-    let curr_version = ChannelState::app_version();
-    curr_version.and_then(|v| ParsedVersion::try_from(v).ok())
-}
+
 
 /// Generate a new random update ID.
 fn new_update_id() -> String {
@@ -776,6 +766,19 @@ fn new_update_id() -> String {
         .map(char::from)
         .take(7)
         .collect()
+}
+
+/// Whether `offered` is strictly newer than `running`.
+///
+/// Fails closed: if either side cannot be parsed, the answer is `false`. An unknown version
+/// must never be treated as an upgrade, because the signature checks cannot tell old from
+/// new -- an older Heddle release carries a perfectly valid Developer ID signature and a
+/// valid notarization ticket. This comparison is the only thing that distinguishes them.
+pub(crate) fn is_upgrade(running: &str, offered: &str) -> bool {
+    match (HeddleVersion::parse(running), HeddleVersion::parse(offered)) {
+        (Some(running), Some(offered)) => offered > running,
+        _ => false,
+    }
 }
 
 /// Fetch the current version on the given channel.
@@ -1136,17 +1139,25 @@ impl Entity for RelaunchModel {
 
 impl SingletonEntity for RelaunchModel {}
 
+/// Whether `version` is past the running build -- used for the manifest's `soft_cutoff` and
+/// `last_prominent_update` fields, which escalate how insistently an update is presented.
+///
+/// Parsed with `HeddleVersion`, not `ParsedVersion`. The latter reads upstream's dated
+/// scheme and cannot parse `v0.3.1`, so on every Heddle build this returned `false`
+/// unconditionally -- the same silent-inert shape as the downgrade guard above.
+///
+/// It still returns `false` in practice, because Heddle's manifest publishes only `version`
+/// and leaves both of these fields unset: this fork notifies about updates, it does not
+/// pressure. The difference is that it is now false because there is nothing to compare,
+/// rather than because the comparison could never run.
 pub fn is_incoming_version_past_current(version: Option<&str>) -> bool {
-    let installed_version = get_curr_parsed_version();
-
-    let Ok(incoming_version): Result<ParsedVersion> = version
-        .ok_or(anyhow!("version is None"))
-        .and_then(|cutoff| cutoff.try_into())
-    else {
+    let Some(installed) = ChannelState::app_version().and_then(HeddleVersion::parse) else {
         return false;
     };
-
-    installed_version.is_some_and(|curr_version| incoming_version > curr_version)
+    let Some(incoming) = version.and_then(HeddleVersion::parse) else {
+        return false;
+    };
+    incoming > installed
 }
 
 /// Returns the base URL that contains release assets for the given version

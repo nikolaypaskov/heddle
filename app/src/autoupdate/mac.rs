@@ -330,6 +330,38 @@ async fn verify_code_signature(component: &str, path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Assert that Apple notarized this build, not merely that it is signed.
+///
+/// `codesign` proves the bundle carries our Developer ID. Notarization is a SEPARATE Apple
+/// gate: a build signed with a leaked or stolen key that was never submitted to Apple passes
+/// `codesign` and fails here. `spctl` is what Gatekeeper itself consults, so this asks the
+/// same question the user's Mac asks on first launch -- and asks it before we replace a
+/// working app rather than after.
+async fn verify_notarization(component: &str, path: &Path) -> Result<()> {
+    let output = Command::new("/usr/sbin/spctl")
+        .arg("-a")
+        .arg("-vv")
+        .arg("-t")
+        .arg("exec")
+        .arg(path)
+        .output()
+        .await?;
+
+    // spctl writes its assessment to stderr, including on success.
+    let assessment = String::from_utf8_lossy(&output.stderr);
+    ensure!(
+        output.status.success() && assessment.contains("source=Notarized Developer ID"),
+        "Staged update for {component} is not notarized: {assessment}"
+    );
+
+    safe_info!(
+        safe: ("Notarization is valid for {component}"),
+        full: ("Notarization is valid for {}", path.display())
+    );
+
+    Ok(())
+}
+
 pub(super) async fn download_update_and_cleanup(
     version_info: &VersionInfo,
     update_id: &str,
@@ -559,8 +591,13 @@ async fn download_and_extract_binary(
     )
     .await?;
 
+    // Notarization is checked on the BUNDLE only. Apple staples tickets to bundles, disk
+    // images and packages -- never to a bare executable -- so running `spctl` against the
+    // inner binary would fail for a correctly notarized app and reject every real update.
+    verify_notarization("bundle", &target).await?;
+
     log::info!(
-        "Verified new app code signature in {:?}",
+        "Verified new app code signature and notarization in {:?}",
         verification_start.elapsed()
     );
 
