@@ -250,7 +250,7 @@ jobs:
       # errors with "Dependency review is not supported on this repository" otherwise, which
       # is a repo setting no branch can satisfy -- and a check that is red for a reason the
       # author cannot fix teaches people to ignore red checks.
-      - uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4.8.2
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         continue-on-error: true
         with:
           fail-on-severity: high
