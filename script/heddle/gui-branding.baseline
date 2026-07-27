@@ -2603,9 +2603,6 @@
 ./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
-./crates/warp_core/src/paths_tests.rs	warp
 ./crates/warp_core/src/semantic_selection/mod_tests.rs	warp
 ./crates/warp_core/src/semantic_selection/mod_tests.rs	warp
 ./crates/warp_core/src/ui/theme/theme_tests.rs	warp
