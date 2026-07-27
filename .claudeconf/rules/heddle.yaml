@@ -25,13 +25,14 @@ rules:
       permanently off, silently. Three shipped bugs came from exactly this shape
       (AI disabled at 312 call sites, BYOK erasing saved keys, onboarding completing
       with AI off). Read what the predicate returns here before leaving it.
-    patterns:
-      - pattern-either:
-          - pattern: $X.is_anonymous_or_logged_out()
-          - pattern: $X.is_logged_in()
-      - pattern-not-inside: |
-          #[cfg(test)]
-          ...
+    pattern-either:
+      - pattern: $X.is_anonymous_or_logged_out()
+      - pattern: $X.is_logged_in()
+    paths:
+      exclude:
+        - "*_tests.rs"
+        - "*_test.rs"
+        - "tests/"
 
   # ── Endpoint / credential reintroduction ──────────────────────────────────────────
   - id: heddle-warp-endpoint-literal
@@ -82,13 +83,18 @@ rules:
       `env::var(..).unwrap()` panics when the variable is unset. In a terminal this
       surfaces as a crash on launch in whatever environment happens to lack it. Prefer
       a default or a handled error.
-    patterns:
-      - pattern-either:
-          - pattern: std::env::var($X).unwrap()
-          - pattern: env::var($X).unwrap()
-      - pattern-not-inside: |
-          #[cfg(test)]
-          ...
+    pattern-either:
+      - pattern: std::env::var($X).unwrap()
+      - pattern: env::var($X).unwrap()
+    paths:
+      exclude:
+        - "*_tests.rs"
+        - "*_test.rs"
+        - "tests/"
+        # build.rs runs at COMPILE time on a developer's machine, where a missing
+        # CARGO_MANIFEST_DIR means the build is already broken. This rule is about
+        # runtime panics in the shipped binary.
+        - "build.rs"
 
   - id: heddle-command-without-sanitized-input
     languages: [rust]

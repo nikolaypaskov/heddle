@@ -16607,18 +16607,18 @@ impl Workspace {
         if self.is_readonly_shared_session_active(ctx) {
             return;
         }
-        if self.auth_state.is_anonymous_or_logged_out()
-            && workflow.as_workflow().is_agent_mode_workflow()
-        {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                auth_manager.attempt_login_gated_feature(
-                    "Run Agent Mode Workflow",
-                    AuthViewVariant::RequireLoginCloseable,
-                    ctx,
-                )
-            });
-            return;
-        }
+        // No account gate on running a workflow.
+        //
+        // This used to return early for logged-out users running an Agent Mode workflow,
+        // and pop a login prompt. In a build with no accounts `is_anonymous_or_logged_out()`
+        // is permanently true, so the branch was unconditional: running an Agent Mode
+        // workflow was impossible, and the prompt offered a login that can never complete.
+        //
+        // This is the same defect class as `is_any_ai_enabled`, `is_byo_api_key_enabled`
+        // and `apply_onboarding_settings` -- remove accounts and the predicate becomes a
+        // constant, so the capability does not become free, it becomes permanently off.
+        // Running a workflow is local: it writes into the terminal input below. Nothing on
+        // this path needs a server, and the user's own API key is what powers the agent.
         if let Some(terminal_view_handle) =
             self.focus_terminal_input(workflow.object_id(), fallback_behavior, ctx)
         {

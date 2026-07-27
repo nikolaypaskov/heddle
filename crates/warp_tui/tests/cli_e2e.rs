@@ -58,8 +58,10 @@ fn help_does_not_advertise_warp() {
 
 /// The two flags that required Warp's server must stay gone from the SHIPPED binary.
 ///
-/// There is a unit test asserting the parser rejects them. This asserts the built binary
-/// does — the parser and the artefact are different things, and only one of them ships.
+/// Asserts the ARGUMENT PARSER rejected them, not merely that the process exited non-zero.
+/// A binary that accepted `--resume` and then failed later during startup would also exit
+/// non-zero, so an exit-code-only assertion passes against exactly the implementation this
+/// test exists to catch.
 #[test]
 fn removed_server_flags_are_rejected_by_the_built_binary() {
     for flag in ["--resume", "--api-key"] {
@@ -71,25 +73,32 @@ fn removed_server_flags_are_rejected_by_the_built_binary() {
         assert!(
             !out.status.success(),
             "`heddle-tui {flag} some-value` succeeded. That flag required a server this \
-             build does not have, so accepting it means the binary advertises a hosted \
-             product it cannot reach."
+             build does not have."
+        );
+
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            combined.contains("unexpected argument") && combined.contains(flag),
+            "`{flag}` should be rejected by the argument parser with an \"unexpected \
+             argument\" error. Got:\n{combined}\n\nA different failure means the flag \
+             may have been accepted and the binary failed later for some other reason, \
+             which is not what this test is checking."
         );
     }
 }
 
-/// `WARP_API_KEY` was read at parse time via clap's `env` attribute. Removing the flag
-/// while leaving that attribute would keep the variable silently honoured with nothing in
-/// `--help` to say so, so this drives the built binary with the variable set.
-#[test]
-fn the_warp_api_key_environment_variable_is_ignored_by_the_built_binary() {
-    let out = Command::new(heddle_tui())
-        .arg("--help")
-        .env("WARP_API_KEY", "should-be-ignored")
-        .output()
-        .expect("failed to execute the built heddle-tui binary");
-
-    assert!(
-        out.status.success(),
-        "a bare invocation must still succeed with WARP_API_KEY set in the environment"
-    );
-}
+// There is deliberately NO end-to-end test here for `WARP_API_KEY` being ignored.
+//
+// The obvious one -- run the binary with the variable set and assert it still starts -- is
+// worthless: every terminating flag (`--help`, `--version`) short-circuits in
+// `session.rs` on `ErrorKind::DisplayHelp` BEFORE any startup path reads the environment,
+// so the assertion passes whether or not the variable is honoured. Testing it properly
+// needs a running TUI and therefore a TTY, which an unattended suite does not have.
+//
+// The real coverage is the unit test in `session_tests.rs`, which asserts the parser has
+// no `env = "WARP_API_KEY"` attribute. This comment exists because an earlier version of
+// this file DID have that e2e test, it passed, and it proved nothing.

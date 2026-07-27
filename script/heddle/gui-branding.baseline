@@ -2879,8 +2879,6 @@
 ./crates/warp_tui/src/zero_state.rs	warp
 ./crates/warp_tui/tests/cli_e2e.rs	warp
 ./crates/warp_tui/tests/cli_e2e.rs	warp
-./crates/warp_tui/tests/cli_e2e.rs	warp
-./crates/warp_tui/tests/cli_e2e.rs	warp
 ./crates/warp_tui/tests/worker_dispatch.rs	warp
 ./crates/warp_tui/tests/worker_dispatch.rs	warp
 ./crates/warp_tui/tests/worker_dispatch.rs	warp

@@ -112,7 +112,12 @@ jobs:
       # Vendored, pinned, offline ruleset. Never --config auto: that makes results depend
       # on the registry's current state and stops being reproducible.
       - name: semgrep
-        run: semgrep scan --error --quiet --metrics=off --config .claudeconf/rules/ app crates
+        run: |
+          set -euo pipefail
+          # ERROR-severity rules block.
+          semgrep scan --error --quiet --metrics=off --severity=ERROR --config .claudeconf/rules/ app crates
+          # WARNING-severity rules report; see lefthook.yml for why they do not block.
+          semgrep scan --quiet --metrics=off --config .claudeconf/rules/ app crates || true
 
   # ── The Rust battery. One job so the compile cache is shared across milestones;
   # ── splitting them would rebuild 1.5M lines per job.
