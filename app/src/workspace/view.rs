@@ -322,7 +322,8 @@ use crate::settings::{
     AppEditorSettings, BlockVisibilitySettings, ChangelogSettings, CodeSettings,
     CodeSettingsChangedEvent, CtrlTabBehavior, CursorBlink, DebugSettings, DefaultSessionMode,
     FontSettings, GPUSettings, InputModeSettings, InputSettings, MonospaceFontSize, PaneSettings,
-    PrivacySettings, SelectionSettings, Settings, SshSettings, ThemeSettings, active_theme_kind,
+    PrivacySettings, SelectionSettings, Settings, SshSettings, ThemeSettings, UpdateConsent,
+    UpdateSettings, active_theme_kind,
     respect_system_theme,
 };
 use crate::settings_view::environments_page::EnvironmentsPage;
@@ -685,6 +686,8 @@ pub enum WorkspaceBanner {
     WaylandCrashRecovery,
     /// to display when settings.toml has errors (parse failure or invalid values)
     InvalidSettings,
+    /// to ask, once, whether Heddle may check GitHub for new releases
+    UpdateConsentPrompt,
 }
 
 impl WorkspaceBanner {
@@ -701,6 +704,11 @@ impl WorkspaceBanner {
             #[cfg(target_os = "linux")]
             Self::WaylandCrashRecovery => true,
             Self::InvalidSettings => true,
+            // Not dismissible by the close button: dismissing would leave consent
+            // `Unanswered`, so the prompt would return on the next launch and the user would
+            // have no way to stop being asked. Both answers are on the banner itself, and
+            // either one is final.
+            Self::UpdateConsentPrompt => false,
         }
     }
 }
@@ -20565,6 +20573,9 @@ impl Workspace {
         let banner_fields = self
             .render_reauth_banner_element()
             .or_else(|| self.render_settings_error_banner(app))
+            // Ahead of the autoupdate banners: until this is answered there can be no update
+            // to report, so it can never compete with one.
+            .or_else(|| self.render_update_consent_banner(app))
             .or_else(|| self.render_autoupdate_banner_element(app));
 
         #[cfg(enable_crash_recovery)]
@@ -20626,6 +20637,52 @@ impl Workspace {
     /// dormant UI is indistinguishable from working UI until something sets the flag.
     fn render_reauth_banner_element(&self) -> Option<WorkspaceBannerFields> {
         None
+    }
+
+    /// The one-time question: may Heddle check GitHub for new releases?
+    ///
+    /// Shown until it is answered, and never again after. This is the piece that makes the
+    /// rest of the update machinery reachable -- with consent stuck at `Unanswered` the
+    /// fetch returns `Ok(None)` forever and the feature, though fully implemented, does
+    /// nothing at all.
+    ///
+    /// It reuses the banner surface rather than adding a first-run slide: onboarding is
+    /// being dismantled, and a notice about updates belongs on the same surface as the
+    /// update notice itself.
+    fn render_update_consent_banner(&self, app: &AppContext) -> Option<WorkspaceBannerFields> {
+        if !FeatureFlag::Autoupdate.is_enabled() {
+            return None;
+        }
+        if !UpdateSettings::as_ref(app).check_for_updates.needs_prompt() {
+            return None;
+        }
+
+        Some(WorkspaceBannerFields {
+            banner_type: WorkspaceBanner::UpdateConsentPrompt,
+            severity: BannerSeverity::Warning,
+            heading: Some("Check for updates automatically?".to_owned()),
+            // Says exactly what is revealed and to whom. "Reveals your IP address to GitHub
+            // and nothing else" is the honest description of a plain HTTPS GET for a public
+            // release asset: no identifier is sent, and there is no telemetry to send.
+            description: "Heddle can check GitHub for new releases. This reveals your IP \
+                          address to GitHub and nothing else — no identifier, no usage data, \
+                          no telemetry. You can change this any time in Settings."
+                .to_owned(),
+            secondary_button: Some(WorkspaceBannerButtonDetails {
+                text: "No".to_owned(),
+                action: WorkspaceAction::SetUpdateConsent(UpdateConsent::Disabled),
+                variant: BannerButtonVariant::Naked,
+                icon: None,
+                more_info_button_action: None,
+            }),
+            button: Some(WorkspaceBannerButtonDetails {
+                text: "Yes".to_owned(),
+                action: WorkspaceAction::SetUpdateConsent(UpdateConsent::Enabled),
+                variant: BannerButtonVariant::Outlined,
+                icon: None,
+                more_info_button_action: None,
+            }),
+        })
     }
 
     fn render_autoupdate_banner_element(&self, app: &AppContext) -> Option<WorkspaceBannerFields> {
@@ -20976,6 +21033,9 @@ impl Workspace {
                 self.settings_error_banner_dismissed = true;
                 self.sync_settings_error_state_into_settings_pane(ctx);
             }
+            // Not dismissible (`is_dismissible` returns false), so this is unreachable. It
+            // must stay a no-op rather than recording an answer: dismissing is not consent.
+            WorkspaceBanner::UpdateConsentPrompt => {}
         }
         ctx.notify();
     }
@@ -23415,6 +23475,21 @@ impl TypedActionView for Workspace {
             }
             FocusLeftPanel => self.focus_left_panel(ctx),
             FocusRightPanel => self.focus_right_panel(ctx),
+            SetUpdateConsent(answer) => {
+                let answer = *answer;
+                UpdateSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    report_if_error!(settings.check_for_updates.set_value(answer, ctx));
+                });
+                // A "yes" should take effect now rather than on the next launch: the user
+                // just asked to be told about updates, and the poll loop's own cadence could
+                // be hours away.
+                if answer.should_check() {
+                    AutoupdateState::handle(ctx).update(ctx, |autoupdate, ctx| {
+                        autoupdate.manually_check_for_update(ctx);
+                    });
+                }
+                ctx.notify();
+            }
             ViewObjectInWarpDrive(item_id) => {
                 // Focus newly created object in WD
                 self.view_in_and_focus_warp_drive(*item_id, ctx);
