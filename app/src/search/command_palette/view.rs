@@ -94,6 +94,8 @@ pub enum Event {
     InvokeEnvironmentVariables { id: SyncId },
     /// Open a notebook identified by `id`.
     OpenNotebook { id: SyncId },
+    /// Reveal the relevant object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive { id: CloudObjectTypeAndId },
     /// Open a file at the given path.
     OpenFile {
         path: String,
@@ -883,6 +885,9 @@ impl View {
             }
             CommandPaletteItemAction::InvokeEnvironmentVariables { id } => {
                 ctx.emit(Event::InvokeEnvironmentVariables { id })
+            }
+            CommandPaletteItemAction::ViewInWarpDrive { id } => {
+                ctx.emit(Event::ViewInWarpDrive { id })
             }
             CommandPaletteItemAction::OpenNotebook { id } => ctx.emit(Event::OpenNotebook { id }),
             CommandPaletteItemAction::NewSession { source } => {

@@ -143,10 +143,9 @@ impl SearchItem for WorkflowSearchItem {
     }
 
     fn execute_result(&self) -> Self::Action {
-        // Was "view in Warp Drive", which navigated to the Drive panel. With no Drive there is
-        // nowhere to navigate, so the alternate binding now does the same useful thing as the
-        // primary one rather than silently doing nothing.
-        self.accept_result()
+        CommandPaletteItemAction::ViewInWarpDrive {
+            id: CloudObjectTypeAndId::Workflow(self.cloud_workflow.id),
+        }
     }
 
     fn accessibility_label(&self) -> String {

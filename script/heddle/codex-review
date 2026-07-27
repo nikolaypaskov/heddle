@@ -72,7 +72,13 @@ Context you need:
     * the local terminal itself
     * the conversation-list panel
     * local model / harness selection
-    * session sharing
+
+- NOT a constraint, as of 2026-07-27: session sharing. It relays the terminal through Warp's
+  session-sharing-server over a websocket and has no local or peer-to-peer mode, so it cannot
+  be preserved in a build that reaches no Warp server. It was already forced off before this
+  work -- `CreatingSharedSessions` is set false whenever `ChannelState::server_root_url()` is
+  `None`. Treat `app/src/terminal/shared_session/` as ordinary dormant cloud surface. Do not
+  report its removal or degradation as a hard-constraint violation.
 - Naming is misleading here on purpose, and it has caused real bugs. "Cloud" in this
   codebase frequently means SYNCABLE, not remote: `CloudModel` is the LOCAL sqlite-backed
   object store that holds the user's workflows and notebooks. Deleting something because

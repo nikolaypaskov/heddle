@@ -32,7 +32,7 @@ use super::workflow_arg_selector::{
 };
 use super::workflow_arg_type_helpers::{self, ArgumentEditorRowIndex};
 use crate::appearance::Appearance;
-use crate::cloud_object::breadcrumbs::{ContainingObject, ContainingObjectKind};
+use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::{CloudObject, CloudObjectEventEntrypoint, ObjectType, Owner, Revision};
 use crate::drive::items::WarpDriveItemId;
@@ -162,6 +162,8 @@ pub struct WorkflowModal {
 
 #[derive(Clone, Debug)]
 pub enum WorkflowModalAction {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(crate::drive::items::WarpDriveItemId),
     AddArgument,
     Close,
     Save,
@@ -174,6 +176,8 @@ pub enum WorkflowModalAction {
 }
 
 pub enum WorkflowModalEvent {
+    /// Reveal an object in the Drive panel. Local navigation, not a link.
+    ViewInWarpDrive(crate::drive::items::WarpDriveItemId),
     Close,
     UpdatedWorkflow(SyncId),
     AiAssistError(String),
@@ -1431,17 +1435,20 @@ impl WorkflowModal {
         // Two header shapes, as upstream had. When the workflow lives in a folder the trail
         // is shown on its own row; a new workflow has no folder yet and gets the compact form.
         //
-        // The crumbs are NOT interactive (`ContainingObject::enabled()` is false). Clicking
-        // one used to open the Warp Drive sidebar, which is gone -- but the folder itself is
-        // local, persisted in this machine's sqlite, so where a workflow lives is worth
-        // showing. An earlier revision removed the whole trail on the reasoning that there was
-        // "nowhere to navigate", which conflated the commercial destination with the useful
-        // information.
+        // Clicking a crumb reveals the folder in the Drive panel -- local navigation through
+        // `CloudModel`, not a link. This callback was a no-op for a while, which was harmless
+        // only while `ContainingObject::enabled()` returned false. Once that flipped back to
+        // true the crumbs here rendered as hoverable and clickable while doing nothing, which
+        // is worse than either previous state.
         if let Some(breadcrumbs) = &self.breadcrumbs {
             let rendered_breadcrumbs = breadcrumb::render_breadcrumbs(
                 breadcrumbs.clone(),
                 appearance,
-                |_ctx, _app, _object| {},
+                |ctx, _, breadcrumb| {
+                    ctx.dispatch_typed_action(WorkflowModalAction::ViewInWarpDrive(
+                        breadcrumb.kind.into_item_id(),
+                    ));
+                },
             );
 
             Container::new(
@@ -1898,6 +1905,9 @@ impl TypedActionView for WorkflowModal {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
+            WorkflowModalAction::ViewInWarpDrive(id) => {
+                ctx.emit(WorkflowModalEvent::ViewInWarpDrive(*id))
+            }
             WorkflowModalAction::AddArgument => self.add_argument(ctx),
             WorkflowModalAction::Close => self.close(false, ctx),
             WorkflowModalAction::Save => self.save_workflow_and_close(ctx),

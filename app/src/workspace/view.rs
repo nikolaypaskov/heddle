@@ -10582,6 +10582,9 @@ impl Workspace {
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
+            WorkflowModalEvent::ViewInWarpDrive(id) => {
+                self.view_in_and_focus_warp_drive(*id, ctx);
+            }
             WorkflowModalEvent::Close => {
                 self.current_workspace_state.is_workflow_modal_open = false;
                 ctx.notify();
@@ -14089,6 +14092,9 @@ impl Workspace {
                 };
 
                 self.invoke_environment_variables(env_var_collection.clone(), false, ctx);
+            }
+            CommandPaletteEvent::ViewInWarpDrive { id } => {
+                self.view_in_and_focus_warp_drive(WarpDriveItemId::Object(*id), ctx);
             }
             CommandPaletteEvent::OpenNotebook { id } => self.open_notebook(
                 &NotebookSource::Existing(*id),

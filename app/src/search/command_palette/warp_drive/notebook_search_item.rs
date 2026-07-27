@@ -136,9 +136,9 @@ impl SearchItem for NotebookSearchItem {
     }
 
     fn execute_result(&self) -> Self::Action {
-        // Was "view in Warp Drive". No Drive, nowhere to navigate; the alternate
-        // binding now matches the primary action instead of doing nothing.
-        self.accept_result()
+        CommandPaletteItemAction::ViewInWarpDrive {
+            id: CloudObjectTypeAndId::Notebook(self.cloud_notebook.id),
+        }
     }
 
     fn accessibility_label(&self) -> String {

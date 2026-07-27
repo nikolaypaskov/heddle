@@ -5,6 +5,8 @@ use warpui::fonts::{Properties, Weight};
 use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
+use crate::cloud_object::{GenericStringObjectFormat, JsonObjectType};
+
 use crate::cloud_object::CloudObject;
 use crate::drive::{CloudObjectTypeAndId, DriveObjectType};
 use crate::env_vars::CloudEnvVarCollection;
@@ -152,9 +154,12 @@ impl SearchItem for EnvVarCollectionSearchItem {
     }
 
     fn execute_result(&self) -> Self::Action {
-        // Was "view in Warp Drive". No Drive, nowhere to navigate; the alternate
-        // binding now matches the primary action instead of doing nothing.
-        self.accept_result()
+        CommandPaletteItemAction::ViewInWarpDrive {
+            id: CloudObjectTypeAndId::GenericStringObject {
+                object_type: GenericStringObjectFormat::Json(JsonObjectType::EnvVarCollection),
+                id: self.cloud_env_var_collection.id,
+            },
+        }
     }
 
     fn accessibility_label(&self) -> String {
