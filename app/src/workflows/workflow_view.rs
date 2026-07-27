@@ -49,7 +49,7 @@ use crate::cloud_object::{
 };
 use crate::drive::drive_helpers::has_feature_gated_anonymous_user_reached_workflow_limit;
 use crate::drive::items::WarpDriveItemId;
-use crate::drive::sharing::{ContentEditability, ShareableObject, SharingAccessLevel};
+use crate::drive::sharing::{ContentEditability, SharingAccessLevel};
 use crate::drive::{CloudObjectTypeAndId, DriveObjectType, OpenWarpDriveObjectSettings};
 use crate::editor::{
     EditorOptions, EditorView, EnterAction, EnterSettings, Event as EditorEvent, InteractionState,
@@ -69,7 +69,7 @@ use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::ai::AIClient;
 use crate::server::telemetry::{
-    CloudObjectTelemetryMetadata, SharingDialogSource, TelemetryCloudObjectType, TelemetryEvent,
+    CloudObjectTelemetryMetadata, TelemetryCloudObjectType, TelemetryEvent,
 };
 use crate::settings::AISettings;
 use crate::settings::app_installation_detection::{
@@ -95,8 +95,8 @@ use crate::workflows::args::workflow_arg_selector::{
 };
 use crate::workflows::args::workflow_arg_type_helpers::{self, ArgumentEditorRowIndex};
 use crate::workflows::workflow::{Argument, Workflow};
-use crate::workspace::{ToastStack, WorkspaceAction};
-use crate::{FeatureFlag, UserWorkspaces, send_telemetry_from_ctx};
+use crate::workspace::ToastStack;
+use crate::{FeatureFlag, send_telemetry_from_ctx};
 
 mod alias_argument_selector;
 mod alias_bar;
@@ -233,11 +233,6 @@ pub enum WorkflowViewEvent {
     Pane(PaneEvent),
     CreatedWorkflow(SyncId),
     UpdatedWorkflow(SyncId),
-    OpenDriveObjectShareDialog {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-    },
     RunWorkflow {
         workflow: Arc<WorkflowType>,
         source: WorkflowSource,
@@ -697,7 +692,7 @@ impl WorkflowView {
     pub fn load(
         &mut self,
         workflow: CloudWorkflow,
-        settings: &OpenWarpDriveObjectSettings,
+        _settings: &OpenWarpDriveObjectSettings,
         mode: WorkflowViewMode,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -740,12 +735,6 @@ impl WorkflowView {
         if let ContainerConfiguration::Pane(pane_config) = &mut self.container_configuration {
             pane_config.update(ctx, |pane_config, ctx| {
                 pane_config.set_title(workflow_name, ctx);
-                if let Some(server_id) = workflow.id.into_server() {
-                    pane_config.set_shareable_object(
-                        Some(ShareableObject::WarpDriveObject(server_id)),
-                        ctx,
-                    );
-                }
             });
         }
 
@@ -826,18 +815,6 @@ impl WorkflowView {
         self.update_breadcrumb(ctx);
         self.update_editors_interactivity(ctx);
         self.refresh_pane_overflow_menu(ctx);
-
-        if let Some(invitee_email) = settings.invitee_email.clone() {
-            let object_id_to_share = settings
-                .focused_folder_id
-                .map(|id| CloudObjectTypeAndId::Folder(SyncId::ServerId(id)))
-                .unwrap_or(CloudObjectTypeAndId::Workflow(workflow.id));
-            ctx.emit(WorkflowViewEvent::OpenDriveObjectShareDialog {
-                cloud_object_type_and_id: object_id_to_share,
-                invitee_email: Some(invitee_email),
-                source: SharingDialogSource::InviteeRequest,
-            });
-        }
 
         if matches!(mode, WorkflowViewMode::View) {
             self.focus_first_argument_value(ctx);
@@ -3177,7 +3154,7 @@ impl BackingView for WorkflowView {
 
     fn render_header_content(
         &self,
-        _ctx: &view::HeaderRenderContext<'_>,
+        _ctx: &view::HeaderRenderContext,
         app: &AppContext,
     ) -> view::HeaderContent {
         let mut content =

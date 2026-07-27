@@ -249,10 +249,6 @@
 ./app/src/drive/mod.rs	warp drive
 ./app/src/drive/settings.rs	warp drive
 ./app/src/drive/settings.rs	warp drive
-./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/sharing/dialog/mod.rs	upgrade
-./app/src/drive/sharing/dialog/mod.rs	upgrade
 ./app/src/experiments/login_layer.rs	login
 ./app/src/integration_testing/assertions.rs	subscription
 ./app/src/integration_testing/assertions.rs	subscription
@@ -275,7 +271,6 @@
 ./app/src/login_item/windows_tests.rs	login
 ./app/src/login_item/windows_tests.rs	login
 ./app/src/notebooks/notebook/details_bar.rs	sign in
-./app/src/pane_group/pane/view/header/sharing.rs	sign in
 ./app/src/remote_server/server_model.rs	subscribe
 ./app/src/remote_server/server_model.rs	subscribe
 ./app/src/remote_server/server_model.rs	subscribe
@@ -508,8 +503,6 @@
 ./app/src/terminal/view/action.rs	login
 ./app/src/terminal/view/action.rs	login
 ./app/src/terminal/view/action.rs	login
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs	warp drive
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs	warp drive
 ./app/src/terminal/view/docker_sandbox/mod.rs	warp drive
 ./app/src/terminal/view/init_environment/mod.rs	cloud agent
 ./app/src/terminal/view/init_project/mod.rs	cloud agent

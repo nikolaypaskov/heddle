@@ -35,7 +35,8 @@ use crate::cloud_object::{
 };
 use crate::drive::CloudObjectTypeAndId;
 use crate::drive::folders::{CloudFolder, CloudFolderModel, FolderId};
-use crate::drive::sharing::{SharingAccessLevel, Subject, UserKind};
+use cloud_objects::drive::sharing::{Subject, UserKind};
+use crate::drive::sharing::SharingAccessLevel;
 use crate::notebooks::{CloudNotebook, CloudNotebookModel, NotebookId};
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::listener::ObjectUpdateMessage;

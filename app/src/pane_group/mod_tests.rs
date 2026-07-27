@@ -1946,15 +1946,11 @@ fn test_start_shared_session_from_modal() {
             assert_eq!(shared_views.len(), 1);
             assert_eq!(shared_views[0].id(), terminal_view.id());
 
-            let terminal_pane = pane_group.terminal_session_by_pane_index(0).unwrap();
-            assert!(
-                terminal_pane
-                    .pane_view()
-                    .as_ref(ctx)
-                    .header()
-                    .as_ref(ctx)
-                    .has_shareable_object(ctx)
-            );
+            // The pane header's share button used to be asserted here as a proxy for
+            // "this session is shared". The button is gone -- sharing published the session
+            // to Warp's server -- and the assertions above check the sharing state directly,
+            // which is what this test was really about.
+            let _ = pane_group.terminal_session_by_pane_index(0).unwrap();
         });
     });
 }
@@ -2029,15 +2025,6 @@ fn test_stop_shared_session() {
             let manager = shared_session::manager::Manager::as_ref(ctx);
             let shared_views = manager.shared_views(ctx).collect_vec();
             assert!(shared_views.is_empty());
-
-            assert!(
-                !terminal_pane
-                    .pane_view()
-                    .as_ref(ctx)
-                    .header()
-                    .as_ref(ctx)
-                    .has_shareable_object(ctx)
-            );
         });
     });
 }

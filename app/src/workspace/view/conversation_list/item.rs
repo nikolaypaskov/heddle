@@ -3,12 +3,10 @@ use warp_core::ui::color::coloru_with_opacity;
 use warp_core::ui::theme::color::internal_colors;
 use warp_util::path::user_friendly_path;
 use warpui::elements::{
-    AnchorPair, ChildAnchor, ChildView, ConstrainedBox, Container, CornerRadius,
-    CrossAxisAlignment, DispatchEventResult, Element, EventHandler, Fill as ElementFill, Flex,
-    Highlight, Hoverable, MainAxisAlignment, MainAxisSize, MouseInBehavior, MouseStateHandle,
-    OffsetPositioning, OffsetType, ParentAnchor, ParentElement, ParentOffsetBounds,
-    PositionedElementOffsetBounds, PositioningAxis, Radius, SavePosition, Shrinkable, Stack, Text,
-    XAxisAnchor, YAxisAnchor,
+    ChildAnchor, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
+    DispatchEventResult, Element, EventHandler, Fill as ElementFill, Flex, Highlight, Hoverable,
+    MainAxisAlignment, MainAxisSize, MouseInBehavior, MouseStateHandle, OffsetPositioning,
+    ParentAnchor, ParentElement, ParentOffsetBounds, Radius, SavePosition, Shrinkable, Stack, Text,
 };
 use warpui::fonts::{Properties, Weight};
 use warpui::platform::Cursor;

@@ -570,9 +570,6 @@
 ./app/src/drive/settings.rs	warp
 ./app/src/drive/settings.rs	warp
 ./app/src/drive/settings.rs	warp
-./app/src/drive/sharing/dialog/mod.rs	warp
-./app/src/drive/sharing/dialog/mod.rs	warp
-./app/src/drive/sharing/qr_code_tests.rs	warp
 ./app/src/editor/view/mod_tests.rs	warp
 ./app/src/editor/view/mod_tests.rs	warp
 ./app/src/editor/view/mod_tests.rs	warp
@@ -1434,8 +1431,6 @@
 ./app/src/terminal/view/action.rs	warp
 ./app/src/terminal/view/action.rs	warp
 ./app/src/terminal/view/auth_secret_ftux/mod.rs	warp
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs	warp
-./app/src/terminal/view/block_onboarding/onboarding_drive_sharing_block.rs	warp
 ./app/src/terminal/view/block_onboarding/onboarding_prompt_block.rs	warp
 ./app/src/terminal/view/block_onboarding/onboarding_prompt_block.rs	warp
 ./app/src/terminal/view/block_onboarding/onboarding_prompt_block.rs	warp
