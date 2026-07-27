@@ -187,8 +187,14 @@ jobs:
 
       # `cargo test` alone covers only the workspace DEFAULT MEMBERS, and warp_core is
       # not one of them — four failures hid behind that for a long time. Name the crates.
+      #
+      # `--no-fail-fast` because this suite had never run on Linux until today, and it is
+      # turning up host-dependent tests one at a time. Stopping at the first failure means one
+      # ~25-minute cycle per test, and no way to tell whether the next fix is the last. Running
+      # to completion costs a slower red build and buys the whole list at once; a green build
+      # is unaffected, since nothing is failing to keep going past.
       - name: unit
-        run: cargo nextest run --locked -p warp -p warp_core -p warp_tui -p onboarding
+        run: cargo nextest run --locked --no-fail-fast -p warp -p warp_core -p warp_tui -p onboarding
 
       # Drives the BUILT binary as a subprocess. Unattended: no TTY, no credentials,
       # no network.
