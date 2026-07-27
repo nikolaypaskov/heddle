@@ -907,7 +907,21 @@ async fn mount_dmg(dmg_dir: &Path, update_id: &str) -> Result<PathBuf> {
     Ok(volume)
 }
 
+/// Where to send a user who has to update by hand.
+///
+/// This is reached from the "Update Heddle manually" banner, which appears when the app
+/// directory is not writable -- exactly the situation where the user is already stuck.
+///
+/// For `Oss` it must NOT go through `release_assets_directory_url`: that function `expect`s an
+/// autoupdate config, and `bin/oss.rs` sets `autoupdate_config: None`, so the recovery action
+/// panicked on the UI thread. A banner offering to help, which instead takes the terminal
+/// down, is worse than no banner.
 fn update_url(channel: Channel, version: &str) -> String {
+    if channel == Channel::Oss {
+        // The releases page rather than a direct asset link: a human is going to read this,
+        // and the page carries the checksums and the notarization note alongside the download.
+        return "https://github.com/nikolaypaskov/heddle/releases/latest".to_owned();
+    }
     format!(
         "{}/{}",
         release_assets_directory_url(channel, version),
