@@ -116,6 +116,29 @@ asserts that case by name.
 `heddlify_page.rs`) is a path upstream must not be allowed to reintroduce, and rename
 detection is a similarity heuristic whose results move with git version and config.
 
+### The same reasoning applies to reading each commit's paths
+
+The per-commit path list is `git show -m --name-only --no-renames`. Both flags earn their
+place, and both were measured rather than assumed:
+
+**`--no-renames`.** Plain `git show --name-only` reports a rename as its **destination
+only**. So an upstream commit moving `app/src/drive/panel.rs` to `app/src/elsewhere.rs`
+prints one path, `COLLISION_RE` never sees `app/src/drive/`, and a guarded subsystem walks
+out of its own guard into the bucket a human reads with intent to accept. Reproduced on a
+throwaway repo: one path with detection on, both paths with it off.
+
+**`-m`.** A merge's combined diff lists only paths that differ from *all* parents, so a
+merge that takes one side wholesale reports little or nothing. Measured on this repo's own
+merge `5d1035fa5`: **7 paths without `-m`, 37 with it**. Upstream has **0** merge commits
+across its entire history (`git rev-list --count --merges upstream/master`) because it
+squash-merges, so nothing today depends on this — it is here because a monthly tool
+outlives the assumption that upstream never changes its merge policy. Root commits are
+unaffected either way (`-m` still lists all 4982 paths of `0dbd3d56`).
+
+Neither flag changes any classification on the current range: no commit among the 118
+contains a rename or is a merge, and bucket membership is byte-identical before and after.
+That is what makes them cheap to add now rather than after they matter.
+
 One prefix rule survives alongside the derived set, because the derived set cannot see
 files upstream *adds* inside a tree this fork deleted wholesale:
 
@@ -229,22 +252,29 @@ enumeration, the report, or the marker write at all. Those are tested by a secon
 that runs the script as a subprocess against a disposable repository under `$TMPDIR`, with
 a `git` shim on `PATH` that breaks one call on demand:
 
-The fixture's shape is the point. HEAD is a commit that **deletes** a file which upstream
-then modifies, so the removed-path set is derived from a real deletion rather than injected:
+The fixture's shape is the point. Every commit in it exists to make one specific way of
+being wrong fail:
 
 ```
-A (merge base)  keep.rs, gone.rs      ← the marker starts here
- ├─ B           adds feature.rs        ) upstream/master
- │  C           modifies gone.rs       ) the range: 2 commits
- └─ D (HEAD)    DELETES gone.rs        ← the fork side
+A (merge base)  keep.rs, gone.rs, drive/panel.rs, drive/index.rs   ← the marker starts here
+ ├─ upstream/master:
+ │    B  adds app/src/feature.rs                        → candidate
+ │    C  modifies app/src/gone.rs                       → auto-reject (derived)
+ │    E  RENAMES drive/panel.rs → app/src/moved_out.rs  → collision
+ │    G  modifies drive/index.rs, on a side branch
+ │    F  MERGE of G                                     → collision
+ └─ D (HEAD)     DELETES app/src/gone.rs                ← the fork side
 ```
 
-C must land in AUTO-REJECT and B in CANDIDATE. That covers the *derivation*, which section
-1 cannot reach because it injects the set by hand.
+D makes the *derivation* testable — a file genuinely deleted between the merge base and
+HEAD, which section 1 cannot exercise because it injects the set by hand. E and F cover the
+two path-extraction flags above.
 
 | Case | Expected |
 |---|---|
-| nothing broken | exit 0, `AUTO-REJECT (1)`, `CANDIDATE (1)`, advance command printed |
+| nothing broken | exit 0; `AUTO-REJECT (1)`, `COLLISION (3)`, `CANDIDATE (1)`, **and each named commit in its own bucket**; advance command printed |
+| `git fetch` exits non-zero | exit 2, message naming `--no-fetch`, **marker untouched** |
+| default run (fetch succeeds) | exit 0, full report |
 | `git rev-list` exits non-zero | exit 2, message, **marker untouched** |
 | `git rev-list` truncates but exits **0** | exit 2, message, **marker untouched** |
 | `git show` exits non-zero for one commit | exit 2, message, **marker untouched** |
@@ -258,6 +288,13 @@ C must land in AUTO-REJECT and B in CANDIDATE. That covers the *derivation*, whi
 Every failure case asserts all three of exit status, stderr, and marker — any one alone
 would let the defect through. The last row is not decoration: a guard that blocks
 everything is not a guard.
+
+**Bucket counts are not asserted alone.** An earlier version of the clean-run case checked
+only `AUTO-REJECT (1)` and `CANDIDATE (1)`, which cannot fail the way the case is named: a
+derivation that put `feature.rs` in the removed set instead of `gone.rs` swaps two commits,
+preserves both counts, and passes. Demonstrated by mutation — with the set swapped, all
+three count assertions still pass and only the two by-name assertions fail. The suite now
+names which commit must be in which bucket.
 
 **Known limit, deliberate.** Neither section verifies that the report's *contents* are
 right — only that the buckets are as expected for a four-commit fixture, that the counts
