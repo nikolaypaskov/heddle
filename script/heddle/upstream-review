@@ -139,6 +139,31 @@ git cat-file -e "${MARKER}^{commit}" 2>/dev/null || {
 UPSTREAM_REF="$(git rev-parse --verify --quiet upstream/main || git rev-parse --verify --quiet upstream/master)"
 [ -n "$UPSTREAM_REF" ] || { echo "error: cannot resolve upstream default branch" >&2; exit 2; }
 
+# The marker must be ON the history the report enumerates, not merely a commit that exists.
+# `MARKER..UPSTREAM_REF` excludes everything reachable from MARKER, so a marker pointing at
+# a divergent branch silently drops every commit that branch already contains. Measured
+# against real refs:
+#
+#   a66337f4..upstream/master --not HEAD                       -> 118
+#   upstream/factory/APP-4991-tui-byok..upstream/master ...    ->   7   (111 omitted)
+#
+# `--not HEAD` cannot rescue this. It filters the RIGHT side of the range; the omission
+# happens on the left, before --not is ever consulted. Nor can the enumeration/count
+# cross-check: both sides agree on 7, because 7 is the honest answer to the question the
+# script asked -- the question was just the wrong one.
+#
+# This is the same check already applied to the `--advance` argument below. The asymmetry
+# was the bug: the value a human types was validated and the value read from a tracked file
+# was not, when only the second one is edited by rebases, bad merges and hand-editing.
+git merge-base --is-ancestor "$MARKER" "$UPSTREAM_REF" || {
+  echo "error: marker '$MARKER' is not on upstream's history." >&2
+  echo "       upstream tip: $UPSTREAM_REF" >&2
+  echo "       Every commit already reachable from the marker would be omitted from the" >&2
+  echo "       report, and --advance would then record them as evaluated. Reset" >&2
+  echo "       .upstream-sync to a sha on upstream's default branch." >&2
+  exit 2
+}
+
 MERGE_BASE="$(git merge-base HEAD "$UPSTREAM_REF")" || {
   echo "error: no merge base between HEAD and upstream — is the upstream remote correct?" >&2
   exit 2

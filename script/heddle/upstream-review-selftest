@@ -231,6 +231,19 @@ build_fixture() {
   "$g" -C "$r" mv app/src/drive/panel.rs app/src/moved_out.rs || return 1
   "$g" -C "$r" commit -q -m renames-out-of-drive              || return 1
 
+  # H — a DIVERGENT commit: real, but never merged, so it is not an ancestor of the tip
+  # while sharing A..E with it. A marker pointing here omits B, C and E from the report
+  # entirely, which is the shape of the real defect. Kept alive under refs/fixture/ rather
+  # than a branch, so `git fetch upstream` (the remote is this repo) does not mirror it.
+  "$g" -C "$r" checkout -q -b divergent || return 1
+  echo divergent > "$r/app/src/divergent.rs"
+  "$g" -C "$r" add -A                        || return 1
+  "$g" -C "$r" commit -q -m divergent-work   || return 1
+  FIX_DIVERGENT="$("$g" -C "$r" rev-parse HEAD)" || return 1
+  "$g" -C "$r" update-ref refs/fixture/divergent "$FIX_DIVERGENT" || return 1
+  "$g" -C "$r" checkout -q up      || return 1
+  "$g" -C "$r" branch -q -D divergent || return 1
+
   # G then F — a side branch touching a collision path, merged with a real merge commit.
   "$g" -C "$r" checkout -q -b side          || return 1
   echo index-upstream > "$r/app/src/drive/index.rs"
@@ -272,6 +285,7 @@ case "\${SHIM_MODE:-}" in
                      fi ;;
   fail-show)         [ "\$1" = show ] && exit 128 ;;
   fail-fetch)        [ "\$1" = fetch ] && exit 128 ;;
+  fail-log)          [ "\$1" = log ] && exit 128 ;;
 esac
 exec "$g" "\$@"
 SHIM
@@ -365,6 +379,30 @@ else
   check          "per-commit read failure exits 2"    2                             "$RUN_STATUS"
   check_contains "per-commit read failure says so"    "cannot read the file list"   "$RUN_ERR"
   check          "per-commit read failure keeps marker" "$RUN_BEFORE"               "$RUN_AFTER"
+
+  # git log dies. Unguarded this yields a blank subject -- the commit still appears in a
+  # bucket, as an empty line -- and the run goes on to advance the marker.
+  run_case fail-log --advance "$FIX_TIP"
+  check          "subject read failure exits 2"      2                            "$RUN_STATUS"
+  check_contains "subject read failure says so"      "cannot read the subject"    "$RUN_ERR"
+  check          "subject read failure keeps marker" "$RUN_BEFORE"                "$RUN_AFTER"
+
+  # ── A DIVERGENT MARKER. Not a bad value -- a real commit, on a branch that was never
+  # merged. `MARKER..UPSTREAM_REF` drops everything the marker already contains, so the
+  # report is short and looks entirely healthy, and --advance then records the omitted
+  # commits as evaluated. Every other case here resets the marker to FIX_BASE, so none of
+  # them could ever have caught this; the off-history case below validates the --advance
+  # ARGUMENT, which is a different value entirely.
+  printf '%s\n' "$FIX_DIVERGENT" > "$FIXTURE/repo/.upstream-sync"
+  RUN_NO_RESET=true
+  run_case "" --advance "$FIX_TIP"
+  RUN_NO_RESET=false
+  check          "divergent marker exits 2"      2                                "$RUN_STATUS"
+  check_contains "divergent marker says so"      "is not on upstream's history"   "$RUN_ERR"
+  check_contains "divergent marker names the tip" "$FIX_TIP"                      "$RUN_ERR"
+  # Asserted against the divergent sha itself, not against "unchanged": with the guard
+  # removed the marker is rewritten to FIX_TIP, and that is the permanent damage.
+  check          "divergent marker is not advanced" "$FIX_DIVERGENT"              "$RUN_AFTER"
 
   # ── --advance now takes the sha the reader reviewed. Each rejection below is a way the
   # marker could otherwise have been set to something nobody read.
