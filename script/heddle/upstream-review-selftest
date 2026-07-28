@@ -149,8 +149,20 @@ FIXTURE=""
 cleanup() { [ -n "$FIXTURE" ] && rm -rf "$FIXTURE"; }
 trap cleanup EXIT
 
-# HEAD sits at `base`; upstream/master is two commits ahead. The range is therefore
-# exactly 2, which is what makes silent truncation to 1 detectable.
+# The shape here is the whole point, so it is worth stating exactly:
+#
+#   A  (merge base)  app/src/keep.rs, app/src/gone.rs      <- the marker starts here
+#    ├─ B            adds app/src/feature.rs               ) upstream/master,
+#    │  C            modifies app/src/gone.rs              ) two commits, the range
+#    └─ D  (HEAD)    DELETES app/src/gone.rs               <- the fork side
+#
+# D is what makes this fixture cover the DERIVATION and not just the classifier: with a
+# file genuinely deleted between the merge base and HEAD, `git diff --diff-filter=D` has
+# something to find, and upstream's C must land in AUTO-REJECT because of it. Delete the
+# runtime REMOVED_PATHS_SET assignment and C becomes a CANDIDATE -- the dangerous
+# direction -- which section 1 cannot see, because section 1 injects the set by hand.
+#
+# The range is exactly 2, which is what makes silent truncation to 1 detectable.
 build_fixture() {
   [ -n "$REAL_GIT" ] || return 1
   FIXTURE="$(mktemp -d)" || return 1
@@ -161,18 +173,36 @@ build_fixture() {
   "$g" -C "$r" config user.email selftest@example.invalid || return 1
   "$g" -C "$r" config user.name selftest                 || return 1
   "$g" -C "$r" config commit.gpgsign false               || return 1
-  local f
-  for f in base one two; do
-    echo "$f" > "$r/app/src/$f.rs"
-    "$g" -C "$r" add -A                     || return 1
-    "$g" -C "$r" commit -q -m "$f"          || return 1
-    [ "$f" = base ] && { FIX_BASE="$("$g" -C "$r" rev-parse HEAD)" || return 1; }
-  done
+
+  # A — the merge base.
+  echo keep > "$r/app/src/keep.rs"
+  echo gone > "$r/app/src/gone.rs"
+  "$g" -C "$r" add -A            || return 1
+  "$g" -C "$r" commit -q -m base || return 1
+  FIX_BASE="$("$g" -C "$r" rev-parse HEAD)" || return 1
+
+  # B and C — upstream. C touches the file the fork is about to delete.
+  echo feature > "$r/app/src/feature.rs"
+  "$g" -C "$r" add -A               || return 1
+  "$g" -C "$r" commit -q -m feature || return 1
+  # B specifically, for the stale-sha case: on upstream's history, not the tip, and NOT
+  # equal to the value the marker is reset to. Using the base there would have let
+  # "keeps marker" pass by coincidence -- a broken guard would write the same value back.
+  FIX_MID="$("$g" -C "$r" rev-parse HEAD)" || return 1
+  echo gone-upstream > "$r/app/src/gone.rs"
+  "$g" -C "$r" add -A                    || return 1
+  "$g" -C "$r" commit -q -m touches-gone || return 1
   FIX_TIP="$("$g" -C "$r" rev-parse HEAD)" || return 1
   "$g" -C "$r" update-ref refs/remotes/upstream/master "$FIX_TIP" || return 1
-  "$g" -C "$r" reset -q --hard "$FIX_BASE"                       || return 1
-  "$g" -C "$r" remote add upstream "$r"                          || return 1
-  printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync"                || return 1
+
+  # D — the fork side. Back to A, then delete the file.
+  "$g" -C "$r" reset -q --hard "$FIX_BASE" || return 1
+  "$g" -C "$r" rm -q "$r/app/src/gone.rs"  || return 1
+  "$g" -C "$r" commit -q -m "remove gone"  || return 1
+  FIX_HEAD="$("$g" -C "$r" rev-parse HEAD)" || return 1
+
+  "$g" -C "$r" remote add upstream "$r"           || return 1
+  printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync" || return 1
   cp "$REPO_ROOT/script/heddle/upstream-review" "$r/script/heddle/upstream-review" || return 1
   chmod +x "$r/script/heddle/upstream-review" || return 1
 
@@ -194,6 +224,7 @@ SHIM
   chmod +x "$FIXTURE/shim/git" || return 1
 }
 
+RUN_NO_RESET=false
 run_case() {
   local mode="$1"; shift
   local r="$FIXTURE/repo"
@@ -201,7 +232,10 @@ run_case() {
   # mutation: break the count guard, and the truncation case advances the marker to the
   # tip, which empties the range for every later case -- so `git show` is never called,
   # the per-commit case exits 0, and the failure is attributed to the wrong guard.
-  printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync"
+  #
+  # RUN_NO_RESET exists for exactly one case: the read-only marker, where the reset would
+  # be the thing that fails instead of the write under test.
+  [ "$RUN_NO_RESET" = true ] || printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync"
   RUN_BEFORE="$(cat "$r/.upstream-sync")"
   RUN_OUT="$(SHIM_MODE="$mode" PATH="$FIXTURE/shim:$PATH" \
              "$r/script/heddle/upstream-review" "$@" 2>"$FIXTURE/err")"
@@ -221,35 +255,101 @@ else
   run_case "" --no-fetch
   check          "clean run exits 0"           0                            "$RUN_STATUS"
   check_contains "clean run counts 2 commits"  "commits not yet in HEAD: 2" "$RUN_OUT"
-  check_contains "clean run buckets 2"         "CANDIDATE (2)"              "$RUN_OUT"
   check          "clean run leaves the marker" "$RUN_BEFORE"                "$RUN_AFTER"
+
+  # THE derivation case. Upstream's C touches app/src/gone.rs, which exists at the merge
+  # base and not in HEAD, so the set built by `git diff --diff-filter=D` at run time must
+  # reject it. Nothing is injected here -- the script derives the set itself against a
+  # repository where a file really was deleted. Both counts are asserted: if the derivation
+  # is broken, C moves to CANDIDATE and BOTH numbers are wrong.
+  check_contains "derived set rejects the deleted-file commit" "AUTO-REJECT (1)" "$RUN_OUT"
+  check_contains "and does not reject the rest"                "CANDIDATE (1)"   "$RUN_OUT"
+
+  # The advance hint has to be exact, or the runbook's copy-paste records the wrong sha.
+  check_contains "report prints the advance command" \
+    "--advance $FIX_TIP" "$RUN_OUT"
 
   # git rev-list dies. Was: invisible, because a process substitution's exit status is
   # not observable by the `while` loop consuming it.
-  run_case fail-rev-list --no-fetch --advance
+  run_case fail-rev-list --advance "$FIX_TIP"
   check          "enumeration failure exits 2"        2                             "$RUN_STATUS"
   check_contains "enumeration failure says so"        "cannot enumerate commits"    "$RUN_ERR"
   check          "enumeration failure keeps marker"   "$RUN_BEFORE"                 "$RUN_AFTER"
 
   # git rev-list truncates but exits 0. No exit status can catch this; only counting
   # independently can.
-  run_case truncate-rev-list --no-fetch --advance
+  run_case truncate-rev-list --advance "$FIX_TIP"
   check          "silent truncation exits 2"          2                             "$RUN_STATUS"
   check_contains "silent truncation is counted"       "enumerated 1 commits but git counts 2" "$RUN_ERR"
   check          "silent truncation keeps marker"     "$RUN_BEFORE"                 "$RUN_AFTER"
 
   # git show dies for one commit. classify_paths returns `ignore` for an empty path list
   # quite happily, so unguarded this files the commit under the bucket nobody reads.
-  run_case fail-show --no-fetch --advance
+  run_case fail-show --advance "$FIX_TIP"
   check          "per-commit read failure exits 2"    2                             "$RUN_STATUS"
   check_contains "per-commit read failure says so"    "cannot read the file list"   "$RUN_ERR"
   check          "per-commit read failure keeps marker" "$RUN_BEFORE"               "$RUN_AFTER"
 
+  # ── --advance now takes the sha the reader reviewed. Each rejection below is a way the
+  # marker could otherwise have been set to something nobody read.
+
+  # No sha at all. Must not silently fall back to re-resolving the remote branch, which is
+  # what made the two-invocation runbook unsafe once the script started fetching.
+  run_case "" --advance
+  check          "bare --advance exits 2"        2                        "$RUN_STATUS"
+  check_contains "bare --advance says what to do" "requires the sha"      "$RUN_ERR"
+  check          "bare --advance keeps marker"   "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # A following FLAG must not be swallowed as the sha.
+  run_case "" --advance --no-fetch
+  check          "flag is not taken as a sha"  2                        "$RUN_STATUS"
+  check_contains "flag-as-sha says what to do" "requires the sha"       "$RUN_ERR"
+
+  # Unresolvable. This is the input that used to be written into the marker verbatim,
+  # because plain `git rev-parse <bad-ref>` echoes its argument back on stdout.
+  run_case "" --advance not-a-sha-at-all
+  check          "unresolvable sha exits 2"      2                        "$RUN_STATUS"
+  check_contains "unresolvable sha says so"      "is not a commit"        "$RUN_ERR"
+  check          "unresolvable sha keeps marker" "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # Resolvable, but ours -- HEAD is not on upstream's history at all.
+  run_case "" --advance "$FIX_HEAD"
+  check          "off-history sha exits 2"       2                        "$RUN_STATUS"
+  check_contains "off-history sha says so"       "is not on upstream's history" "$RUN_ERR"
+  check          "off-history sha keeps marker"  "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # On upstream's history, but NOT the tip this report covers. This is the critical case:
+  # it is what the reader would pass if upstream moved between the report they read and the
+  # advance they typed, and recording it would mark the commits in between as evaluated.
+  run_case "" --advance "$FIX_MID"
+  check          "stale sha exits 2"             2                        "$RUN_STATUS"
+  check_contains "stale sha says so"             "is not what this report covers" "$RUN_ERR"
+  check          "stale sha keeps marker"        "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # The write path's own failure branch, which no simulated resolve failure reaches: every
+  # case above exits before the write. A read-only marker is the only way to make the
+  # write itself fail without a shim.
+  if [ "$(id -u)" = 0 ]; then
+    # Loud, not silent. A skipped case that prints nothing is indistinguishable from a
+    # case that passed.
+    echo "skip [marker write failure]: running as root, a read-only file still writes"
+  else
+    printf '%s\n' "$FIX_BASE" > "$FIXTURE/repo/.upstream-sync"
+    chmod 444 "$FIXTURE/repo/.upstream-sync"
+    RUN_NO_RESET=true
+    run_case "" --advance "$FIX_TIP"
+    RUN_NO_RESET=false
+    chmod 644 "$FIXTURE/repo/.upstream-sync"
+    check          "unwritable marker exits 2"   2                        "$RUN_STATUS"
+    check_contains "unwritable marker says so"   "failed to write"        "$RUN_ERR"
+    check          "unwritable marker unchanged" "$RUN_BEFORE"            "$RUN_AFTER"
+  fi
+
   # And the other half of the guard: on a clean run --advance MUST still move the marker.
   # A guard that blocks everything is not a guard.
-  run_case "" --no-fetch --advance
-  check "advance exits 0"                0          "$RUN_STATUS"
-  check "advance writes the upstream tip" "$FIX_TIP" "$RUN_AFTER"
+  run_case "" --advance "$FIX_TIP"
+  check "advance exits 0"                 0          "$RUN_STATUS"
+  check "advance writes the reviewed sha" "$FIX_TIP" "$RUN_AFTER"
 fi
 
 if [ "$fails" -ne 0 ]; then

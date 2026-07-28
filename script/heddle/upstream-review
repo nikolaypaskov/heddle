@@ -64,13 +64,41 @@ classify_paths() {
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 
+usage() {
+  echo "usage: $0 [--no-fetch]" >&2
+  echo "       $0 --advance <sha>" >&2
+}
+
 ADVANCE=false
+ADVANCE_SHA=""
+ADVANCE_RESOLVED=""
 FETCH=true
 while [ $# -gt 0 ]; do
   case "$1" in
-    --advance)  ADVANCE=true ;;
+    --advance)
+      # The sha is REQUIRED, and it is the whole point. A bare `--advance` re-resolved the
+      # remote branch at write time: the runbook runs the report and the advance as two
+      # invocations, this one fetches on start, so anything that landed upstream in between
+      # was recorded as evaluated having appeared in no report a human ever read. Binding
+      # the write to a sha the reader passes in makes the marker a record of a decision
+      # rather than of a clock.
+      ADVANCE=true
+      shift
+      ADVANCE_SHA="${1:-}"
+      case "$ADVANCE_SHA" in
+        "" | --*)
+          echo "error: --advance requires the sha the report you read ended at." >&2
+          echo "       Run the report first; its last line prints the exact command." >&2
+          exit 2
+          ;;
+      esac
+      # Advancing never fetches. The report printed by THIS invocation is what the write is
+      # checked against, so fetching here would move the target underneath the reader
+      # between the report they read and the sha they are recording.
+      FETCH=false
+      ;;
     --no-fetch) FETCH=false ;;
-    *) echo "usage: $0 [--advance] [--no-fetch]" >&2; exit 2 ;;
+    *) usage; exit 2 ;;
   esac
   shift
 done
@@ -115,6 +143,40 @@ MERGE_BASE="$(git merge-base HEAD "$UPSTREAM_REF")" || {
   echo "error: no merge base between HEAD and upstream — is the upstream remote correct?" >&2
   exit 2
 }
+
+# Validated HERE, before the enumeration, so a bad sha costs one git call rather than a
+# full report -- and so nothing is written on a run that was never going to be valid.
+if [ "$ADVANCE" = true ]; then
+  # `--verify ... ^{commit}` rather than plain `rev-parse`: plain `git rev-parse <bad-ref>`
+  # exits non-zero but still echoes the input back on stdout, which is how the original
+  # `git rev-parse ... > "$MARKER_FILE"` managed to write a literal ref *string* into the
+  # tracked marker while reporting success.
+  ADVANCE_RESOLVED="$(git rev-parse --verify --quiet "${ADVANCE_SHA}^{commit}")" || {
+    echo "error: --advance sha '$ADVANCE_SHA' is not a commit in this repository." >&2
+    exit 2
+  }
+
+  # Subsumed by the equality check below -- anything that fails this also fails that. It is
+  # kept for the DIAGNOSIS, not the decision: it names the likely mistake (a sha from HEAD,
+  # from another branch, or from another repository) instead of reporting a mismatch
+  # between two opaque hashes. Mutation testing confirms it: removing it leaves the exit
+  # status at 2 and only changes the message.
+  git merge-base --is-ancestor "$ADVANCE_RESOLVED" "$UPSTREAM_REF" || {
+    echo "error: --advance sha '$ADVANCE_SHA' is not on upstream's history." >&2
+    echo "       It resolves to $ADVANCE_RESOLVED, which $UPSTREAM_REF does not contain." >&2
+    echo "       Pass the sha the report prints, not one of your own commits." >&2
+    exit 2
+  }
+
+  if [ "$ADVANCE_RESOLVED" != "$UPSTREAM_REF" ]; then
+    echo "error: --advance sha '$ADVANCE_SHA' is not what this report covers." >&2
+    echo "       report covers: $UPSTREAM_REF" >&2
+    echo "       you passed:    $ADVANCE_RESOLVED" >&2
+    echo "       Upstream moved since the report you read. Re-run the report, read the" >&2
+    echo "       commits it now lists, and pass the sha it prints." >&2
+    exit 2
+  fi
+fi
 
 # Every file that existed at the merge base and is gone from HEAD: everything this fork
 # deleted, derived rather than hand-listed. A hardcoded list is wrong the day after the
@@ -237,22 +299,24 @@ if [ "$ADVANCE" = true ]; then
   # Advances past REJECTED commits too. Rejections are decisions; resurfacing them makes
   # each pass grow rather than shrink.
   #
-  # Resolve and validate BEFORE the redirection touches the file. A bare
-  # `git rev-parse ... > "$MARKER_FILE"` truncates the file the moment the shell opens the
-  # redirect, regardless of whether the command itself succeeds -- so a failed or empty
-  # resolve would clobber the tracked marker to empty while still falling through to the
-  # success message below. Resolving into a variable first, and only writing once that has
-  # been validated, means a failed resolve exits 2 with the marker untouched.
-  #
-  # Only the exit-status check is provably necessary against real git: mutation testing
-  # showed that plain `git rev-parse <bad-ref>` (no `--verify`) exits non-zero but still
-  # echoes the input back on stdout, so dropping the status check lets an unresolvable ref
-  # write the literal ref *string* into the marker. The emptiness check is belt-and-braces
-  # -- no observed git invocation reaches it with a zero exit and empty output.
-  if ! sha="$(git rev-parse "$UPSTREAM_REF")" || [ -z "$sha" ] || ! printf '%s\n' "$sha" > "$MARKER_FILE"; then
-    echo "error: failed to write marker" >&2
+  # There is NO git command inside this redirect, deliberately. The original form was
+  # `git rev-parse "$UPSTREAM_REF" > "$MARKER_FILE"`, which truncates the tracked marker the
+  # moment the shell opens the redirect, whether or not the command then succeeds -- so a
+  # failed resolve emptied the file and still printed the success message below. Writing a
+  # value that was resolved and validated hundreds of lines earlier removes the class
+  # rather than guarding it: by the time control reaches here there is nothing left that
+  # can fail except the write itself.
+  printf '%s\n' "$ADVANCE_RESOLVED" > "$MARKER_FILE" || {
+    echo "error: failed to write $MARKER_FILE" >&2
     exit 2
-  fi
+  }
   echo
-  echo "marker advanced to $(git rev-parse --short "$sha") — commit .upstream-sync with any picks"
+  echo "marker advanced to ${upstream_short} — commit .upstream-sync with any picks"
+else
+  echo
+  # Printed as a full sha, and printed at all, so the runbook is copy-paste and the value
+  # recorded is the one the reader just looked at rather than whatever the remote says by
+  # the time they get round to typing it.
+  echo "To record this pass as evaluated, after your picks:"
+  echo "  script/heddle/upstream-review --advance ${UPSTREAM_REF}"
 fi
