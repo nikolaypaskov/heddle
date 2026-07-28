@@ -1,21 +1,29 @@
 # Heddle — upstream cherry-pick strategy
 
-**Status:** Designed, not implemented
+**Status:** Implemented — `script/heddle/upstream-review`, `.upstream-sync`
 **Date:** 2026-07-28
 
 ## The situation, measured
 
-Heddle forked `warpdotdev/Warp` at `0dbd3d56` (2026-04-28). Since then:
+Heddle's fork point is `git merge-base HEAD upstream/master` = **`a66337f4`** (2026-07-21,
+"Add TUI logout slash command (#14117)"). Measured over
+`a66337f4..upstream/master --not HEAD`:
 
-| | Count |
-|---|---:|
-| Upstream commits | 1799 |
-| Touching `app/` or `crates/` | 1591 |
-| Touching the terminal core | 556 |
-| Touching subsystems this fork removed | 406 |
-| Mentioning security / CVE / RUSTSEC in the message | **0** |
+| | Pathspec / filter | Count |
+|---|---|---:|
+| Upstream commits not already in HEAD | — | 118 |
+| Touching `app/` or `crates/` | `app/ crates/` | 104 |
+| Touching the terminal core | `app/src/terminal crates/warp_terminal` | 15 |
+| Touching subsystems this fork removed | the AUTO-REJECT bucket | 8 |
+| Mentioning security / CVE / panic / RUSTSEC in the message | `git log -Ei --grep` | 11 |
 
-That last row shapes the urgency, with a caveat recorded below.
+Every pathspec is named because the first draft of this table did not name one, and the
+row measured over an unstated pathspec was the row that turned out to be wrong.
+
+An earlier draft recorded the fork point as `0dbd3d56` and the backlog as 1799 commits.
+`0dbd3d56` is the **root commit of the public Warp repository**, not a fork point:
+1681 of those 1799 commits were already ancestors of HEAD. Every number in the original
+table inherited that error. See "Recorded uncertainty" for what else it took down with it.
 
 ## Decisions
 
@@ -44,8 +52,13 @@ will be skipped. That is accepted.
 
 Two artefacts.
 
-**`.upstream-sync`** — a tracked file recording the last upstream sha evaluated.
-Committed, so the marker survives machines and its movement is visible in review.
+**`.upstream-sync`** — a tracked file recording the last upstream sha evaluated, starting
+at the fork point `a66337f4`. Committed, so the marker survives machines and its movement
+is visible in review.
+
+The marker is hand-maintained, and it has already been wrong once. Enumeration therefore
+passes `--not HEAD` as well, so git decides what HEAD does not already contain and the
+report self-corrects against marker drift instead of compounding it.
 
 **`script/heddle/upstream-review`** — bash, matching the other gates in that directory:
 read-only, self-testing, no new dependencies.
@@ -56,10 +69,14 @@ Every commit since the marker lands in exactly one bucket, by the paths it touch
 
 | Bucket | Rule | Action |
 |---|---|---|
-| `ignore` | Touches nothing under `app/` or `crates/` | Silent |
 | `auto-reject` | Touches a removed surface | Listed, not reviewed |
 | `collision` | Touches a reworked subsystem | Listed with its subject — ours wins |
-| `candidate` | Everything else | **The only bucket read** |
+| `candidate` | Touches `app/` or `crates/`, and neither of the above | **The only bucket read** |
+| `ignore` | Matches nothing we classify | Silent (a count only) |
+
+`ignore` is not "no `app/` or `crates/` change": a commit touching only
+`.github/workflows/` has no such change and is still reported, under `collision`. The
+buckets are evaluated in the order above and always sum to the commit count.
 
 **Precedence: collision beats candidate.** A commit touching both must classify as
 collision. Getting this backwards is the most expensive failure available to this
@@ -70,12 +87,36 @@ to accept.
 indistinguishable from a commit that never existed. If upstream fixes the same cloud
 bug five times, that pattern is worth noticing even though the answer stays no.
 
-### Removed surfaces
+### Removed surfaces — derived, not listed
+
+A hand-maintained list of removed paths is wrong the day after the next removal lands.
+The first draft of this document listed three entries; measured against the tree, they
+covered 4 of the 160 files this fork has actually deleted, and two of the three named
+subsystems Heddle still ships (`crates/cloud_objects/` is a live workspace member;
+`app/src/ai/blocklist/` is 201 present files). An upstream panic fix in either would have
+appeared under a heading reading "touches a removed subsystem" and never been read.
+
+So the set is derived at run time:
 
 ```
-crates/cloud_objects/
-crates/warp_multi_agent_*/
-app/src/ai/blocklist/           orchestration, ambient agents
+git diff --diff-filter=D --no-renames --name-only <merge-base> HEAD -- app/ crates/
+```
+
+A path is auto-reject if it **existed at the merge base and is gone from HEAD**. Both
+halves matter. Without the first, every file upstream newly *adds* is also absent from
+HEAD, so the whole candidate bucket collapses into auto-reject — measured: 95 candidates
+become 72, with 23 commits silently written off. `script/heddle/upstream-review-selftest`
+asserts that case by name.
+
+`--no-renames` is deliberate. A path the fork renamed away (`warpify_page.rs` →
+`heddlify_page.rs`) is a path upstream must not be allowed to reintroduce, and rename
+detection is a similarity heuristic whose results move with git version and config.
+
+One prefix rule survives alongside the derived set, because the derived set cannot see
+files upstream *adds* inside a tree this fork deleted wholesale:
+
+```
+crates/warp_multi_agent*        removed here; upstream still adds files to it
 ```
 
 ### Collision paths
@@ -83,26 +124,45 @@ app/src/ai/blocklist/           orchestration, ambient agents
 Each entry is a deliberate decision that an upstream change would silently undo:
 
 ```
-app/src/drive/settings.rs       the account gate that hid Drive from every user
+app/src/drive/                  the account gate that hid Drive from every user, and the
+                                ten other files the restoration reworked
+app/src/settings_view/privacy_page.rs   the de-branding rework
 app/src/autoupdate/             consent-gated updates, notarisation and team checks
 crates/warp_core/src/channel/   endpoint and channel configuration
 script/heddle/                  the gates themselves
 .github/workflows/              CI, privacy gate, release
 ```
 
+The Drive entry was `app/src/drive/settings.rs` in the first draft — one file of an
+eleven-file rework, which left `app/src/drive/panel.rs` and the rest landing in the
+bucket a human reads with intent to accept. The guard is only as wide as the change it
+guards.
+
+The rest of the de-branding rework — `app/src/settings/heddlify_key_migration*.rs` and
+the renamed `heddlify_page.rs` — is not listed. Those paths do not exist upstream, so no
+upstream commit can touch them; listing them would be decoration. The rename *source*,
+`warpify_page.rs`, is covered by the derived removed set.
+
 ## A sync pass
 
 ```
-1.  git fetch upstream
-2.  script/heddle/upstream-review        → four buckets, candidates last
-3.  read candidates; cherry-pick wanted ones individually
-4.  lefthook run gate                    → the ratchets get their say
-5.  advance .upstream-sync, commit with the picks
+1.  script/heddle/upstream-review        → fetches, then four buckets, candidates last
+2.  read candidates; cherry-pick wanted ones individually
+3.  lefthook run gate                    → the ratchets get their say
+4.  advance .upstream-sync, commit with the picks
 ```
 
+**The script fetches; the runbook does not.** The report is only ever as current as the
+last fetch, and `--advance` turns it into a tracked, permanent "evaluated through here"
+decision — so a forgotten fetch buries real commits in a file that re-running does not
+recover. Detecting staleness instead was considered and rejected: there is no reliable
+local signal for it (a ref's mtime is not a fetch time once refs are packed), and a guard
+that cannot observe what it claims to check is the vacuous-check pattern this repo keeps
+finding. `--no-fetch` reports against the last fetch when that is what you want; a failed
+fetch is exit 2, never a quietly short report.
+
 **The marker advances past rejected commits too.** Rejections are decisions; resurfacing
-them makes each pass grow rather than shrink, which is how 1799 accumulated in the first
-place.
+them makes each pass grow rather than shrink.
 
 ## When a cherry-pick trips a ratchet
 
@@ -124,39 +184,62 @@ vacuous — a semgrep rule that matched nothing, a version guard that errored on
 real tag, and a release workflow whose trigger never fired. Self-tests are what caught
 them.
 
-Fixture commits, asserting classification:
+Fixture path lists, asserting classification. The derived removed set is passed in as
+data, so the test needs no fixture repository and no dependency on what upstream has
+actually deleted today:
 
 | Fixture touches | Expected |
 |---|---|
-| `crates/cloud_objects/…` | `auto-reject` |
-| `app/src/drive/settings.rs` | `collision` |
+| `crates/warp_multi_agent_client/…` | `auto-reject` |
+| a path in the derived removed set | `auto-reject` |
+| `app/src/drive/panel.rs` | `collision` |
 | `crates/warp_terminal/…` | `candidate` |
+| `crates/cloud_objects/…`, `app/src/ai/blocklist/…` (still shipped) | `candidate` |
 | upstream docs only | `ignore` |
 | **both a collision and a candidate path** | **`collision`** |
+| **a path in neither HEAD nor the derived set (upstream ADDS it)** | **`candidate`** |
 
-The last row is the one that matters.
+The last two rows are the ones that matter. The first is precedence: get it backwards and
+an upstream Drive change lands in the bucket read with intent to accept. The second is the
+"existed at the merge base" half of the removal rule: get it wrong and everything new
+upstream is written off, which reads to a human as "nothing to review".
 
 ## Recorded uncertainty
 
-**The zero-security finding is not proven.** It comes from grepping upstream commit
-messages for `security|CVE|vulnerab|overflow|panic|unsound|RUSTSEC`. If upstream does not
-label security fixes that way — many projects do not — the inference "no urgency" is
-unfounded. Message-grepping is the same shape of check that has produced wrong answers
-in this repo before.
+**The zero-security finding was wrong, twice over.** The first draft reported **0**
+commits mentioning `security|CVE|vulnerab|overflow|panic|unsound|RUSTSEC` and built the
+urgency argument on it. Re-run with `git log -Ei --grep`, the real figures are **11** over
+the corrected range and **114** over the range the first draft thought it was measuring.
+Among the 11 is `43a41099d fix: update cmov to 0.5.4 to resolve CVE-2026-50185`. A row
+reading "0" was not a weak signal; it was a broken measurement, and it is not knowable
+from the draft how it was produced.
 
-What is independently true: Rust security issues arrive predominantly through
-dependencies, and `cargo deny check advisories` already runs on every build. That
-argument stands on its own and does not depend on the grep.
+Message-grepping remains the same shape of check that has produced wrong answers in this
+repo before, so the corrected number is a floor, not a census: upstream may fix security
+bugs without saying so.
 
-**The removed-surface count above was wrong in the first draft.** It originally read 635,
+Where those 11 land: 7 `candidate`, 1 `collision`, 3 `ignore`. The three ignored are two
+lockfile-only bumps (`2fe6a4f56`, `06eedd6fc` — root `Cargo.lock`, outside `app/` and
+`crates/`) and `43a41099d`, which despite its CVE subject changes **no files at all** and
+so has nothing to classify. Lockfile bumps being invisible to this tool is deliberate,
+and it is the one place where the independent argument carries the weight: Rust security
+issues arrive predominantly through dependencies, and `cargo deny check advisories`
+already runs on every build against this fork's own lockfile, which is the graph that
+actually ships. Upstream's bumps are not the mechanism by which Heddle learns about
+advisories.
+
+**The removed-surface count above was wrong in both earlier drafts.** It first read 635,
 measured over the pathspec `crates/cloud_objects app/src/ai app/src/drive` — which counts
 all of `app/src/ai` rather than just `app/src/ai/blocklist/`, and counts `app/src/drive`,
 which this fork did not remove. Drive was *restored*, not removed: an always-false account
 gate had hidden it from every user, and it is listed in this document's own collision path
-list, not the removed one. The corrected figure, measured over the pathspec this document
-actually specifies, is 406. The error is instructive on its own terms: the wrong
-measurement treated a restored subsystem as a removed one, which is the exact confusion
-the collision list exists to prevent.
+list, not the removed one. It was then corrected to 406 — still measured over the wrong
+1799-commit range, and still measured with a hand-written path list that covered 4 of 160
+removed files. The figure in the table above is the AUTO-REJECT bucket the tool actually
+produces, over the real range, from the derived set.
+
+Both errors are instructive on the same point: every wrong number here came from a
+measurement whose inputs were never re-derived, only re-stated.
 
 **Not consulted:** Codex was asked to critique this design and both attempts ran too long
 to be useful — it is fast on concrete diffs and slow on open-ended design questions. It

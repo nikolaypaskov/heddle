@@ -2,7 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A repeatable monthly pass that surfaces the handful of upstream commits worth cherry-picking, out of ~1800, without re-reviewing rejections.
+> **Superseded in part — read the script, not the snippets.** This plan was written
+> against a fork point of `0dbd3d56`, which is upstream's ROOT commit, not Heddle's fork
+> point. The real merge base is `a66337f4` and the real backlog is 118 commits, not 1799.
+> The whole-branch review that followed corrected that and three other defects, so the
+> shipped `script/heddle/upstream-review` differs from the code blocks below in four ways:
+> enumeration passes `--not HEAD`; AUTO-REJECT is driven by a removed-path set derived
+> from `git diff --diff-filter=D <merge-base> HEAD` rather than a hand-written regex; the
+> collision list covers all of `app/src/drive/`; and the script fetches.
+>
+> Commands that would produce a wrong artefact if run (the marker value, the expected
+> counts) have been corrected in place. The illustrative source snippets are left as
+> written, as the record of what was planned — including the `0dbd3d56` in the Task 1
+> header comment, which is exactly the error this note is about.
+
+**Goal:** A repeatable monthly pass that surfaces the handful of upstream commits worth cherry-picking, out of a backlog of 118, without re-reviewing rejections.
 
 **Architecture:** A tracked marker file records the last evaluated upstream sha. A bash script enumerates commits since that marker and sorts each into one of four buckets by the paths it touches. Classification is a **pure function over a newline-separated path list**, which is what makes the self-test hermetic — it needs no fixture repository and no dependency on upstream's real history.
 
@@ -13,7 +27,7 @@
 - Spec: `docs/design/specs/2026-07-28-upstream-cherry-pick-design.md`
 - Exit codes follow the existing gates: **2 = infrastructure failure** (missing remote, missing marker, not a git repo), **0 = report produced**. This script never fails the build; it is a review aid, not a gate.
 - Upstream remote is named `upstream` → `https://github.com/warpdotdev/Warp.git`
-- Fork point: `0dbd3d56`
+- Fork point: `a66337f4` (`git merge-base HEAD upstream/master`)
 - `collision` beats `candidate` when a commit touches both. This precedence is load-bearing.
 - Every gate in `script/heddle/` has a `*-selftest` sibling. Three checks in this repo turned out to be vacuous; the self-tests are what caught them.
 - Shell style: `set -uo pipefail`, never `set -e` in a script whose job is to capture non-zero exits.
@@ -166,7 +180,7 @@ git commit -m "feat(upstream): classify upstream commits by path, with a hermeti
 - [ ] **Step 1: Create the marker at the fork point**
 
 ```bash
-echo "0dbd3d56" > .upstream-sync
+echo "a66337f4" > .upstream-sync
 ```
 
 - [ ] **Step 2: Append enumeration and reporting to `upstream-review`**
@@ -228,7 +242,7 @@ printf '  %s\n' "${b_candidate[@]:-  (none)}"
 - [ ] **Step 3: Run it against real history**
 
 Run: `git fetch upstream && ./script/heddle/upstream-review | head -20`
-Expected: a report whose bucket counts sum to roughly 1798 minus ignored. Sanity-check that `AUTO-REJECT` is in the hundreds — the spec measured 635 commits touching removed surfaces.
+Expected: a report whose four bucket counts sum exactly to the commits in the range. As shipped that is 118 = 8 auto-reject + 7 collision + 95 candidate + 8 ignored. (This step originally read "roughly 1798 minus ignored… `AUTO-REJECT` in the hundreds — the spec measured 635 commits touching removed surfaces". Both figures were wrong: 635 was measured over a pathspec the spec did not specify, and 1798 came from the root-commit fork point. A sanity check whose expected value is itself unverified is not a sanity check.)
 
 - [ ] **Step 4: Verify the infrastructure failures are real**
 
@@ -275,7 +289,7 @@ And at the end of the script:
 ```bash
 if [ "$ADVANCE" = true ]; then
   # Advances past REJECTED commits too. Rejections are decisions; resurfacing them makes
-  # each pass grow rather than shrink, which is how 1798 accumulated.
+  # each pass grow rather than shrink, which is how a backlog accumulates.
   git rev-parse "$UPSTREAM_REF" > "$MARKER_FILE"
   echo
   echo "marker advanced to $(git rev-parse --short "$UPSTREAM_REF") — commit .upstream-sync with any picks"
@@ -337,4 +351,6 @@ git commit -m "feat(upstream): advance the marker past evaluated commits, and do
 
 **Type consistency.** `classify_paths` is defined in Task 1 and consumed in Task 2 with the same stdin/stdout contract. `MARKER_FILE`, `UPSTREAM_REF` and `ADVANCE` are introduced before use.
 
-**Known gap, deliberate:** path-based classification is a proxy for intent. An upstream commit can touch `crates/warp_terminal` while being cloud plumbing, or touch a collision path incidentally. The bias is toward over-rejecting, so the failure mode is missing something useful rather than accepting something harmful. If the candidate bucket proves too noisy in the first real pass, tighten `CODE_RE` rather than loosening the other two.
+**Known gap, deliberate:** path-based classification is a proxy for intent. An upstream commit can touch `crates/warp_terminal` while being cloud plumbing, or touch a collision path incidentally. The bias is toward over-rejecting, so the failure mode is missing something useful rather than accepting something harmful.
+
+~~If the candidate bucket proves too noisy in the first real pass, tighten `CODE_RE` rather than loosening the other two.~~ **Struck.** The first real pass produced 95 candidates out of 118 — a list a person reads in a sitting. The candidate *ratio* was never the problem; the range was, and it was 15× too large because the fork point was recorded as upstream's root commit. Tightening `CODE_RE` would have hidden that by making the symptom smaller, which is the wrong problem solved in the wrong direction. Do not narrow the only bucket anyone reads to make a number look better.

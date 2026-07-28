@@ -241,20 +241,38 @@ rebuild. That is correct behaviour, not a bug.
 
 ## Upstream cherry-picking
 
-Upstream is `warpdotdev/Warp`; `.upstream-sync` records the last evaluated sha.
+Upstream is `warpdotdev/Warp`. The fork point is `a66337f4` (2026-07-21) —
+`git merge-base HEAD upstream/master`, not the root commit of the public Warp repo.
+`.upstream-sync` records the last evaluated sha, starting there.
 
-    git fetch upstream
-    script/heddle/upstream-review          # four buckets; read CANDIDATE only
+    script/heddle/upstream-review          # fetches, then four buckets; read CANDIDATE only
     git cherry-pick <sha>                  # one at a time
     lefthook run gate                      # the ratchets get their say
     script/heddle/upstream-review --advance
     git commit .upstream-sync -m "chore(upstream): evaluated through <sha>"
+
+**Do not run `git fetch upstream` first — the script does it.** That is deliberate: the
+report is only as current as the last fetch, and `--advance` writes the result into a
+tracked file as a permanent "evaluated through here" decision, so a forgotten fetch buries
+real commits somewhere re-running does not reach. `--no-fetch` reports against the last
+fetch when you are offline or deliberately re-reading; a failed fetch exits 2 rather than
+producing a quietly short report.
+
+Exit 2 is always infrastructure (no upstream remote, missing or unresolvable marker,
+failed fetch). Finding commits never fails.
 
 If a pick trips `gui-branding.baseline` or `gui-surfaces.baseline`, the default is to
 DROP THE PICK, not re-record the baseline. Re-recording turns the ratchet into a
 formality. Re-record only when the pick genuinely shrinks the surface, and check the
 diff shows removals only.
 
-`COLLISION` means upstream touched something this fork reworked deliberately — the Drive
-account gate, the update mechanism, the gates. Ours wins; the bucket is listed so
-repeated upstream activity there is visible, not so it gets re-litigated each pass.
+`AUTO-REJECT` means the commit touches a file this fork deleted. That set is **derived at
+run time** from `git diff --diff-filter=D --no-renames <merge-base> HEAD -- app/ crates/`,
+not hand-maintained, so it stays correct as more is removed. Nothing to update when you
+delete a subsystem.
+
+`COLLISION` means upstream touched something this fork reworked deliberately — all of
+`app/src/drive/`, the update mechanism, the channel config, the privacy page, the gates,
+the workflows. Ours wins; the bucket is listed so repeated upstream activity there is
+visible, not so it gets re-litigated each pass. Widen `COLLISION_RE` in the script when
+you rework something new, and add a case to `upstream-review-selftest`.
