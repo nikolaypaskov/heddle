@@ -44,3 +44,53 @@ classify_paths() {
 
 # Sourced by the self-test: define the functions and stop.
 [ "${BASH_SOURCE[0]}" != "${0}" ] && return 0
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+MARKER_FILE="$REPO_ROOT/.upstream-sync"
+
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: not a git repository" >&2; exit 2; }
+git remote get-url upstream >/dev/null 2>&1 || {
+  echo "error: no 'upstream' remote. Add it with:" >&2
+  echo "       git remote add upstream https://github.com/warpdotdev/Warp.git" >&2
+  exit 2
+}
+[ -f "$MARKER_FILE" ] || { echo "error: $MARKER_FILE is missing" >&2; exit 2; }
+
+MARKER="$(tr -d '[:space:]' < "$MARKER_FILE")"
+git cat-file -e "${MARKER}^{commit}" 2>/dev/null || {
+  echo "error: marker '$MARKER' is not a commit. Run: git fetch upstream" >&2
+  exit 2
+}
+
+UPSTREAM_REF="$(git rev-parse --verify --quiet upstream/main || git rev-parse --verify --quiet upstream/master)"
+[ -n "$UPSTREAM_REF" ] || { echo "error: cannot resolve upstream default branch" >&2; exit 2; }
+
+declare -a b_reject=() b_collide=() b_candidate=()
+ignored=0
+
+while IFS= read -r sha; do
+  [ -n "$sha" ] || continue
+  bucket="$(git show --name-only --pretty=format: "$sha" | classify_paths)"
+  subject="$(git log -1 --format='%h %s' "$sha")"
+  case "$bucket" in
+    auto-reject) b_reject+=("$subject") ;;
+    collision)   b_collide+=("$subject") ;;
+    candidate)   b_candidate+=("$subject") ;;
+    *)           ignored=$((ignored + 1)) ;;
+  esac
+done < <(git rev-list --reverse "${MARKER}..${UPSTREAM_REF}")
+
+echo "upstream review: ${MARKER} -> $(git rev-parse --short "$UPSTREAM_REF")"
+echo "  ignored (no app/ or crates/ change): $ignored"
+echo
+# Listed but not read. A rejection nobody sees is indistinguishable from a commit that
+# never existed -- and repeated upstream work on a removed surface is worth noticing.
+echo "AUTO-REJECT (${#b_reject[@]}) — touches a removed subsystem:"
+printf '  %s\n' "${b_reject[@]:-  (none)}"
+echo
+echo "COLLISION (${#b_collide[@]}) — touches something we reworked; ours wins:"
+printf '  %s\n' "${b_collide[@]:-  (none)}"
+echo
+echo "CANDIDATE (${#b_candidate[@]}) — read these:"
+printf '  %s\n' "${b_candidate[@]:-  (none)}"
