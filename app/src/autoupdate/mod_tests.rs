@@ -295,8 +295,8 @@ fn test_download_failure_allows_retry() {
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_01"));
-            let target_version = "v0.2023.05.15.08.04.stable_02";
+            ChannelState::set_app_version(Some("v0.3.1"));
+            let target_version = "v0.3.2";
 
             autoupdate.on_download_update_complete(
                 RequestType::Poll,
@@ -337,8 +337,8 @@ fn test_successful_download_prevents_redownload() {
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_01"));
-            let target_version = "v0.2023.05.15.08.04.stable_02";
+            ChannelState::set_app_version(Some("v0.3.1"));
+            let target_version = "v0.3.2";
 
             autoupdate.on_download_update_complete(
                 RequestType::Poll,
@@ -389,9 +389,9 @@ fn test_failed_download_preserves_previous_successful_download() {
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_01"));
-            let v2 = "v0.2023.05.15.08.04.stable_02";
-            let v3 = "v0.2023.05.15.08.04.stable_03";
+            ChannelState::set_app_version(Some("v0.3.1"));
+            let v2 = "v0.3.2";
+            let v3 = "v0.3.3";
 
             // Successful download of v2.
             autoupdate.on_download_update_complete(
@@ -457,9 +457,9 @@ fn test_successful_download_after_failure_replaces_preserved_download() {
         let autoupdate_state = initialize_app(&mut app);
 
         app.update_model(&autoupdate_state, |autoupdate, ctx| {
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_01"));
-            let v2 = "v0.2023.05.15.08.04.stable_02";
-            let v3 = "v0.2023.05.15.08.04.stable_03";
+            ChannelState::set_app_version(Some("v0.3.1"));
+            let v2 = "v0.3.2";
+            let v3 = "v0.3.3";
 
             // Step 1: Successful download of v2.
             autoupdate.on_download_update_complete(
@@ -514,7 +514,7 @@ fn test_should_update() {
             // Test 1: No version tag set
             ChannelState::set_app_version(None);
             let version = make_version_info(
-                "v0.2023.05.15.08.04.stable_01",
+                "v0.3.1",
                 false, /* is_rollback */
             );
 
@@ -525,9 +525,9 @@ fn test_should_update() {
             );
 
             // Test 2: Already up to date
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_01"));
+            ChannelState::set_app_version(Some("v0.3.1"));
             let version = make_version_info(
-                "v0.2023.05.15.08.04.stable_01",
+                "v0.3.1",
                 false, /* is_rollback */
             );
             let result = autoupdate.should_update(version, "update2".to_string());
@@ -536,10 +536,10 @@ fn test_should_update() {
                 "Should not update when already on the latest version"
             );
 
-            // Test 3: Current version ahead of server version (no rollback)
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_02"));
+            // Test 3: Current version ahead of the manifest version
+            ChannelState::set_app_version(Some("v0.3.2"));
             let version = make_version_info(
-                "v0.2023.05.15.08.04.stable_01",
+                "v0.3.1",
                 false, /* is_rollback */
             );
             let result = autoupdate.should_update(version, "update3".to_string());
@@ -548,20 +548,25 @@ fn test_should_update() {
                 "Should not update when current version is ahead and no rollback"
             );
 
-            // Test 4: Current version ahead of server version (with rollback)
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_02"));
-            let version =
-                make_version_info("v0.2023.05.15.08.04.stable_01", true /* is_rollback */);
+            // Test 4: a rollback no longer authorises a downgrade.
+            //
+            // Upstream honoured `is_rollback` so Warp could walk users back off a bad
+            // release. Heddle refuses: an older release is validly signed AND validly
+            // notarized, so if the manifest could authorise a downgrade, both Apple checks
+            // would wave through a build with a known bug. Monotonicity is the only thing
+            // that can tell those apart, so it has to be unconditional.
+            ChannelState::set_app_version(Some("v0.3.2"));
+            let version = make_version_info("v0.3.1", true /* is_rollback */);
             let result = autoupdate.should_update(version, "update4".to_string());
             assert!(
-                matches!(result, UpdateReady::CanDownload { .. }),
-                "Should update when current version is ahead but rollback is true"
+                matches!(result, UpdateReady::No),
+                "a rollback flag in the manifest must not authorise a downgrade"
             );
 
             // Test 5: New update available for download
-            ChannelState::set_app_version(Some("v0.2023.05.15.08.04.stable_01"));
+            ChannelState::set_app_version(Some("v0.3.1"));
             let version = make_version_info(
-                "v0.2023.05.15.08.04.stable_02",
+                "v0.3.2",
                 false, /* is_rollback */
             );
             let result = autoupdate.should_update(version.clone(), "updateid".to_string());
@@ -571,7 +576,7 @@ fn test_should_update() {
                     update_id,
                 } => {
                     assert_eq!(
-                        new_version.version, "v0.2023.05.15.08.04.stable_02",
+                        new_version.version, "v0.3.2",
                         "New version should match server version"
                     );
                     assert_eq!(
@@ -581,6 +586,154 @@ fn test_should_update() {
                 }
                 _ => panic!("Expected UpdateReady::CanDownload for new update"),
             }
+        });
+    });
+}
+
+// ── Monotonicity ────────────────────────────────────────────────────────────────────────
+//
+// The downgrade guard. An older Heddle release is validly signed AND validly notarized, so
+// both Apple checks pass on it; version ordering is the only thing that can refuse it.
+
+use super::is_upgrade;
+
+#[test]
+fn only_a_strictly_greater_version_is_an_upgrade() {
+    assert!(
+        is_upgrade("v0.3.1", "v0.3.2"),
+        "0.3.2 must be newer than 0.3.1"
+    );
+    assert!(
+        is_upgrade("v0.3.1", "v0.4.0"),
+        "0.4.0 must be newer than 0.3.1"
+    );
+    assert!(
+        is_upgrade("v0.9.0", "v0.10.0"),
+        "0.10.0 must be newer than 0.9.0"
+    );
+    // The running version comes from CFBundleShortVersionString, which has no `v` prefix,
+    // while the manifest's does. The mixed form is the one that actually ships.
+    assert!(is_upgrade("0.3.1", "v0.3.2"));
+}
+
+#[test]
+fn the_same_version_is_not_an_upgrade() {
+    assert!(!is_upgrade("v0.3.1", "v0.3.1"));
+    assert!(!is_upgrade("0.3.1", "v0.3.1"), "prefix must not fake a diff");
+}
+
+#[test]
+fn an_older_version_is_never_an_upgrade() {
+    assert!(!is_upgrade("v0.3.2", "v0.3.1"));
+    assert!(!is_upgrade("v0.10.0", "v0.9.0"));
+    assert!(!is_upgrade("v1.0.0", "v0.9.9"));
+}
+
+#[test]
+fn an_unparseable_version_on_either_side_is_never_an_upgrade() {
+    // Fail closed. If we cannot tell which is newer, we do not install.
+    assert!(!is_upgrade("v0.3.1", "garbage"));
+    assert!(!is_upgrade("garbage", "v0.3.2"));
+    assert!(!is_upgrade("", "v0.3.2"));
+    // Upstream's dated scheme. `ParsedVersion` -- the parser the previous guard used --
+    // accepts THIS and rejects our own tags, which is why that guard never ran.
+    assert!(!is_upgrade("v0.2026.07.26.18.00.stable_01", "v0.3.2"));
+    assert!(!is_upgrade("v0.3.1", "v0.2026.07.26.18.00.stable_01"));
+}
+
+// ── Soft cutoff / prominent-update comparison ───────────────────────────────────────────
+
+#[test]
+fn a_cutoff_newer_than_the_running_build_is_past_current() {
+    ChannelState::set_app_version(Some("v0.3.1"));
+    assert!(super::is_incoming_version_past_current(Some("v0.3.2")));
+    assert!(super::is_incoming_version_past_current(Some("v0.10.0")));
+}
+
+#[test]
+fn a_cutoff_at_or_before_the_running_build_is_not_past_current() {
+    ChannelState::set_app_version(Some("v0.3.2"));
+    assert!(!super::is_incoming_version_past_current(Some("v0.3.2")));
+    assert!(!super::is_incoming_version_past_current(Some("v0.3.1")));
+}
+
+#[test]
+fn an_absent_or_unparseable_cutoff_is_never_past_current() {
+    // Heddle's manifest publishes only `version` and leaves these fields unset, so `None` is
+    // the case that actually ships. It must be false rather than defaulting to "escalate".
+    ChannelState::set_app_version(Some("v0.3.1"));
+    assert!(!super::is_incoming_version_past_current(None));
+    assert!(!super::is_incoming_version_past_current(Some("garbage")));
+    // Upstream's dated scheme, which the previous implementation parsed and ours does not.
+    assert!(!super::is_incoming_version_past_current(Some(
+        "v0.2026.07.26.18.00.stable_01"
+    )));
+}
+
+// ── The notice comes before the download ────────────────────────────────────────────────
+//
+// Codex's review found that discovering a newer version called `download_new_update`
+// immediately, so enabling update CHECKS silently enabled update DOWNLOADS -- roughly 100 MB
+// of application fetched before the user had been told anything, while the consent copy
+// described a request for the release list. These pin the two events apart.
+
+#[test]
+fn a_newer_version_is_offered_and_not_downloaded() {
+    App::test((), |mut app| async move {
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        let autoupdate_state = initialize_app(&mut app);
+
+        app.update_model(&autoupdate_state, |autoupdate, ctx| {
+            ChannelState::set_app_version(Some("v0.3.1"));
+            let version = make_version_info("v0.3.2", false /* is_rollback */);
+            let result = autoupdate.should_update(version.clone(), "update1".to_string());
+            assert!(
+                matches!(result, UpdateReady::CanDownload { .. }),
+                "a newer version must be downloadable"
+            );
+
+            autoupdate.on_update_check_complete(
+                RequestType::ManualCheck,
+                "update1".to_string(),
+                Ok(version),
+                false,
+                ctx,
+            );
+        });
+
+        app.read_model(&autoupdate_state, |autoupdate, _| {
+            assert!(
+                matches!(autoupdate.stage, AutoupdateStage::UpdateOffered { .. }),
+                "finding an update must OFFER it, not start fetching it; got {:?}",
+                autoupdate.stage
+            );
+            assert!(
+                !matches!(autoupdate.stage, AutoupdateStage::DownloadingUpdate),
+                "no download may begin before the user asks for one"
+            );
+        });
+    });
+}
+
+#[test]
+fn downloading_an_update_nobody_was_offered_does_nothing() {
+    // Guards the stray-dispatch case: a `DownloadOfferedUpdate` action arriving in any other
+    // state must not start a fetch out of nowhere.
+    App::test((), |mut app| async move {
+        app.add_singleton_model(|ctx| AppExecutionMode::new(ExecutionMode::App, false, ctx));
+        let autoupdate_state = initialize_app(&mut app);
+
+        app.update_model(&autoupdate_state, |autoupdate, ctx| {
+            autoupdate.stage = AutoupdateStage::NoUpdateAvailable;
+            autoupdate.download_offered_update(ctx);
+        });
+
+        app.read_model(&autoupdate_state, |autoupdate, _| {
+            assert!(
+                matches!(autoupdate.stage, AutoupdateStage::NoUpdateAvailable),
+                "with nothing offered, asking to download must be a no-op; got {:?}",
+                autoupdate.stage
+            );
         });
     });
 }

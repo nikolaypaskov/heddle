@@ -23,7 +23,12 @@ fn enabled_features() -> HashSet<FeatureFlag> {
     }
 
     flags.extend([
-        #[cfg(feature = "autoupdate")]
+        // macOS only, deliberately. The spec scopes updates to `Heddle.app`, and the
+        // inherited Linux path is actively dangerous here: it adds a package repository and
+        // rewrites /etc/pacman.conf, referring to `warp-terminal` packages on Warp's servers
+        // that this fork neither publishes nor controls. Windows is likewise unbuilt. Enabling
+        // the cargo feature everywhere would have armed both.
+        #[cfg(all(feature = "autoupdate", target_os = "macos"))]
         FeatureFlag::Autoupdate,
         #[cfg(feature = "changelog")]
         FeatureFlag::Changelog,
@@ -433,4 +438,35 @@ fn enabled_features() -> HashSet<FeatureFlag> {
     ]);
 
     flags
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Updates ship on macOS and nowhere else.
+    ///
+    /// This is not a style preference. The inherited Linux updater adds a package repository
+    /// named `warpdotdev` and installs a package called `warp-oss` from it, rewriting
+    /// `/etc/pacman.conf` on the way -- pointing a Heddle user's package manager at Warp's
+    /// infrastructure, which this fork neither publishes to nor controls. The Windows path is
+    /// equally unbuilt. Only `Heddle.app` has a real release artifact and a real verification
+    /// story, so only macOS gets the flag.
+    ///
+    /// The cargo feature alone was not enough: adding `autoupdate` to the default set armed
+    /// every platform at once.
+    ///
+    /// Note where this test has teeth. On macOS it passes whether or not the `target_os` gate
+    /// is present, so a developer removing the gate locally sees green. It fails only on
+    /// Linux and Windows -- which is where the damage would be, and which is what CI runs.
+    #[test]
+    fn autoupdate_is_enabled_on_macos_only() {
+        let enabled = enabled_features().contains(&FeatureFlag::Autoupdate);
+        assert_eq!(
+            enabled,
+            cfg!(target_os = "macos"),
+            "autoupdate must be enabled on macOS and disabled everywhere else; \
+             the Linux path would point a package manager at Warp's repositories"
+        );
+    }
 }

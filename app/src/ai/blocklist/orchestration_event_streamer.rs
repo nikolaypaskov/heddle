@@ -572,10 +572,25 @@ impl OrchestrationEventStreamer {
         // skip the server fetch. The child still receives its own inbox via
         // the existing `is_eligible` -> `RunIds(self)` stream, so there is no
         // regression.
-        let is_child = BlocklistAIHistoryModel::as_ref(ctx)
-            .conversation(&conversation_id)
-            .is_some_and(|c| c.is_child_agent_conversation());
-        if is_child {
+        //
+        // A conversation we cannot find is NOT treated as "not a child". This was
+        // `is_some_and(..)`, which collapses a missing conversation to `false` and
+        // falls straight through to the fetch below -- so whenever the lookup lost a
+        // race with the history model, a child conversation issued exactly the
+        // `get_ambient_agent_task` call this guard exists to prevent. It surfaced as
+        // an intermittent failure of
+        // `execute_invokes_parent_registration_and_honors_child_short_circuit`, from a
+        // background-executor thread, and only on a machine wide enough to lose that
+        // race often.
+        //
+        // Not knowing is a reason to do nothing, not a reason to hit the network: the
+        // next wait re-checks, exactly as the `self_run_id` case below already does.
+        let Some(conversation) =
+            BlocklistAIHistoryModel::as_ref(ctx).conversation(&conversation_id)
+        else {
+            return;
+        };
+        if conversation.is_child_agent_conversation() {
             return;
         }
         // Passive views of a run hosted elsewhere (shared-session viewers,
