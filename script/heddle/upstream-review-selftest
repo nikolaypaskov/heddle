@@ -2,7 +2,18 @@
 #
 # Prove the classifier can be WRONG before trusting it to be right.
 #
-# Two cases are load-bearing.
+# Two sections, because the script has two halves and they cannot be tested the same way.
+#
+# SECTION 1 sources the script and unit-tests `classify_paths` directly. Hermetic: no
+# fixture repository, no dependency on upstream's real history.
+#
+# SECTION 2 runs the script as a subprocess against a DISPOSABLE repository built in
+# $TMPDIR, with a `git` shim on PATH that breaks one call on demand. It exists because the
+# sourcing guard returns before the report body, so section 1 cannot reach the enumeration
+# and marker-write code at all -- and the defect that code is guarded against is a report
+# that looks clean while being short.
+#
+# Two cases in section 1 are load-bearing.
 #
 # `collision beats candidate` (below): a commit touching both a collision path and a
 # candidate path must classify as `collision`. If that precedence inverts, an upstream
@@ -42,6 +53,8 @@ expect_removed() {
   expect "$label" "$want" "$@"
   REMOVED_PATHS_SET="$saved"
 }
+
+echo "── section 1: classify_paths (hermetic)"
 
 # ── Regex buckets, with no derived set at all. These must hold on their own.
 expect "removed tree"           auto-reject "crates/warp_multi_agent_client/src/lib.rs"
@@ -95,6 +108,149 @@ expect_removed "removed path is not a suffix match" candidate \
 expect_removed "derived removal beats collision" auto-reject \
   "app/src/ai/agent_sdk/ambient.rs" \
   "app/src/drive/panel.rs" "app/src/ai/agent_sdk/ambient.rs"
+
+# ─────────────────────────────────────────────────────────────────────────────────────
+# SECTION 2 — enumeration and marker-write failure paths.
+#
+# The defect being guarded: `git rev-list` or `git show` fails or truncates, the script
+# has no `set -e`, and the result is an empty-or-short report that reads to a human as
+# "nothing to review". With --advance the upstream tip is then written into the tracked
+# marker, permanently recording unreviewed commits as evaluated. Re-running does not
+# recover it.
+#
+# Each case asserts THREE things: the exit status is 2 (infrastructure failure), something
+# was said on stderr, and the marker file was NOT touched. Any one of those alone would
+# let the defect through.
+# ─────────────────────────────────────────────────────────────────────────────────────
+echo
+echo "── section 2: report and marker failure paths (disposable repo in \$TMPDIR)"
+
+check() {
+  local label="$1" want="$2" got="$3"
+  if [ "$got" != "$want" ]; then
+    echo "FAIL [$label]: expected '$want', got '$got'" >&2
+    fails=$((fails + 1))
+  else
+    echo "ok [$label]"
+  fi
+}
+
+check_contains() {
+  local label="$1" needle="$2" hay="$3"
+  case "$hay" in
+    *"$needle"*) echo "ok [$label]" ;;
+    *) echo "FAIL [$label]: expected text containing '$needle', got: $hay" >&2
+       fails=$((fails + 1)) ;;
+  esac
+}
+
+REAL_GIT="$(command -v git)"
+FIXTURE=""
+cleanup() { [ -n "$FIXTURE" ] && rm -rf "$FIXTURE"; }
+trap cleanup EXIT
+
+# HEAD sits at `base`; upstream/master is two commits ahead. The range is therefore
+# exactly 2, which is what makes silent truncation to 1 detectable.
+build_fixture() {
+  [ -n "$REAL_GIT" ] || return 1
+  FIXTURE="$(mktemp -d)" || return 1
+  local r="$FIXTURE/repo" g="$REAL_GIT"
+  mkdir -p "$r/script/heddle" "$r/app/src" || return 1
+  "$g" -C "$r" init -q                                   || return 1
+  "$g" -C "$r" symbolic-ref HEAD refs/heads/work         || return 1
+  "$g" -C "$r" config user.email selftest@example.invalid || return 1
+  "$g" -C "$r" config user.name selftest                 || return 1
+  "$g" -C "$r" config commit.gpgsign false               || return 1
+  local f
+  for f in base one two; do
+    echo "$f" > "$r/app/src/$f.rs"
+    "$g" -C "$r" add -A                     || return 1
+    "$g" -C "$r" commit -q -m "$f"          || return 1
+    [ "$f" = base ] && { FIX_BASE="$("$g" -C "$r" rev-parse HEAD)" || return 1; }
+  done
+  FIX_TIP="$("$g" -C "$r" rev-parse HEAD)" || return 1
+  "$g" -C "$r" update-ref refs/remotes/upstream/master "$FIX_TIP" || return 1
+  "$g" -C "$r" reset -q --hard "$FIX_BASE"                       || return 1
+  "$g" -C "$r" remote add upstream "$r"                          || return 1
+  printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync"                || return 1
+  cp "$REPO_ROOT/script/heddle/upstream-review" "$r/script/heddle/upstream-review" || return 1
+  chmod +x "$r/script/heddle/upstream-review" || return 1
+
+  # PATH-shadows git and breaks exactly one call, selected by $SHIM_MODE. The real git
+  # path is baked in at build time, before PATH is changed, so the shim cannot find
+  # itself. `truncate-rev-list` is the nasty one: short output with a ZERO exit status.
+  mkdir -p "$FIXTURE/shim" || return 1
+  cat > "$FIXTURE/shim/git" <<SHIM || return 1
+#!/bin/bash
+case "\${SHIM_MODE:-}" in
+  fail-rev-list)     [ "\$1" = rev-list ] && exit 128 ;;
+  truncate-rev-list) if [ "\$1" = rev-list ] && [ "\$2" = --reverse ]; then
+                       "$g" "\$@" | head -1; exit 0
+                     fi ;;
+  fail-show)         [ "\$1" = show ] && exit 128 ;;
+esac
+exec "$g" "\$@"
+SHIM
+  chmod +x "$FIXTURE/shim/git" || return 1
+}
+
+run_case() {
+  local mode="$1"; shift
+  local r="$FIXTURE/repo"
+  # Reset the marker first, so cases are independent. Without this the suite lies under
+  # mutation: break the count guard, and the truncation case advances the marker to the
+  # tip, which empties the range for every later case -- so `git show` is never called,
+  # the per-commit case exits 0, and the failure is attributed to the wrong guard.
+  printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync"
+  RUN_BEFORE="$(cat "$r/.upstream-sync")"
+  RUN_OUT="$(SHIM_MODE="$mode" PATH="$FIXTURE/shim:$PATH" \
+             "$r/script/heddle/upstream-review" "$@" 2>"$FIXTURE/err")"
+  RUN_STATUS=$?
+  RUN_ERR="$(cat "$FIXTURE/err")"
+  RUN_AFTER="$(cat "$r/.upstream-sync")"
+}
+
+if ! build_fixture; then
+  # NOT a skip. A section that cannot run is a section that proves nothing, and reporting
+  # that as a pass is the same defect class this file exists to catch.
+  echo "FAIL [fixture]: could not build the disposable repository" >&2
+  fails=$((fails + 1))
+else
+  # Baseline: the fixture is sound and the happy path works. Without this, every failure
+  # case below could be passing for the wrong reason.
+  run_case "" --no-fetch
+  check          "clean run exits 0"           0                            "$RUN_STATUS"
+  check_contains "clean run counts 2 commits"  "commits not yet in HEAD: 2" "$RUN_OUT"
+  check_contains "clean run buckets 2"         "CANDIDATE (2)"              "$RUN_OUT"
+  check          "clean run leaves the marker" "$RUN_BEFORE"                "$RUN_AFTER"
+
+  # git rev-list dies. Was: invisible, because a process substitution's exit status is
+  # not observable by the `while` loop consuming it.
+  run_case fail-rev-list --no-fetch --advance
+  check          "enumeration failure exits 2"        2                             "$RUN_STATUS"
+  check_contains "enumeration failure says so"        "cannot enumerate commits"    "$RUN_ERR"
+  check          "enumeration failure keeps marker"   "$RUN_BEFORE"                 "$RUN_AFTER"
+
+  # git rev-list truncates but exits 0. No exit status can catch this; only counting
+  # independently can.
+  run_case truncate-rev-list --no-fetch --advance
+  check          "silent truncation exits 2"          2                             "$RUN_STATUS"
+  check_contains "silent truncation is counted"       "enumerated 1 commits but git counts 2" "$RUN_ERR"
+  check          "silent truncation keeps marker"     "$RUN_BEFORE"                 "$RUN_AFTER"
+
+  # git show dies for one commit. classify_paths returns `ignore` for an empty path list
+  # quite happily, so unguarded this files the commit under the bucket nobody reads.
+  run_case fail-show --no-fetch --advance
+  check          "per-commit read failure exits 2"    2                             "$RUN_STATUS"
+  check_contains "per-commit read failure says so"    "cannot read the file list"   "$RUN_ERR"
+  check          "per-commit read failure keeps marker" "$RUN_BEFORE"               "$RUN_AFTER"
+
+  # And the other half of the guard: on a clean run --advance MUST still move the marker.
+  # A guard that blocks everything is not a guard.
+  run_case "" --no-fetch --advance
+  check "advance exits 0"                0          "$RUN_STATUS"
+  check "advance writes the upstream tip" "$FIX_TIP" "$RUN_AFTER"
+fi
 
 if [ "$fails" -ne 0 ]; then
   echo "SELF-TEST FAILED: $fails case(s). A classifier that cannot be shown to fail is not evidence." >&2

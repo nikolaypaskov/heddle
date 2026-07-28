@@ -148,20 +148,75 @@ total=0
 # HEAD). Asking git which commits HEAD does not already contain makes the report
 # self-correcting against any future drift, including a cherry-pick that landed without
 # the marker moving.
+#
+# Enumerated into a VARIABLE, not consumed through `done < <(...)`. A process
+# substitution's exit status is not visible to the loop at all, so in the version of this
+# script that had no guard here, a `git rev-list` that died mid-stream produced a short
+# report reading as "fewer commits to review" -- and with --advance, the tip was then
+# written into the tracked marker, permanently recording unreviewed commits as evaluated.
+#
+# Do not read more into this line than it earns. Mutation testing put the process
+# substitution back, on its own, and the self-test still passed: the count cross-check
+# below already catches a short enumeration however it was read. This form is what makes
+# the status checkable at all, and it avoids running rev-list a third time; it is not by
+# itself what fixes the defect.
+shas="$(git rev-list --reverse "${MARKER}..${UPSTREAM_REF}" --not HEAD)" || {
+  echo "error: cannot enumerate commits in ${MARKER}..${UPSTREAM_REF}" >&2
+  exit 2
+}
+
+# Counted independently, because a non-zero exit is not the only way enumeration goes
+# wrong: a truncated stream that still exits 0 is indistinguishable from a genuinely
+# shorter backlog. Two disagreeing answers from git mean the report cannot be trusted,
+# whichever one is right.
+#
+# This is the guard that provably changes the exit code -- mutation testing removed it and
+# a silently truncated enumeration produced a clean report AND advanced the marker. The
+# exit-status check above is not redundant, but what it provably contributes is the
+# accurate diagnosis: with it removed, a dead `git rev-list` still exits 2 here, just
+# blaming the count instead of the enumeration.
+expected="$(git rev-list --count "${MARKER}..${UPSTREAM_REF}" --not HEAD)" || {
+  echo "error: cannot count commits in ${MARKER}..${UPSTREAM_REF}" >&2
+  exit 2
+}
+
 while IFS= read -r sha; do
   [ -n "$sha" ] || continue
   total=$((total + 1))
-  bucket="$(git show --name-only --pretty=format: "$sha" | classify_paths)"
-  subject="$(git log -1 --format='%h %s' "$sha")"
+  # `set -o pipefail` is on, so this assignment carries `git show`'s status even though
+  # `classify_paths` succeeds. That matters: classify_paths given an empty path list
+  # returns `ignore` quite happily, so an unguarded failure here does not look like a
+  # failure -- it silently files the commit under the one bucket nobody reads.
+  bucket="$(git show --name-only --pretty=format: "$sha" | classify_paths)" || {
+    echo "error: cannot read the file list for $sha" >&2
+    exit 2
+  }
+  subject="$(git log -1 --format='%h %s' "$sha")" || {
+    echo "error: cannot read the subject for $sha" >&2
+    exit 2
+  }
   case "$bucket" in
     auto-reject) b_reject+=("$subject") ;;
     collision)   b_collide+=("$subject") ;;
     candidate)   b_candidate+=("$subject") ;;
     *)           ignored=$((ignored + 1)) ;;
   esac
-done < <(git rev-list --reverse "${MARKER}..${UPSTREAM_REF}" --not HEAD)
+done <<< "$shas"
 
-echo "upstream review: ${MARKER} -> $(git rev-parse --short "$UPSTREAM_REF")"
+# Before ANY output. A short report that looks clean is the failure this whole guard
+# exists to prevent, so it must not be printed and then contradicted.
+if [ "$total" != "$expected" ]; then
+  echo "error: enumerated $total commits but git counts $expected — the report would be" >&2
+  echo "       short, and --advance would record commits nobody reviewed as evaluated." >&2
+  exit 2
+fi
+
+upstream_short="$(git rev-parse --short "$UPSTREAM_REF")" || {
+  echo "error: cannot resolve $UPSTREAM_REF" >&2
+  exit 2
+}
+
+echo "upstream review: ${MARKER} -> ${upstream_short}"
 echo "  commits not yet in HEAD: $total"
 # Not "no app/ or crates/ change": a commit touching only .github/workflows/ has no
 # app/ or crates/ change and is still reported, under COLLISION.
