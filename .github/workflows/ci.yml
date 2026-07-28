@@ -37,6 +37,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # See the note on incremental compilation in .github/workflows/heddle-privacy-gate.yml
+  # (it is set there for the same reason; there is no such note in this file).
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   # ── Does this diff touch anything that can change a build?

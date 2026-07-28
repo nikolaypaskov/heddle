@@ -26,6 +26,20 @@ concurrency:
   group: heddle-privacy-gate-${{ github.ref }}
   cancel-in-progress: true
 
+# Incremental compilation off, everywhere.
+#
+# CI never reuses an incremental cache the way a developer's machine does: every
+# job is a fresh checkout, so the artifacts are written and then almost never hit.
+# On the self-hosted runner, where the target dir persists deliberately, they were
+# 87G of a 144G cache -- 60% of the disk spent on a speedup CI cannot collect.
+#
+# This used to be set for us as a side-effect of Swatinem/rust-cache, which exports
+# CARGO_INCREMENTAL=0. Guarding that action to hosted runners silently turned
+# incremental back ON for self-hosted jobs. Relying on a caching action to set a
+# compiler flag was the real mistake; it is explicit now.
+env:
+  CARGO_INCREMENTAL: "0"
+
 jobs:
   # Same reasoning as ci.yml: the jobs below compile Rust -- the endpoint gate now
   # builds the GUI, the heaviest of the lot -- and a docs edit cannot change what any
@@ -90,6 +104,16 @@ jobs:
 
       - name: Verify no Warp-controlled code path
         run: ./script/heddle/verify-warp-supply-chain
+
+      # Lives in THIS job, not a new one, because it needs exactly what this job already
+      # has: bash, git and mktemp, no toolchain. It builds its own throwaway repository
+      # under $TMPDIR, so it does not depend on this checkout's depth or remotes.
+      #
+      # `lefthook run gate` runs it too. ci.yml asserts Gate = CI, and for one round that
+      # claim was false here: the self-test guarding what a human reads with intent to
+      # accept ran locally and nowhere else.
+      - name: Self-test the upstream-review classifier
+        run: ./script/heddle/upstream-review-selftest
 
   no-warp-endpoints:
     name: Binary contains no Warp endpoints

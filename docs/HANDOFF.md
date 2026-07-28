@@ -238,3 +238,74 @@ If you need to debug a release binary: `CARGO_PROFILE_RELEASE_LTO_DEBUG=1`.
 Note that `GIT_RELEASE_TAG` is recorded as an `env-dep` in cargo's dep-info, so changing it correctly
 invalidates `warp_core` and everything downstream. A version bump therefore costs a near-full
 rebuild. That is correct behaviour, not a bug.
+
+## Upstream cherry-picking
+
+Upstream is `warpdotdev/Warp`. The fork point is `a66337f4` (2026-07-21) —
+`git merge-base HEAD upstream/master`, not the root commit of the public Warp repo.
+`.upstream-sync` records the last evaluated sha, starting there.
+
+    script/heddle/upstream-review          # fetches, then four buckets; read CANDIDATE only
+    git cherry-pick <sha>                  # one at a time
+    lefthook run gate                      # the ratchets get their say
+    script/heddle/upstream-review --advance <sha>   # <sha> = the one the report printed
+    git commit .upstream-sync -m "chore(upstream): evaluated through <sha>"
+
+**`--advance` takes the sha, and the report prints it.** Copy its last line verbatim. The
+sha is required because the runbook is two invocations: the report fetches, so a bare
+`--advance` re-resolving `upstream/master` would record anything that landed in between as
+evaluated, having appeared in no report anyone read. Advancing never fetches, and refuses
+any sha that is not the one the report it just printed covers — so the marker can only
+ever be set to a value a human had on screen.
+
+**Do not run `git fetch upstream` first — the script does it.** That is deliberate: the
+report is only as current as the last fetch, and `--advance` writes the result into a
+tracked file as a permanent "evaluated through here" decision, so a forgotten fetch buries
+real commits somewhere re-running does not reach. `--no-fetch` reports against the last
+fetch when you are offline or deliberately re-reading; a failed fetch exits 2 rather than
+producing a quietly short report.
+
+Exit 2 is always infrastructure (no upstream remote, missing or unresolvable marker,
+failed fetch). Finding commits never fails.
+
+If a pick trips `gui-branding.baseline` or `gui-surfaces.baseline`, the default is to
+DROP THE PICK, not re-record the baseline. Re-recording turns the ratchet into a
+formality. Re-record only when the pick genuinely shrinks the surface, and check the
+diff shows removals only.
+
+`AUTO-REJECT` means the commit touches a file this fork deleted. That set is **derived at
+run time** from `git diff --diff-filter=D --no-renames <merge-base> HEAD -- app/ crates/`,
+not hand-maintained, so it stays correct as more is removed. Nothing to update when you
+delete a subsystem.
+
+`COLLISION` means upstream touched something this fork reworked deliberately — all of
+`app/src/drive/`, the update mechanism, the channel config, the privacy page, the gates,
+the workflows. Ours wins; the bucket is listed so repeated upstream activity there is
+visible, not so it gets re-litigated each pass. Widen `COLLISION_RE` in the script when
+you rework something new, and add a case to `upstream-review-selftest`.
+
+### Known limits of upstream-review
+
+Recorded from an adversarial review pass, accepted rather than fixed. None affects the
+current 118-commit range; all three are latent and would need a hostile or unusual
+upstream to matter. Fix them when the tool next gets attention.
+
+- **The temporary marker file is a predictable path.** `${MARKER_FILE}.tmp.$$` is opened
+  with an ordinary truncating redirect, so a symlink or hardlink pre-placed at that exact
+  path would be followed and the real marker truncated. `mktemp` with exclusive creation
+  closes it. Until then the atomic-rename guarantee holds against crashes and write
+  errors, but not against a pre-placed temp path.
+- **The subject sanitizer strips C0 and DEL only.** `LC_ALL=C tr -d '\000-\037\177'`
+  leaves raw C1 controls (`0x80`-`0x9f`) intact, which some terminals interpret as 8-bit
+  OSC/ST. A commit subject crafted with 8-bit C1 sequences could still affect the terminal
+  rendering the report. Note also that the fixture injects only ESC, so the suite's
+  "no BEL byte" assertion would pass against a sanitizer that filters ESC alone — that
+  assertion is weaker than its name suggests.
+- **Only `upstream/master` is exercised by the self-test**, so the fallback that selects
+  the upstream default branch is not covered against a stale or unusual remote layout.
+
+The first two were disproved claims before they were known limits: the spec asserted the
+marker "is never opened for writing" and the suite asserted control bytes were filtered,
+and both were true only under conditions nobody had checked. That is the failure mode this
+tool exists to guard against, so it is worth naming here rather than in a commit message
+nobody re-reads.

@@ -1,0 +1,387 @@
+#!/usr/bin/env bash
+#
+# Which upstream commits are worth reading?
+#
+# Heddle's fork point is `a66337f4` (2026-07-21). `.upstream-sync` records the last
+# upstream sha evaluated, starting there. Upstream moves faster than anyone will read, so
+# this sorts the backlog and asks a human to read one bucket.
+#
+# Classification is by PATH, which is a proxy for intent and therefore imperfect. It is
+# deliberately biased: `collision` and `auto-reject` are broad, so the cost of being
+# wrong is skipping something useful rather than accepting something harmful.
+#
+# See docs/design/specs/2026-07-28-upstream-cherry-pick-design.md.
+set -uo pipefail
+
+# Whole subsystems this fork deleted. The derived set below covers every file that
+# existed at the merge base, but not files upstream ADDS inside a tree we no longer have
+# -- a new file under crates/warp_multi_agent_client/ was never at the merge base, so
+# only a prefix rule catches it. Entries here must name a tree absent from HEAD.
+REMOVED_RE='^(crates/warp_multi_agent)'
+
+# Subsystems this fork reworked deliberately. OURS WINS -- see the spec for why this is
+# a default rather than a judgement call.
+COLLISION_RE='^(app/src/drive/|app/src/settings_view/privacy_page\.rs|app/src/autoupdate/|crates/warp_core/src/channel/|script/heddle/|\.github/workflows/)'
+
+# Only these trees can contain a change worth taking.
+CODE_RE='^(app/|crates/)'
+
+# Newline-framed set of paths this fork deleted, supplied by the CALLER as data. Empty
+# here so that sourcing the file yields a classifier with no hidden dependency on this
+# repository's history; the report below fills it in from git, and the self-test sets it
+# per case. classify_paths must never derive this itself -- the moment it shells out to
+# git the self-test stops being hermetic and starts testing upstream's history instead of
+# the classifier.
+REMOVED_PATHS_SET=""
+
+# Pure function: newline-separated paths on stdin -> exactly one bucket on stdout.
+# Reads REMOVED_PATHS_SET, REMOVED_RE, COLLISION_RE and CODE_RE; touches nothing else.
+# Precedence, highest first: auto-reject, collision, candidate, ignore.
+classify_paths() {
+  local paths reject=0 collide=0 code=0
+  paths="$(cat)"
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    # "$p" is quoted inside the case pattern, so a path containing glob metacharacters
+    # is matched literally rather than as a wildcard. The framing newlines make this a
+    # whole-line match, so `app/src/x.rs` does not match `app/src/x.rs.orig`.
+    case "$REMOVED_PATHS_SET" in *$'\n'"$p"$'\n'*) reject=1 ;; esac
+    [[ "$p" =~ $REMOVED_RE ]] && reject=1
+    [[ "$p" =~ $COLLISION_RE ]] && collide=1
+    [[ "$p" =~ $CODE_RE ]] && code=1
+  done <<< "$paths"
+
+  if [ "$reject" = 1 ]; then echo auto-reject
+  elif [ "$collide" = 1 ]; then echo collision
+  elif [ "$code" = 1 ]; then echo candidate
+  else echo ignore
+  fi
+}
+
+# Sourced by the self-test: define the functions and stop.
+[ "${BASH_SOURCE[0]}" != "${0}" ] && return 0
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+
+usage() {
+  echo "usage: $0 [--no-fetch]" >&2
+  echo "       $0 --advance <sha>" >&2
+}
+
+ADVANCE=false
+ADVANCE_SHA=""
+ADVANCE_RESOLVED=""
+FETCH=true
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --advance)
+      # The sha is REQUIRED, and it is the whole point. A bare `--advance` re-resolved the
+      # remote branch at write time: the runbook runs the report and the advance as two
+      # invocations, this one fetches on start, so anything that landed upstream in between
+      # was recorded as evaluated having appeared in no report a human ever read. Binding
+      # the write to a sha the reader passes in makes the marker a record of a decision
+      # rather than of a clock.
+      ADVANCE=true
+      shift
+      ADVANCE_SHA="${1:-}"
+      case "$ADVANCE_SHA" in
+        "" | --*)
+          echo "error: --advance requires the sha the report you read ended at." >&2
+          echo "       Run the report first; its last line prints the exact command." >&2
+          exit 2
+          ;;
+      esac
+      # Advancing never fetches. The report printed by THIS invocation is what the write is
+      # checked against, so fetching here would move the target underneath the reader
+      # between the report they read and the sha they are recording.
+      FETCH=false
+      ;;
+    --no-fetch) FETCH=false ;;
+    *) usage; exit 2 ;;
+  esac
+  shift
+done
+
+MARKER_FILE="$REPO_ROOT/.upstream-sync"
+
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: not a git repository" >&2; exit 2; }
+git remote get-url upstream >/dev/null 2>&1 || {
+  echo "error: no 'upstream' remote. Add it with:" >&2
+  echo "       git remote add upstream https://github.com/warpdotdev/Warp.git" >&2
+  exit 2
+}
+
+if [ "$FETCH" = true ]; then
+  # The report is only ever as current as the last fetch, and `--advance` turns it into a
+  # tracked, permanent "evaluated through here" decision -- a stale run buries real
+  # commits in a file that re-running does not recover. Fetching here rather than trusting
+  # the runbook to have done it removes that failure at the root. Detecting staleness
+  # instead was considered and rejected: there is no reliable local signal for it (a ref's
+  # mtime is not a fetch time once refs are packed), and a guard that cannot actually
+  # observe what it claims to check is the vacuous-check pattern this repo keeps finding.
+  git fetch --quiet upstream || {
+    echo "error: 'git fetch upstream' failed." >&2
+    echo "       Re-run with --no-fetch to report against the last fetch instead," >&2
+    echo "       accepting that the result may be short." >&2
+    exit 2
+  }
+fi
+
+[ -f "$MARKER_FILE" ] || { echo "error: $MARKER_FILE is missing" >&2; exit 2; }
+
+MARKER="$(tr -d '[:space:]' < "$MARKER_FILE")"
+git cat-file -e "${MARKER}^{commit}" 2>/dev/null || {
+  echo "error: marker '$MARKER' is not a commit. Run: git fetch upstream" >&2
+  exit 2
+}
+
+UPSTREAM_REF="$(git rev-parse --verify --quiet upstream/main || git rev-parse --verify --quiet upstream/master)"
+[ -n "$UPSTREAM_REF" ] || { echo "error: cannot resolve upstream default branch" >&2; exit 2; }
+
+# The marker must be ON the history the report enumerates, not merely a commit that exists.
+# `MARKER..UPSTREAM_REF` excludes everything reachable from MARKER, so a marker pointing at
+# a divergent branch silently drops every commit that branch already contains. Measured
+# against real refs:
+#
+#   a66337f4..upstream/master --not HEAD                       -> 118
+#   upstream/factory/APP-4991-tui-byok..upstream/master ...    ->   7   (111 omitted)
+#
+# `--not HEAD` cannot rescue this. It filters the RIGHT side of the range; the omission
+# happens on the left, before --not is ever consulted. Nor can the enumeration/count
+# cross-check: both sides agree on 7, because 7 is the honest answer to the question the
+# script asked -- the question was just the wrong one.
+#
+# This is the same check already applied to the `--advance` argument below. The asymmetry
+# was the bug: the value a human types was validated and the value read from a tracked file
+# was not, when only the second one is edited by rebases, bad merges and hand-editing.
+git merge-base --is-ancestor "$MARKER" "$UPSTREAM_REF" || {
+  echo "error: marker '$MARKER' is not on upstream's history." >&2
+  echo "       upstream tip: $UPSTREAM_REF" >&2
+  echo "       Every commit already reachable from the marker would be omitted from the" >&2
+  echo "       report, and --advance would then record them as evaluated. Reset" >&2
+  echo "       .upstream-sync to a sha on upstream's default branch." >&2
+  exit 2
+}
+
+MERGE_BASE="$(git merge-base HEAD "$UPSTREAM_REF")" || {
+  echo "error: no merge base between HEAD and upstream — is the upstream remote correct?" >&2
+  exit 2
+}
+
+# Validated HERE, before the enumeration, so a bad sha costs one git call rather than a
+# full report -- and so nothing is written on a run that was never going to be valid.
+if [ "$ADVANCE" = true ]; then
+  # `--verify ... ^{commit}` rather than plain `rev-parse`: plain `git rev-parse <bad-ref>`
+  # exits non-zero but still echoes the input back on stdout, which is how the original
+  # `git rev-parse ... > "$MARKER_FILE"` managed to write a literal ref *string* into the
+  # tracked marker while reporting success.
+  ADVANCE_RESOLVED="$(git rev-parse --verify --quiet "${ADVANCE_SHA}^{commit}")" || {
+    echo "error: --advance sha '$ADVANCE_SHA' is not a commit in this repository." >&2
+    exit 2
+  }
+
+  # Subsumed by the equality check below -- anything that fails this also fails that. It is
+  # kept for the DIAGNOSIS, not the decision: it names the likely mistake (a sha from HEAD,
+  # from another branch, or from another repository) instead of reporting a mismatch
+  # between two opaque hashes. Mutation testing confirms it: removing it leaves the exit
+  # status at 2 and only changes the message.
+  git merge-base --is-ancestor "$ADVANCE_RESOLVED" "$UPSTREAM_REF" || {
+    echo "error: --advance sha '$ADVANCE_SHA' is not on upstream's history." >&2
+    echo "       It resolves to $ADVANCE_RESOLVED, which $UPSTREAM_REF does not contain." >&2
+    echo "       Pass the sha the report prints, not one of your own commits." >&2
+    exit 2
+  }
+
+  if [ "$ADVANCE_RESOLVED" != "$UPSTREAM_REF" ]; then
+    echo "error: --advance sha '$ADVANCE_SHA' is not what this report covers." >&2
+    echo "       report covers: $UPSTREAM_REF" >&2
+    echo "       you passed:    $ADVANCE_RESOLVED" >&2
+    echo "       Upstream moved since the report you read. Re-run the report, read the" >&2
+    echo "       commits it now lists, and pass the sha it prints." >&2
+    exit 2
+  fi
+fi
+
+# Every file that existed at the merge base and is gone from HEAD: everything this fork
+# deleted, derived rather than hand-listed. A hardcoded list is wrong the day after the
+# next removal lands, and the version of this script that carried one covered 4 of 160
+# removed files while naming two subsystems the fork still ships.
+#
+# `--no-renames` deliberately. A path the fork renamed away (warpify_page.rs ->
+# heddlify_page.rs) is a path upstream must not be allowed to reintroduce, and rename
+# detection is a similarity heuristic whose results move with git version and config --
+# which would make classification nondeterministic across machines.
+#
+# Scoped to app/ and crates/ to match CODE_RE, so a commit touching only a deleted doc
+# stays `ignore` rather than becoming a listed rejection.
+removed_paths="$(git diff --diff-filter=D --no-renames --name-only "$MERGE_BASE" HEAD -- app/ crates/)" || {
+  echo "error: cannot enumerate the files removed since the merge base" >&2
+  exit 2
+}
+# git's exit status is what is checked above, not emptiness: a fork that has deleted
+# nothing legitimately yields an empty set, and treating that as an error would make the
+# tool refuse to run on a fresh fork. The framing newlines let the membership test in
+# classify_paths anchor whole lines.
+REMOVED_PATHS_SET=$'\n'"$removed_paths"$'\n'
+
+declare -a b_reject=() b_collide=() b_candidate=()
+ignored=0
+total=0
+
+# `--not HEAD` is not redundant with the marker. The marker is a hand-maintained value in
+# a tracked file; it has already been wrong once (it held upstream's ROOT commit, which
+# reported 1799 commits when the real backlog was 118, 1681 of them already ancestors of
+# HEAD). Asking git which commits HEAD does not already contain makes the report
+# self-correcting against any future drift, including a cherry-pick that landed without
+# the marker moving.
+#
+# Enumerated into a VARIABLE, not consumed through `done < <(...)`. A process
+# substitution's exit status is not visible to the loop at all, so in the version of this
+# script that had no guard here, a `git rev-list` that died mid-stream produced a short
+# report reading as "fewer commits to review" -- and with --advance, the tip was then
+# written into the tracked marker, permanently recording unreviewed commits as evaluated.
+#
+# Do not read more into this line than it earns. Mutation testing put the process
+# substitution back, on its own, and the self-test still passed: the count cross-check
+# below already catches a short enumeration however it was read. This form is what makes
+# the status checkable at all, and it avoids running rev-list a third time; it is not by
+# itself what fixes the defect.
+shas="$(git rev-list --reverse "${MARKER}..${UPSTREAM_REF}" --not HEAD)" || {
+  echo "error: cannot enumerate commits in ${MARKER}..${UPSTREAM_REF}" >&2
+  exit 2
+}
+
+# Counted independently, because a non-zero exit is not the only way enumeration goes
+# wrong: a truncated stream that still exits 0 is indistinguishable from a genuinely
+# shorter backlog. Two disagreeing answers from git mean the report cannot be trusted,
+# whichever one is right.
+#
+# This is the guard that provably changes the exit code -- mutation testing removed it and
+# a silently truncated enumeration produced a clean report AND advanced the marker. The
+# exit-status check above is not redundant, but what it provably contributes is the
+# accurate diagnosis: with it removed, a dead `git rev-list` still exits 2 here, just
+# blaming the count instead of the enumeration.
+expected="$(git rev-list --count "${MARKER}..${UPSTREAM_REF}" --not HEAD)" || {
+  echo "error: cannot count commits in ${MARKER}..${UPSTREAM_REF}" >&2
+  exit 2
+}
+
+while IFS= read -r sha; do
+  [ -n "$sha" ] || continue
+  total=$((total + 1))
+  # `set -o pipefail` is on, so this assignment carries `git show`'s status even though
+  # `classify_paths` succeeds. That matters: classify_paths given an empty path list
+  # returns `ignore` quite happily, so an unguarded failure here does not look like a
+  # failure -- it silently files the commit under the one bucket nobody reads.
+  #
+  # `--no-renames` for the same reason the removed-path derivation uses it, and it is not
+  # theoretical. Measured on a throwaway repo: renaming app/src/drive/panel.rs to
+  # app/src/elsewhere.rs makes plain `git show --name-only` print ONE path, the
+  # destination. COLLISION_RE never sees app/src/drive/ and the commit becomes a
+  # candidate -- a guarded subsystem walking out of its guard. With --no-renames both
+  # paths are printed and the collision fires.
+  #
+  # `-m` so a merge is described by its diff against each parent rather than by the
+  # combined diff, which reports only paths that differ from ALL parents. Measured on
+  # this repo's own merge 5d1035fa5: 7 paths without -m, 37 with it. Upstream has 0
+  # merges (`git rev-list --count --merges upstream/master`) because it squash-merges, so
+  # nothing today depends on this; it is here because a monthly tool outlives the
+  # assumption that upstream never changes its merge policy. Root commits are unaffected
+  # -- `-m` still lists all 4982 paths of 0dbd3d56.
+  bucket="$(git show -m --name-only --no-renames --pretty=format: "$sha" | classify_paths)" || {
+    echo "error: cannot read the file list for $sha" >&2
+    exit 2
+  }
+  # Subjects are UNTRUSTED INPUT. They are attacker-controlled text from another
+  # organisation's repository, printed straight to a terminal, and this tool's entire job
+  # is rendering them. Git preserves whatever bytes the committer put there -- verified:
+  # a commit subject containing ESC [ 3 1 m comes back with the raw 0x1B intact -- so a
+  # crafted subject can recolour or overwrite the report, hide a line, or push an OSC 52
+  # clipboard sequence at whoever runs the monthly pass.
+  #
+  # `LC_ALL=C tr` deletes bytes 0x00-0x1F and 0x7F. In the C locale tr works on bytes, and
+  # no UTF-8 lead or continuation byte falls in those ranges, so non-ASCII subjects survive
+  # intact. Deleting rather than escaping keeps the report a fixed shape. Tabs go too:
+  # they are not worth a special case in a one-line subject.
+  #
+  # `set -o pipefail` is on, so git log's failure still reaches the guard below even though
+  # tr succeeds.
+  subject="$(git log -1 --format='%h %s' "$sha" | LC_ALL=C tr -d '\000-\037\177')" || {
+    echo "error: cannot read the subject for $sha" >&2
+    exit 2
+  }
+  case "$bucket" in
+    auto-reject) b_reject+=("$subject") ;;
+    collision)   b_collide+=("$subject") ;;
+    candidate)   b_candidate+=("$subject") ;;
+    *)           ignored=$((ignored + 1)) ;;
+  esac
+done <<< "$shas"
+
+# Before ANY output. A short report that looks clean is the failure this whole guard
+# exists to prevent, so it must not be printed and then contradicted.
+if [ "$total" != "$expected" ]; then
+  echo "error: enumerated $total commits but git counts $expected — the report would be" >&2
+  echo "       short, and --advance would record commits nobody reviewed as evaluated." >&2
+  exit 2
+fi
+
+upstream_short="$(git rev-parse --short "$UPSTREAM_REF")" || {
+  echo "error: cannot resolve $UPSTREAM_REF" >&2
+  exit 2
+}
+
+echo "upstream review: ${MARKER} -> ${upstream_short}"
+echo "  commits not yet in HEAD: $total"
+# Not "no app/ or crates/ change": a commit touching only .github/workflows/ has no
+# app/ or crates/ change and is still reported, under COLLISION.
+echo "  ignored (nothing we classify): $ignored"
+echo
+# Listed but not read. A rejection nobody sees is indistinguishable from a commit that
+# never existed -- and repeated upstream work on a removed surface is worth noticing.
+echo "AUTO-REJECT (${#b_reject[@]}) — touches a removed subsystem:"
+printf '  %s\n' "${b_reject[@]:-  (none)}"
+echo
+echo "COLLISION (${#b_collide[@]}) — touches something we reworked; ours wins:"
+printf '  %s\n' "${b_collide[@]:-  (none)}"
+echo
+echo "CANDIDATE (${#b_candidate[@]}) — read these:"
+printf '  %s\n' "${b_candidate[@]:-  (none)}"
+
+if [ "$ADVANCE" = true ]; then
+  # Advances past REJECTED commits too. Rejections are decisions; resurfacing them makes
+  # each pass grow rather than shrink.
+  #
+  # Written to a temporary file and RENAMED over the marker. `> "$MARKER_FILE"` truncates
+  # the tracked file the moment the shell opens the redirect -- so an interrupted or failed
+  # write left it empty or partial, and exiting 2 afterwards does not put the old value
+  # back. Two earlier versions of this block were wrong in that way, and the read-only-file
+  # test that was supposed to cover it could not: a read-only file fails at OPEN, before
+  # truncation, so it passed against the broken implementation too.
+  #
+  # The temp file is in the SAME DIRECTORY, so it is on the same filesystem and rename(2)
+  # is atomic: any reader sees either the old sha or the new one, never a partial write.
+  # The marker itself is never opened for writing, which is what makes "no failure here can
+  # damage the marker" a property of the structure rather than a claim about test coverage.
+  marker_tmp="${MARKER_FILE}.tmp.$$"
+  if ! printf '%s\n' "$ADVANCE_RESOLVED" > "$marker_tmp"; then
+    rm -f "$marker_tmp"
+    echo "error: failed to write $marker_tmp — $MARKER_FILE is unchanged" >&2
+    exit 2
+  fi
+  if ! mv -f "$marker_tmp" "$MARKER_FILE"; then
+    rm -f "$marker_tmp"
+    echo "error: failed to replace $MARKER_FILE — it is unchanged" >&2
+    exit 2
+  fi
+  echo
+  echo "marker advanced to ${upstream_short} — commit .upstream-sync with any picks"
+else
+  echo
+  # Printed as a full sha, and printed at all, so the runbook is copy-paste and the value
+  # recorded is the one the reader just looked at rather than whatever the remote says by
+  # the time they get round to typing it.
+  echo "To record this pass as evaluated, after your picks:"
+  echo "  script/heddle/upstream-review --advance ${UPSTREAM_REF}"
+fi

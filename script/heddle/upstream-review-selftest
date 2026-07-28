@@ -1,0 +1,521 @@
+#!/usr/bin/env bash
+#
+# Prove the classifier can be WRONG before trusting it to be right.
+#
+# Two sections, because the script has two halves and they cannot be tested the same way.
+#
+# SECTION 1 sources the script and unit-tests `classify_paths` directly. Hermetic: no
+# fixture repository, no dependency on upstream's real history.
+#
+# SECTION 2 runs the script as a subprocess against a DISPOSABLE repository built in
+# $TMPDIR, with a `git` shim on PATH that breaks one call on demand. It exists because the
+# sourcing guard returns before the report body, so section 1 cannot reach the enumeration
+# and marker-write code at all -- and the defect that code is guarded against is a report
+# that looks clean while being short.
+#
+# Two cases in section 1 are load-bearing.
+#
+# `collision beats candidate` (below): a commit touching both a collision path and a
+# candidate path must classify as `collision`. If that precedence inverts, an upstream
+# change to Drive lands in the bucket a human reads with intent to accept -- the most
+# expensive failure this script can have.
+#
+# `newly added file is not removed`: AUTO-REJECT is driven by the set of files that
+# existed at the merge base and are gone from HEAD. The "existed at the merge base" half
+# is what stops every file upstream newly ADDS -- which is also absent from HEAD -- from
+# being written off as touching a deleted subsystem. Get that wrong and the candidate
+# bucket empties out silently, which reads as "nothing to review".
+set -uo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=/dev/null
+source "$REPO_ROOT/script/heddle/upstream-review"
+
+fails=0
+expect() {
+  local label="$1" want="$2"; shift 2
+  local got
+  got="$(printf '%s\n' "$@" | classify_paths)"
+  if [ "$got" != "$want" ]; then
+    echo "FAIL [$label]: expected '$want', got '$got'" >&2
+    fails=$((fails + 1))
+  else
+    echo "ok [$label]: $want"
+  fi
+}
+
+# Same assertion, with a derived removed-path set supplied as data. The set is
+# newline-framed exactly as the report builds it; nothing here reads git, so this stays
+# hermetic and independent of what upstream has actually deleted today.
+expect_removed() {
+  local label="$1" want="$2" removed="$3"; shift 3
+  local saved="$REMOVED_PATHS_SET"
+  REMOVED_PATHS_SET=$'\n'"$removed"$'\n'
+  expect "$label" "$want" "$@"
+  REMOVED_PATHS_SET="$saved"
+}
+
+echo "── section 1: classify_paths (hermetic)"
+
+# ── Regex buckets, with no derived set at all. These must hold on their own.
+expect "removed tree"           auto-reject "crates/warp_multi_agent_client/src/lib.rs"
+expect "drive account gate"     collision   "app/src/drive/settings.rs"
+expect "drive panel"            collision   "app/src/drive/panel.rs"
+expect "privacy page"           collision   "app/src/settings_view/privacy_page.rs"
+expect "terminal core"          candidate   "crates/warp_terminal/src/pty.rs"
+expect "upstream docs only"     ignore      "docs/CONTRIBUTING.md"
+expect "collision beats candidate" collision "crates/warp_terminal/src/pty.rs" "app/src/autoupdate/mac.rs"
+expect "reject beats candidate" auto-reject "crates/warp_terminal/src/pty.rs" "crates/warp_multi_agent_client/src/x.rs"
+expect "reject beats collision" auto-reject "crates/warp_multi_agent_client/src/x.rs" "app/src/drive/settings.rs"
+
+# Subsystems this fork SHIPS must not be rejected. Both of these were in REMOVED_RE while
+# being live code here: cloud_objects is a workspace member, and app/src/ai/blocklist is
+# 201 present files. An upstream panic fix in either used to land under a heading saying
+# "touches a removed subsystem" and never be read.
+expect "cloud_objects still shipped" candidate "crates/cloud_objects/src/lib.rs"
+expect "blocklist still shipped"     candidate "app/src/ai/blocklist/controller.rs"
+
+# ── The derived set is what actually drives AUTO-REJECT.
+expect_removed "derived removal rejects" auto-reject \
+  "app/src/ai/ambient_agents/mod.rs" \
+  "app/src/ai/ambient_agents/mod.rs"
+expect_removed "derived removal beats candidate" auto-reject \
+  "app/src/ai/agent_sdk/ambient.rs" \
+  "crates/warp_terminal/src/pty.rs" "app/src/ai/agent_sdk/ambient.rs"
+# The other half of the same guard: nothing in the set means nothing derived to reject.
+expect_removed "empty derived set rejects nothing" candidate \
+  "" \
+  "app/src/ai/ambient_agents/mod.rs"
+
+# THE case. A file upstream newly ADDS is absent from HEAD too, so a rule that tested
+# only "not in HEAD" would reject it. It is not in the derived set, because it did not
+# exist at the merge base, so it must stay a candidate.
+expect_removed "newly added file is not removed" candidate \
+  "app/src/ai/ambient_agents/mod.rs" \
+  "app/src/terminal/brand_new_upstream_feature.rs"
+
+# Whole-line anchoring, both directions. The path under test is a proper prefix of a set
+# entry in the first case and a proper suffix of one in the second; neither is a removal.
+# Drop the framing newlines and the membership test degrades to a substring search, which
+# rejects both.
+expect_removed "removed path is not a prefix match" candidate \
+  "app/src/gone.rs.orig" \
+  "app/src/gone.rs"
+expect_removed "removed path is not a suffix match" candidate \
+  "crates/vendored/app/src/gone.rs" \
+  "app/src/gone.rs"
+
+# Precedence again, this time with the derived set as the rejecting side.
+expect_removed "derived removal beats collision" auto-reject \
+  "app/src/ai/agent_sdk/ambient.rs" \
+  "app/src/drive/panel.rs" "app/src/ai/agent_sdk/ambient.rs"
+
+# ─────────────────────────────────────────────────────────────────────────────────────
+# SECTION 2 — enumeration and marker-write failure paths.
+#
+# The defect being guarded: `git rev-list` or `git show` fails or truncates, the script
+# has no `set -e`, and the result is an empty-or-short report that reads to a human as
+# "nothing to review". With --advance the upstream tip is then written into the tracked
+# marker, permanently recording unreviewed commits as evaluated. Re-running does not
+# recover it.
+#
+# Each case asserts THREE things: the exit status is 2 (infrastructure failure), something
+# was said on stderr, and the marker file was NOT touched. Any one of those alone would
+# let the defect through.
+# ─────────────────────────────────────────────────────────────────────────────────────
+echo
+echo "── section 2: report and marker failure paths (disposable repo in \$TMPDIR)"
+
+check() {
+  local label="$1" want="$2" got="$3"
+  if [ "$got" != "$want" ]; then
+    echo "FAIL [$label]: expected '$want', got '$got'" >&2
+    fails=$((fails + 1))
+  else
+    echo "ok [$label]"
+  fi
+}
+
+check_contains() {
+  local label="$1" needle="$2" hay="$3"
+  case "$hay" in
+    *"$needle"*) echo "ok [$label]" ;;
+    *) echo "FAIL [$label]: expected text containing '$needle', got: $hay" >&2
+       fails=$((fails + 1)) ;;
+  esac
+}
+
+check_absent() {
+  local label="$1" needle="$2" hay="$3"
+  case "$hay" in
+    *"$needle"*) echo "FAIL [$label]: output still contains the byte it must not" >&2
+                 fails=$((fails + 1)) ;;
+    *) echo "ok [$label]" ;;
+  esac
+}
+
+# Which bucket did the commit whose subject contains $1 land in? Bucket COUNTS cannot
+# distinguish a correct classification from two commits swapped between buckets, so the
+# assertions below name commits rather than counting them.
+bucket_of() {
+  printf '%s\n' "$RUN_OUT" | awk -v needle="$1" '
+    /^AUTO-REJECT / { b = "auto-reject"; next }
+    /^COLLISION /   { b = "collision";   next }
+    /^CANDIDATE /   { b = "candidate";   next }
+    b != "" && index($0, needle) > 0 { print b; exit }
+  '
+}
+
+REAL_GIT="$(command -v git)"
+FIXTURE=""
+cleanup() { [ -n "$FIXTURE" ] && rm -rf "$FIXTURE"; }
+trap cleanup EXIT
+
+# The shape here is the whole point, so it is worth stating exactly:
+#
+#   A  (merge base)  keep.rs, gone.rs, drive/panel.rs, drive/index.rs   <- marker starts
+#    ├─ upstream/master:
+#    │    B  adds app/src/feature.rs                        -> candidate
+#    │    C  modifies app/src/gone.rs                       -> auto-reject (derived)
+#    │    E  RENAMES drive/panel.rs -> app/src/moved_out.rs -> collision
+#    │    G  modifies drive/index.rs, on a side branch
+#    │    F  MERGE of G                                     -> collision
+#    └─ D  (HEAD)     DELETES app/src/gone.rs               <- the fork side
+#
+# Each commit is here to make one specific way of being wrong fail.
+#
+# D covers the DERIVATION rather than the classifier: with a file genuinely deleted
+# between the merge base and HEAD, `git diff --diff-filter=D` has something to find, and
+# C must land in AUTO-REJECT because of it. Section 1 cannot see this -- it injects the
+# set by hand.
+#
+# E covers rename detection. Plain `git show --name-only` reports a rename as its
+# DESTINATION only, so a file walking out of app/src/drive/ takes its collision guard off
+# with it and the commit becomes a candidate.
+#
+# F covers merges. A combined diff lists only paths that differ from ALL parents, so a
+# merge that takes one side's changes wholesale reports nothing and classifies as
+# `ignore`. Upstream squash-merges and has no merges today; this is one cheap case, not a
+# redesign.
+#
+# The range is exactly 6, which is what makes silent truncation to 1 detectable.
+build_fixture() {
+  [ -n "$REAL_GIT" ] || return 1
+  FIXTURE="$(mktemp -d)" || return 1
+  local r="$FIXTURE/repo" g="$REAL_GIT"
+  mkdir -p "$r/script/heddle" "$r/app/src" || return 1
+  "$g" -C "$r" init -q                                   || return 1
+  "$g" -C "$r" symbolic-ref HEAD refs/heads/work         || return 1
+  "$g" -C "$r" config user.email selftest@example.invalid || return 1
+  "$g" -C "$r" config user.name selftest                 || return 1
+  "$g" -C "$r" config commit.gpgsign false               || return 1
+
+  # A — the merge base. panel.rs needs enough content that git would happily call the
+  # later `git mv` a rename; the point of the case is that we ask it not to.
+  mkdir -p "$r/app/src/drive" || return 1
+  echo keep > "$r/app/src/keep.rs"
+  echo gone > "$r/app/src/gone.rs"
+  printf 'aaa\nbbb\nccc\nddd\neee\nfff\n' > "$r/app/src/drive/panel.rs"
+  echo index > "$r/app/src/drive/index.rs"
+  "$g" -C "$r" add -A            || return 1
+  "$g" -C "$r" commit -q -m base || return 1
+  FIX_BASE="$("$g" -C "$r" rev-parse HEAD)" || return 1
+
+  "$g" -C "$r" checkout -q -b up || return 1
+
+  # B — an ordinary candidate.
+  echo feature > "$r/app/src/feature.rs"
+  "$g" -C "$r" add -A               || return 1
+  "$g" -C "$r" commit -q -m feature || return 1
+  # B specifically, for the stale-sha case: on upstream's history, not the tip, and NOT
+  # equal to the value the marker is reset to. Using the base there would have let
+  # "keeps marker" pass by coincidence -- a broken guard would write the same value back.
+  FIX_MID="$("$g" -C "$r" rev-parse HEAD)" || return 1
+
+  # Bx — a HOSTILE SUBJECT: raw ESC sequences, as a compromised upstream could write.
+  # Verified that git stores and returns the 0x1B bytes untouched, so this is what the
+  # report is actually handed.
+  echo evil > "$r/app/src/evil.rs"
+  "$g" -C "$r" add -A || return 1
+  "$g" -C "$r" commit -q -m "$(printf 'evil \033[31mSUBJECT\033[0m tail')" || return 1
+
+  # C — touches the file the fork deletes.
+  echo gone-upstream > "$r/app/src/gone.rs"
+  "$g" -C "$r" add -A                    || return 1
+  "$g" -C "$r" commit -q -m touches-gone || return 1
+
+  # E — walks a file OUT of the guarded subsystem.
+  "$g" -C "$r" mv app/src/drive/panel.rs app/src/moved_out.rs || return 1
+  "$g" -C "$r" commit -q -m renames-out-of-drive              || return 1
+
+  # H — a DIVERGENT commit: real, but never merged, so it is not an ancestor of the tip
+  # while sharing A..E with it. A marker pointing here omits B, C and E from the report
+  # entirely, which is the shape of the real defect. Kept alive under refs/fixture/ rather
+  # than a branch, so `git fetch upstream` (the remote is this repo) does not mirror it.
+  "$g" -C "$r" checkout -q -b divergent || return 1
+  echo divergent > "$r/app/src/divergent.rs"
+  "$g" -C "$r" add -A                        || return 1
+  "$g" -C "$r" commit -q -m divergent-work   || return 1
+  FIX_DIVERGENT="$("$g" -C "$r" rev-parse HEAD)" || return 1
+  "$g" -C "$r" update-ref refs/fixture/divergent "$FIX_DIVERGENT" || return 1
+  "$g" -C "$r" checkout -q up      || return 1
+  "$g" -C "$r" branch -q -D divergent || return 1
+
+  # G then F — a side branch touching a collision path, merged with a real merge commit.
+  "$g" -C "$r" checkout -q -b side          || return 1
+  echo index-upstream > "$r/app/src/drive/index.rs"
+  "$g" -C "$r" add -A                       || return 1
+  "$g" -C "$r" commit -q -m touches-drive-index || return 1
+  "$g" -C "$r" checkout -q up               || return 1
+  "$g" -C "$r" merge -q --no-ff side -m merges-the-side || return 1
+  FIX_TIP="$("$g" -C "$r" rev-parse HEAD)" || return 1
+  "$g" -C "$r" update-ref refs/remotes/upstream/master "$FIX_TIP" || return 1
+
+  # D — the fork side. Back to A, then delete the file.
+  "$g" -C "$r" checkout -q work            || return 1
+  "$g" -C "$r" reset -q --hard "$FIX_BASE" || return 1
+  "$g" -C "$r" rm -q "$r/app/src/gone.rs"  || return 1
+  "$g" -C "$r" commit -q -m "remove gone"  || return 1
+  FIX_HEAD="$("$g" -C "$r" rev-parse HEAD)" || return 1
+
+  # The upstream commits stay reachable through refs/remotes/upstream/master. Dropping the
+  # branches keeps `git fetch upstream` (the fixture remote is the repo itself) from
+  # inventing extra remote refs and makes the fetch cases below deterministic.
+  "$g" -C "$r" branch -q -D up   || return 1
+  "$g" -C "$r" branch -q -D side || return 1
+
+  "$g" -C "$r" remote add upstream "$r"           || return 1
+  printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync" || return 1
+  cp "$REPO_ROOT/script/heddle/upstream-review" "$r/script/heddle/upstream-review" || return 1
+  chmod +x "$r/script/heddle/upstream-review" || return 1
+
+  # PATH-shadows git and breaks exactly one call, selected by $SHIM_MODE. The real git
+  # path is baked in at build time, before PATH is changed, so the shim cannot find
+  # itself. `truncate-rev-list` is the nasty one: short output with a ZERO exit status.
+  mkdir -p "$FIXTURE/shim" || return 1
+  cat > "$FIXTURE/shim/git" <<SHIM || return 1
+#!/bin/bash
+case "\${SHIM_MODE:-}" in
+  fail-rev-list)     [ "\$1" = rev-list ] && exit 128 ;;
+  truncate-rev-list) if [ "\$1" = rev-list ] && [ "\$2" = --reverse ]; then
+                       "$g" "\$@" | head -1; exit 0
+                     fi ;;
+  fail-show)         [ "\$1" = show ] && exit 128 ;;
+  fail-fetch)        [ "\$1" = fetch ] && exit 128 ;;
+  fail-log)          [ "\$1" = log ] && exit 128 ;;
+esac
+exec "$g" "\$@"
+SHIM
+  chmod +x "$FIXTURE/shim/git" || return 1
+}
+
+RUN_NO_RESET=false
+run_case() {
+  local mode="$1"; shift
+  local r="$FIXTURE/repo"
+  # Reset the marker first, so cases are independent. Without this the suite lies under
+  # mutation: break the count guard, and the truncation case advances the marker to the
+  # tip, which empties the range for every later case -- so `git show` is never called,
+  # the per-commit case exits 0, and the failure is attributed to the wrong guard.
+  #
+  # RUN_NO_RESET exists for exactly one case: the read-only marker, where the reset would
+  # be the thing that fails instead of the write under test.
+  [ "$RUN_NO_RESET" = true ] || printf '%s\n' "$FIX_BASE" > "$r/.upstream-sync"
+  RUN_BEFORE="$(cat "$r/.upstream-sync")"
+  RUN_OUT="$(SHIM_MODE="$mode" PATH="$FIXTURE/shim:$PATH" \
+             "$r/script/heddle/upstream-review" "$@" 2>"$FIXTURE/err")"
+  RUN_STATUS=$?
+  RUN_ERR="$(cat "$FIXTURE/err")"
+  RUN_AFTER="$(cat "$r/.upstream-sync")"
+}
+
+if ! build_fixture; then
+  # NOT a skip. A section that cannot run is a section that proves nothing, and reporting
+  # that as a pass is the same defect class this file exists to catch.
+  echo "FAIL [fixture]: could not build the disposable repository" >&2
+  fails=$((fails + 1))
+else
+  # Baseline: the fixture is sound and the happy path works. Without this, every failure
+  # case below could be passing for the wrong reason.
+  run_case "" --no-fetch
+  check          "clean run exits 0"           0                            "$RUN_STATUS"
+  check_contains "clean run counts 6 commits"  "commits not yet in HEAD: 6" "$RUN_OUT"
+  check          "clean run leaves the marker" "$RUN_BEFORE"                "$RUN_AFTER"
+
+  # Counts first...
+  check_contains "one commit auto-rejected" "AUTO-REJECT (1)" "$RUN_OUT"
+  check_contains "three collide"            "COLLISION (3)"   "$RUN_OUT"
+  check_contains "two candidates"           "CANDIDATE (2)"   "$RUN_OUT"
+
+  # ...and then WHICH commit is in WHICH bucket, which is the assertion that matters.
+  # Counts alone cannot fail the way their name implies: a derivation that put feature.rs
+  # in the removed set instead of gone.rs would swap two commits, preserve both counts,
+  # and pass.
+  check "derived set rejects the deleted-file commit" auto-reject "$(bucket_of touches-gone)"
+  check "the ordinary commit stays a candidate"       candidate   "$(bucket_of feature)"
+  check "a rename out of drive/ still collides"       collision   "$(bucket_of renames-out-of-drive)"
+  check "a merge is described by all its parents"     collision   "$(bucket_of merges-the-side)"
+  check "the side commit collides too"                collision   "$(bucket_of touches-drive-index)"
+
+  # The advance hint has to be exact, or the runbook's copy-paste records the wrong sha.
+  check_contains "report prints the advance command" \
+    "--advance $FIX_TIP" "$RUN_OUT"
+
+  # ── Untrusted upstream text must not reach the terminal as control bytes. Asserted on
+  # the SPECIFIC bytes, not on a count or on the absence of a whole string: ESC (0x1B) is
+  # what drives colour, cursor and OSC 52 clipboard sequences, and 0x07 (BEL) terminates
+  # an OSC. The visible characters must survive, or the fix would just be censorship.
+  check_absent   "no ESC byte reaches the report"   "$(printf '\033')" "$RUN_OUT"
+  check_absent   "no BEL byte reaches the report"   "$(printf '\007')" "$RUN_OUT"
+  check_contains "the readable text survives"       "evil [31mSUBJECT[0m tail" "$RUN_OUT"
+  check          "and the hostile commit is still classified" candidate "$(bucket_of SUBJECT)"
+
+  # ── Fetching. Every other case here passes --no-fetch, or uses --advance which disables
+  # fetching internally, so without these two the fetch guard was covered by nothing at
+  # all: deleting it left the suite green while permitting exactly the stale report the
+  # docs promise cannot happen. The fixture's `upstream` remote is the repo itself, so a
+  # real fetch works and a real failure can be simulated.
+  run_case ""
+  check          "default run fetches and succeeds" 0     "$RUN_STATUS"
+  check_contains "and still reports"  "commits not yet in HEAD: 6" "$RUN_OUT"
+
+  run_case fail-fetch
+  check          "failed fetch exits 2"      2                          "$RUN_STATUS"
+  check_contains "failed fetch says so"      "'git fetch upstream' failed" "$RUN_ERR"
+  check_contains "failed fetch offers --no-fetch" "--no-fetch"          "$RUN_ERR"
+  check          "failed fetch keeps marker" "$RUN_BEFORE"              "$RUN_AFTER"
+
+  # git rev-list dies. Was: invisible, because a process substitution's exit status is
+  # not observable by the `while` loop consuming it.
+  run_case fail-rev-list --advance "$FIX_TIP"
+  check          "enumeration failure exits 2"        2                             "$RUN_STATUS"
+  check_contains "enumeration failure says so"        "cannot enumerate commits"    "$RUN_ERR"
+  check          "enumeration failure keeps marker"   "$RUN_BEFORE"                 "$RUN_AFTER"
+
+  # git rev-list truncates but exits 0. No exit status can catch this; only counting
+  # independently can.
+  run_case truncate-rev-list --advance "$FIX_TIP"
+  check          "silent truncation exits 2"          2                             "$RUN_STATUS"
+  check_contains "silent truncation is counted"       "enumerated 1 commits but git counts 6" "$RUN_ERR"
+  check          "silent truncation keeps marker"     "$RUN_BEFORE"                 "$RUN_AFTER"
+
+  # git show dies for one commit. classify_paths returns `ignore` for an empty path list
+  # quite happily, so unguarded this files the commit under the bucket nobody reads.
+  run_case fail-show --advance "$FIX_TIP"
+  check          "per-commit read failure exits 2"    2                             "$RUN_STATUS"
+  check_contains "per-commit read failure says so"    "cannot read the file list"   "$RUN_ERR"
+  check          "per-commit read failure keeps marker" "$RUN_BEFORE"               "$RUN_AFTER"
+
+  # git log dies. Unguarded this yields a blank subject -- the commit still appears in a
+  # bucket, as an empty line -- and the run goes on to advance the marker.
+  run_case fail-log --advance "$FIX_TIP"
+  check          "subject read failure exits 2"      2                            "$RUN_STATUS"
+  check_contains "subject read failure says so"      "cannot read the subject"    "$RUN_ERR"
+  check          "subject read failure keeps marker" "$RUN_BEFORE"                "$RUN_AFTER"
+
+  # ── A DIVERGENT MARKER. Not a bad value -- a real commit, on a branch that was never
+  # merged. `MARKER..UPSTREAM_REF` drops everything the marker already contains, so the
+  # report is short and looks entirely healthy, and --advance then records the omitted
+  # commits as evaluated. Every other case here resets the marker to FIX_BASE, so none of
+  # them could ever have caught this; the off-history case below validates the --advance
+  # ARGUMENT, which is a different value entirely.
+  printf '%s\n' "$FIX_DIVERGENT" > "$FIXTURE/repo/.upstream-sync"
+  RUN_NO_RESET=true
+  run_case "" --advance "$FIX_TIP"
+  RUN_NO_RESET=false
+  check          "divergent marker exits 2"      2                                "$RUN_STATUS"
+  check_contains "divergent marker says so"      "is not on upstream's history"   "$RUN_ERR"
+  check_contains "divergent marker names the tip" "$FIX_TIP"                      "$RUN_ERR"
+  # Asserted against the divergent sha itself, not against "unchanged": with the guard
+  # removed the marker is rewritten to FIX_TIP, and that is the permanent damage.
+  check          "divergent marker is not advanced" "$FIX_DIVERGENT"              "$RUN_AFTER"
+
+  # ── --advance now takes the sha the reader reviewed. Each rejection below is a way the
+  # marker could otherwise have been set to something nobody read.
+
+  # No sha at all. Must not silently fall back to re-resolving the remote branch, which is
+  # what made the two-invocation runbook unsafe once the script started fetching.
+  run_case "" --advance
+  check          "bare --advance exits 2"        2                        "$RUN_STATUS"
+  check_contains "bare --advance says what to do" "requires the sha"      "$RUN_ERR"
+  check          "bare --advance keeps marker"   "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # A following FLAG must not be swallowed as the sha.
+  run_case "" --advance --no-fetch
+  check          "flag is not taken as a sha"  2                        "$RUN_STATUS"
+  check_contains "flag-as-sha says what to do" "requires the sha"       "$RUN_ERR"
+  check          "flag-as-sha keeps marker"    "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # Unresolvable. This is the input that used to be written into the marker verbatim,
+  # because plain `git rev-parse <bad-ref>` echoes its argument back on stdout.
+  run_case "" --advance not-a-sha-at-all
+  check          "unresolvable sha exits 2"      2                        "$RUN_STATUS"
+  check_contains "unresolvable sha says so"      "is not a commit"        "$RUN_ERR"
+  check          "unresolvable sha keeps marker" "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # Resolvable, but ours -- HEAD is not on upstream's history at all.
+  run_case "" --advance "$FIX_HEAD"
+  check          "off-history sha exits 2"       2                        "$RUN_STATUS"
+  check_contains "off-history sha says so"       "is not on upstream's history" "$RUN_ERR"
+  check          "off-history sha keeps marker"  "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # On upstream's history, but NOT the tip this report covers. This is the critical case:
+  # it is what the reader would pass if upstream moved between the report they read and the
+  # advance they typed, and recording it would mark the commits in between as evaluated.
+  run_case "" --advance "$FIX_MID"
+  check          "stale sha exits 2"             2                        "$RUN_STATUS"
+  check_contains "stale sha says so"             "is not what this report covers" "$RUN_ERR"
+  check          "stale sha keeps marker"        "$RUN_BEFORE"            "$RUN_AFTER"
+
+  # ── The marker write. Two cases, and the first is a CHARACTERISATION test: it asserts
+  # the write is a rename rather than a truncate.
+  #
+  # rename(2) needs write permission on the DIRECTORY, not on the target file, so a
+  # read-only marker file is replaced successfully. `> "$MARKER_FILE"` would fail at open
+  # and exit 2. Reverting to the truncating form therefore fails this case -- which is what
+  # the old read-only-file test could not do: it fails at OPEN, before truncation, so it
+  # passed against the broken implementation it was supposed to be guarding.
+  if [ "$(id -u)" = 0 ]; then
+    # Loud, not silent. A skipped case that prints nothing is indistinguishable from a
+    # case that passed.
+    echo "skip [marker write]: running as root, file and directory modes do not bind"
+  else
+    printf '%s\n' "$FIX_BASE" > "$FIXTURE/repo/.upstream-sync"
+    chmod 444 "$FIXTURE/repo/.upstream-sync"
+    RUN_NO_RESET=true
+    run_case "" --advance "$FIX_TIP"
+    RUN_NO_RESET=false
+    chmod 644 "$FIXTURE/repo/.upstream-sync"
+    check "read-only marker file is replaced" 0          "$RUN_STATUS"
+    check "and holds the reviewed sha"        "$FIX_TIP" "$RUN_AFTER"
+
+    # A read-only DIRECTORY blocks the temp file, which is the write failing for real.
+    # The marker must be byte-identical afterwards and no debris left behind.
+    printf '%s\n' "$FIX_BASE" > "$FIXTURE/repo/.upstream-sync"
+    chmod 555 "$FIXTURE/repo"
+    RUN_NO_RESET=true
+    run_case "" --advance "$FIX_TIP"
+    RUN_NO_RESET=false
+    chmod 755 "$FIXTURE/repo"
+    check          "unwritable directory exits 2"    2                  "$RUN_STATUS"
+    check_contains "unwritable directory says so"    "failed to write"  "$RUN_ERR"
+    check_contains "and says the marker is unharmed" "is unchanged"     "$RUN_ERR"
+    check          "unwritable directory keeps marker" "$FIX_BASE"      "$RUN_AFTER"
+    leftover=""
+    for f in "$FIXTURE/repo"/.upstream-sync.tmp.*; do
+      [ -e "$f" ] && leftover="$leftover $f"
+    done
+    check "no temp file left behind" "" "$leftover"
+  fi
+
+  # And the other half of the guard: on a clean run --advance MUST still move the marker.
+  # A guard that blocks everything is not a guard.
+  run_case "" --advance "$FIX_TIP"
+  check "advance exits 0"                 0          "$RUN_STATUS"
+  check "advance writes the reviewed sha" "$FIX_TIP" "$RUN_AFTER"
+fi
+
+if [ "$fails" -ne 0 ]; then
+  echo "SELF-TEST FAILED: $fails case(s). A classifier that cannot be shown to fail is not evidence." >&2
+  exit 1
+fi
+echo "self-test passed"
