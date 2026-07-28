@@ -153,8 +153,22 @@ upstream commit can touch them; listing them would be decoration. The rename *so
 1.  script/heddle/upstream-review        → fetches, then four buckets, candidates last
 2.  read candidates; cherry-pick wanted ones individually
 3.  lefthook run gate                    → the ratchets get their say
-4.  advance .upstream-sync, commit with the picks
+4.  script/heddle/upstream-review --advance <sha>   ← the sha step 1 printed
+5.  commit .upstream-sync with the picks
 ```
+
+**The marker is bound to the reviewed sha, not to the remote's current tip.** Step 4 is a
+second invocation; with fetch-on-start, a bare `--advance` would re-resolve
+`upstream/master` and write whatever landed in the meantime — recording as evaluated
+commits that appeared in no report anyone read. So `--advance` requires the sha, the report
+prints it as its last line for copy-paste, and advancing never fetches. It refuses a sha
+that is not on upstream's history, and refuses one that is not the tip the report it just
+printed covers, both with exit 2. The marker can only be set to a value a human had on
+screen.
+
+Fetch-on-start narrowed that window; it did not close it. Only binding the write to the
+reviewed sha closes it, and the two changes together are what make the pass safe — either
+alone is not enough.
 
 **The script fetches; the runbook does not.** The report is only ever as current as the
 last fetch, and `--advance` turns it into a tracked, permanent "evaluated through here"
@@ -215,27 +229,44 @@ enumeration, the report, or the marker write at all. Those are tested by a secon
 that runs the script as a subprocess against a disposable repository under `$TMPDIR`, with
 a `git` shim on `PATH` that breaks one call on demand:
 
-| Broken call | Expected |
+The fixture's shape is the point. HEAD is a commit that **deletes** a file which upstream
+then modifies, so the removed-path set is derived from a real deletion rather than injected:
+
+```
+A (merge base)  keep.rs, gone.rs      ← the marker starts here
+ ├─ B           adds feature.rs        ) upstream/master
+ │  C           modifies gone.rs       ) the range: 2 commits
+ └─ D (HEAD)    DELETES gone.rs        ← the fork side
+```
+
+C must land in AUTO-REJECT and B in CANDIDATE. That covers the *derivation*, which section
+1 cannot reach because it injects the set by hand.
+
+| Case | Expected |
 |---|---|
+| nothing broken | exit 0, `AUTO-REJECT (1)`, `CANDIDATE (1)`, advance command printed |
 | `git rev-list` exits non-zero | exit 2, message, **marker untouched** |
 | `git rev-list` truncates but exits **0** | exit 2, message, **marker untouched** |
 | `git show` exits non-zero for one commit | exit 2, message, **marker untouched** |
-| nothing broken, `--advance` | exit 0, marker moves to the upstream tip |
+| `--advance` with no sha, or with a flag | exit 2, message, **marker untouched** |
+| `--advance` with an unresolvable sha | exit 2, message, **marker untouched** |
+| `--advance` with a sha off upstream's history | exit 2, message, **marker untouched** |
+| `--advance` with a sha that is not the report's tip | exit 2, message, **marker untouched** |
+| `--advance` with the marker read-only | exit 2, message, **marker untouched** |
+| `--advance <reviewed tip>` | exit 0, marker becomes that sha |
 
 Every failure case asserts all three of exit status, stderr, and marker — any one alone
 would let the defect through. The last row is not decoration: a guard that blocks
 everything is not a guard.
 
 **Known limit, deliberate.** Neither section verifies that the report's *contents* are
-right — only that the counts are consistent and that failures are loud. A green self-test
-is evidence the classifier and the failure paths behave; it is not evidence that any
-particular commit was bucketed correctly. That check is the human reading pass.
+right — only that the buckets are as expected for a four-commit fixture, that the counts
+are internally consistent, and that failures are loud. A green self-test is evidence the
+classifier and the failure paths behave; it is not evidence that any particular real
+upstream commit was bucketed correctly. That check is the human reading pass.
 
-**Follow-up idea, not implemented.** `--advance` re-resolves `upstream/master` rather than
-taking the sha that was actually reviewed, so a fetch landing between the report and the
-advance would record commits nobody saw. The fetch-on-start behaviour narrows the window
-but does not close it. Binding the marker to the reviewed sha — `--advance <sha>`, defaulting
-to the tip the report was built from — would close it, at the cost of a longer runbook line.
+An earlier version of this section claimed the derivation could not be covered here at all.
+That was wrong: the fixture just needed a deletion in it.
 
 ## Recorded uncertainty
 

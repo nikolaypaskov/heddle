@@ -273,6 +273,13 @@ git commit -m "feat(upstream): enumerate and bucket commits since the recorded m
 
 - [ ] **Step 1: Add `--advance`**
 
+> **Superseded.** The bare `--advance` below is unsafe as shipped. The runbook is two
+> invocations and the script fetches on start, so re-resolving `upstream/master` at write
+> time records anything that landed in between as evaluated, having appeared in no report
+> anyone read. The shipped form is `--advance <sha>`: the sha is required, the report
+> prints it, advancing never fetches, and a sha that is not the one the report covered is
+> refused with exit 2.
+
 Insert argument parsing after `cd "$REPO_ROOT"`:
 
 ```bash
@@ -306,7 +313,7 @@ fi
 - [ ] **Step 2: Verify advance writes the sha and is idempotent**
 
 ```bash
-./script/heddle/upstream-review --advance | tail -2
+./script/heddle/upstream-review --advance "$(git rev-parse upstream/master)" | tail -2
 ./script/heddle/upstream-review              # expect 0 in every bucket
 git checkout .upstream-sync                  # restore for the real first pass
 ```
@@ -324,11 +331,10 @@ Add under a new `## Upstream cherry-picking` heading:
 ```markdown
 Upstream is `warpdotdev/Warp`; `.upstream-sync` records the last evaluated sha.
 
-    git fetch upstream
-    script/heddle/upstream-review          # four buckets; read CANDIDATE only
+    script/heddle/upstream-review          # fetches, then four buckets; read CANDIDATE only
     git cherry-pick <sha>                  # one at a time
     lefthook run gate                      # the ratchets get their say
-    script/heddle/upstream-review --advance
+    script/heddle/upstream-review --advance <sha>   # the sha the report printed
     git commit .upstream-sync -m "chore(upstream): evaluated through <sha>"
 
 If a pick trips `gui-branding.baseline` or `gui-surfaces.baseline`, the default is to

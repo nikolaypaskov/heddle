@@ -248,8 +248,15 @@ Upstream is `warpdotdev/Warp`. The fork point is `a66337f4` (2026-07-21) —
     script/heddle/upstream-review          # fetches, then four buckets; read CANDIDATE only
     git cherry-pick <sha>                  # one at a time
     lefthook run gate                      # the ratchets get their say
-    script/heddle/upstream-review --advance
+    script/heddle/upstream-review --advance <sha>   # <sha> = the one the report printed
     git commit .upstream-sync -m "chore(upstream): evaluated through <sha>"
+
+**`--advance` takes the sha, and the report prints it.** Copy its last line verbatim. The
+sha is required because the runbook is two invocations: the report fetches, so a bare
+`--advance` re-resolving `upstream/master` would record anything that landed in between as
+evaluated, having appeared in no report anyone read. Advancing never fetches, and refuses
+any sha that is not the one the report it just printed covers — so the marker can only
+ever be set to a value a human had on screen.
 
 **Do not run `git fetch upstream` first — the script does it.** That is deliberate: the
 report is only as current as the last fetch, and `--advance` writes the result into a
