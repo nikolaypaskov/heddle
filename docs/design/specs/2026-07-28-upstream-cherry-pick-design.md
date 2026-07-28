@@ -9,10 +9,10 @@ Heddle forked `warpdotdev/Warp` at `0dbd3d56` (2026-04-28). Since then:
 
 | | Count |
 |---|---:|
-| Upstream commits | 1798 |
+| Upstream commits | 1799 |
 | Touching `app/` or `crates/` | 1591 |
 | Touching the terminal core | 556 |
-| Touching subsystems this fork removed | 635 |
+| Touching subsystems this fork removed | 406 |
 | Mentioning security / CVE / RUSTSEC in the message | **0** |
 
 That last row shapes the urgency, with a caveat recorded below.
@@ -101,7 +101,7 @@ script/heddle/                  the gates themselves
 ```
 
 **The marker advances past rejected commits too.** Rejections are decisions; resurfacing
-them makes each pass grow rather than shrink, which is how 1798 accumulated in the first
+them makes each pass grow rather than shrink, which is how 1799 accumulated in the first
 place.
 
 ## When a cherry-pick trips a ratchet
@@ -147,6 +147,16 @@ in this repo before.
 What is independently true: Rust security issues arrive predominantly through
 dependencies, and `cargo deny check advisories` already runs on every build. That
 argument stands on its own and does not depend on the grep.
+
+**The removed-surface count above was wrong in the first draft.** It originally read 635,
+measured over the pathspec `crates/cloud_objects app/src/ai app/src/drive` — which counts
+all of `app/src/ai` rather than just `app/src/ai/blocklist/`, and counts `app/src/drive`,
+which this fork did not remove. Drive was *restored*, not removed: an always-false account
+gate had hidden it from every user, and it is listed in this document's own collision path
+list, not the removed one. The corrected figure, measured over the pathspec this document
+actually specifies, is 406. The error is instructive on its own terms: the wrong
+measurement treated a restored subsystem as a removed one, which is the exact confusion
+the collision list exists to prevent.
 
 **Not consulted:** Codex was asked to critique this design and both attempts ran too long
 to be useful — it is fast on concrete diffs and slow on open-ended design questions. It

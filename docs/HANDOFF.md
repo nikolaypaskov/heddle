@@ -238,3 +238,23 @@ If you need to debug a release binary: `CARGO_PROFILE_RELEASE_LTO_DEBUG=1`.
 Note that `GIT_RELEASE_TAG` is recorded as an `env-dep` in cargo's dep-info, so changing it correctly
 invalidates `warp_core` and everything downstream. A version bump therefore costs a near-full
 rebuild. That is correct behaviour, not a bug.
+
+## Upstream cherry-picking
+
+Upstream is `warpdotdev/Warp`; `.upstream-sync` records the last evaluated sha.
+
+    git fetch upstream
+    script/heddle/upstream-review          # four buckets; read CANDIDATE only
+    git cherry-pick <sha>                  # one at a time
+    lefthook run gate                      # the ratchets get their say
+    script/heddle/upstream-review --advance
+    git commit .upstream-sync -m "chore(upstream): evaluated through <sha>"
+
+If a pick trips `gui-branding.baseline` or `gui-surfaces.baseline`, the default is to
+DROP THE PICK, not re-record the baseline. Re-recording turns the ratchet into a
+formality. Re-record only when the pick genuinely shrinks the surface, and check the
+diff shows removals only.
+
+`COLLISION` means upstream touched something this fork reworked deliberately — the Drive
+account gate, the update mechanism, the gates. Ours wins; the bucket is listed so
+repeated upstream activity there is visible, not so it gets re-litigated each pass.

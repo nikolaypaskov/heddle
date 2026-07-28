@@ -47,6 +47,14 @@ classify_paths() {
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT" || exit 2
+
+ADVANCE=false
+case "${1:-}" in
+  --advance) ADVANCE=true ;;
+  "") ;;
+  *) echo "usage: $0 [--advance]" >&2; exit 2 ;;
+esac
+
 MARKER_FILE="$REPO_ROOT/.upstream-sync"
 
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "error: not a git repository" >&2; exit 2; }
@@ -94,3 +102,11 @@ printf '  %s\n' "${b_collide[@]:-  (none)}"
 echo
 echo "CANDIDATE (${#b_candidate[@]}) — read these:"
 printf '  %s\n' "${b_candidate[@]:-  (none)}"
+
+if [ "$ADVANCE" = true ]; then
+  # Advances past REJECTED commits too. Rejections are decisions; resurfacing them makes
+  # each pass grow rather than shrink, which is how 1799 accumulated.
+  git rev-parse "$UPSTREAM_REF" > "$MARKER_FILE"
+  echo
+  echo "marker advanced to $(git rev-parse --short "$UPSTREAM_REF") — commit .upstream-sync with any picks"
+fi
