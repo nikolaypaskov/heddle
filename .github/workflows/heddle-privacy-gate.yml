@@ -27,11 +27,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Same reasoning as ci.yml: the jobs below compile Rust -- the endpoint gate now
+  # builds the GUI, the heaviest of the lot -- and a docs edit cannot change what any
+  # of them find. `.github/workflows/ci.yml` is excluded here because a change to the
+  # test battery cannot affect what is in this binary; the reverse exclusion lives in
+  # ci.yml. Fails OPEN: if the diff cannot be computed, everything runs, because a
+  # filter that guesses "nothing changed" would skip the gate that catches the mistake.
+  changes:
+    name: what changed
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: detect
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+          if [ -z "${BASE:-}" ]; then
+            echo "not a pull_request -- running everything"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! files=$(git diff --name-only "$BASE" "$HEAD" 2>/dev/null) || [ -z "$files" ]; then
+            echo "could not diff -- failing open"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "changed files:"; printf '%s\n' "$files" | sed 's/^/  /'
+          if printf '%s\n' "$files" | grep -qvE '^(docs/|README\.md$|FAQ\.md$|CONTRIBUTING\.md$|CODE_OF_CONDUCT\.md$|SECURITY\.md$|AGENTS\.md$|\.github/workflows/ci\.yml$)'; then
+            echo "-> build-affecting changes present"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "-> documentation only; skipping the binary gates"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Cheapest job, and it gates the thing that would compromise every other job's result: if the
   # build can execute code Warp controls, no downstream scan proves anything about what shipped.
   # Needs no toolchain, so it fails in seconds rather than after a 90-minute build.
   supply-chain:
     name: No Warp-controlled code path
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -52,7 +93,14 @@ jobs:
 
   no-warp-endpoints:
     name: Binary contains no Warp endpoints
-    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # Trusted code builds on the self-hosted runner; fork PRs stay hosted. This job
+    # now compiles the GUI, which is far heavier than the TUI it used to build, and
+    # the 32-core builder with a persistent target dir is what makes that affordable.
+    # The fork test is the same trust boundary ci.yml uses -- untrusted code must
+    # never reach that machine.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'voltron-linux' }}
     timeout-minutes: 90
 
     steps:
@@ -70,7 +118,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config unzip \
             libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
-            libfontconfig1-dev libasound2-dev libclang-dev
+            libfontconfig1-dev libasound2-dev libclang-dev \
+            clang
 
       # protoc must come from the official release, NOT apt. Debian/Ubuntu's
       # protobuf-compiler ships the binary without the well-known type
@@ -87,12 +136,40 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      # Hosted runners only -- this ACTION DELETED THE SELF-HOSTED RUNNER'S TOOLCHAIN.
+      #
+      # On a hosted runner the cargo home is disposable, so rust-cache restoring and
+      # pruning it is free. On the self-hosted runner it is persistent and shared:
+      # restoring a cached ~/.cargo/bin over the top left `cargo` and `rustc` but no
+      # `rustup`, so every later job died at `rustup show` with "command not found".
+      #
+      # ci.yml already guards this the same way; the guard was missed here, and then
+      # the endpoint job was routed to the self-hosted runner, which is what broke it.
+      # There is also nothing to gain: that runner keeps CARGO_TARGET_DIR outside the
+      # workspace, so its cache already survives between jobs.
+      - if: runner.environment == 'github-hosted'
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           key: heddle-privacy-gate
 
-      - name: Build the OSS binary
-        run: cargo build -p warp_tui --bin heddle-tui --features standalone
+      # Scan what users install.
+      #
+      # This built `warp_tui --bin heddle-tui` and scanned that. The TUI is not what
+      # anyone downloads -- the release ships Heddle.app -- so the headline claim,
+      # the README badge and the landing page's "checked automatically" line all
+      # rested on a binary nobody runs. The GUI could have carried an endpoint the
+      # TUI does not and this gate would have passed.
+      #
+      # The feature list matches script/heddle/gui-surface-gate, which type-checks
+      # the same target; keep them in step.
+      #
+      # Paths below go through CARGO_TARGET_DIR. The self-hosted runner sets it
+      # outside the workspace so the build cache survives actions/checkout's
+      # `git clean -ffdx`, which means a hardcoded `target/debug/...` resolves to
+      # nothing there -- `cp: cannot stat 'target/debug/heddle'`, exactly what the
+      # first run of this job hit.
+      - name: Build the shipped GUI binary
+        run: cargo build -p warp --bin heddle --features release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2
 
       # Prove the scanner CAN fail before trusting it to pass. A verification
       # tool that cannot distinguish "checked and clean" from "did not really
@@ -101,7 +178,7 @@ jobs:
       - name: Self-test the scanner against a planted canary
         run: |
           set -euo pipefail
-          cp target/debug/heddle-tui /tmp/heddle-canary
+          cp "${CARGO_TARGET_DIR:-target}/debug/heddle" /tmp/heddle-canary
           printf 'oz.warp.dev' >> /tmp/heddle-canary
           if ./script/heddle/verify-no-warp-endpoints /tmp/heddle-canary; then
             echo "::error::Scanner PASSED a binary containing a planted endpoint."
@@ -111,8 +188,11 @@ jobs:
           echo "Scanner correctly rejected the canary."
           rm -f /tmp/heddle-canary
 
-      - name: Verify no Warp endpoints in the binary
-        run: ./script/heddle/verify-no-warp-endpoints
+      # Pass the path explicitly. The script defaults to target/debug/heddle-tui,
+      # so calling it bare would have scanned a binary this job no longer builds --
+      # the exact silent-wrong-target failure this change exists to remove.
+      - name: Verify no Warp endpoints in the shipped binary
+        run: ./script/heddle/verify-no-warp-endpoints "${CARGO_TARGET_DIR:-target}/debug/heddle"
 
       - name: Verify bundled binary assets match the reviewed manifest
         run: ./script/heddle/verify-bundled-assets
@@ -202,6 +282,8 @@ jobs:
 
   gui-surface:
     name: GUI compiles and its commercial UI only shrinks
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -226,7 +308,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config unzip \
             libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
-            libfontconfig1-dev libasound2-dev libclang-dev
+            libfontconfig1-dev libasound2-dev libclang-dev \
+            clang
 
       - name: Install protoc with well-known types
         env:
@@ -238,7 +321,19 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      # Hosted runners only -- this ACTION DELETED THE SELF-HOSTED RUNNER'S TOOLCHAIN.
+      #
+      # On a hosted runner the cargo home is disposable, so rust-cache restoring and
+      # pruning it is free. On the self-hosted runner it is persistent and shared:
+      # restoring a cached ~/.cargo/bin over the top left `cargo` and `rustc` but no
+      # `rustup`, so every later job died at `rustup show` with "command not found".
+      #
+      # ci.yml already guards this the same way; the guard was missed here, and then
+      # the endpoint job was routed to the self-hosted runner, which is what broke it.
+      # There is also nothing to gain: that runner keeps CARGO_TARGET_DIR outside the
+      # workspace, so its cache already survives between jobs.
+      - if: runner.environment == 'github-hosted'
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           key: heddle-gui-surface
 

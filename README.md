@@ -27,7 +27,6 @@ so it opens with a double-click — no security warning to click past.
 | File | What it is |
 |---|---|
 | `Heddle-aarch64-apple-darwin.app.zip` | **The app. Start here.** |
-| `heddle-aarch64-apple-darwin.tar.gz` | Terminal-only version, runs in an existing window |
 
 Unzip it with **Archive Utility** (double-click) or `ditto`, then drag `Heddle.app` to your
 Applications folder. Avoid third-party unzip tools — some strip the Apple signature, after which
@@ -66,14 +65,37 @@ open Heddle.app
 Everything else is the Warp terminal you may already know: the same blocks, the same editor, the
 same keyboard shortcuts.
 
+## Finding out about new versions
+
+Heddle asks **once**, on first run, whether it may check for updates — and does nothing until you
+answer. Change your mind any time in **Settings → Privacy**.
+
+If you say yes, it fetches a small file from this repository's releases over HTTPS. It sends no
+account, no identifier and no usage data — there is nothing to send, and the request deliberately
+does not use the app's normal HTTP client, which would have attached a client ID.
+
+If you say no, it never contacts anything, and you can watch the
+[releases page](https://github.com/nikolaypaskov/heddle/releases) instead.
+
+Before anything is installed, a downloaded build must be notarized by Apple **and** signed by this
+project's Developer ID — a validly-signed build from anyone else is refused — and its version is
+read from the downloaded bundle itself, so a manifest cannot advertise one version and ship
+another. You are told what is available before the download starts, not after.
+
+macOS only for now.
+
 ## What is not here
 
 Warp's paid features ran on Warp's servers. Removing the sign-in screen does not move them to your
 machine — **this is not a way to get Warp's paid plan for free.** What you get instead is a terminal
 that works entirely on its own.
 
-Removed: sign-in and accounts, Warp Drive cloud sync, usage analytics, crash reporting, remote
-configuration, billing and upgrade prompts, and every `warp.dev` address.
+Removed: sign-in and accounts, Drive's cloud sync and sharing, usage analytics, crash reporting,
+remote configuration, billing and upgrade prompts, and every `warp.dev` address.
+
+**Drive itself stayed.** Its workflows, notebooks and environment variables are local information,
+so removing the cloud sync it used to travel over did not mean removing the library. It is on by
+default and everything in it lives on your machine.
 
 ## How much of it works today
 
@@ -82,8 +104,9 @@ configuration, billing and upgrade prompts, and every `warp.dev` address.
 | The terminal | ✅ Works |
 | Themes, settings, keyboard shortcuts | ✅ Works |
 | Claude Code, Codex and other CLI agents | ✅ Works |
+| Drive — workflows, notebooks, environment variables | ✅ Works, stored on your machine |
 | Warp's built-in AI agent | ❌ Needs Warp's server |
-| Cloud sync / Warp Drive | ❌ Removed on purpose |
+| Cloud sync and object sharing | ❌ Removed on purpose |
 | Windows, Intel Mac | ❌ Not built |
 
 Heddle is a terminal today, not an AI environment. A replacement agent that talks to a local
@@ -127,7 +150,7 @@ Full instructions are in [CONTRIBUTING.md](CONTRIBUTING.md).
 - **[How it works](docs/HOW-IT-WORKS.md)** — what was removed and how, the server-supplied privacy
   setting that shaped the design, how the checks work and what they prove, and the bug pattern that
   cost the most time
-- **[Questions](FAQ.md)** — is this legal, why not just use Warp logged out, what about updates
+- **[Questions](FAQ.md)** — is this legal, why not just use Warp logged out
 - **[Contributing](CONTRIBUTING.md)** — building, testing, and what changes are in scope
 - **[Reporting a security issue](SECURITY.md)**
 

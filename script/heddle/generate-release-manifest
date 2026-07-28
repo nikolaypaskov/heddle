@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# Generate the update manifest that a running Heddle reads to learn a new version exists.
+#
+# The manifest is an ordinary release asset. GitHub resolves
+# `releases/latest/download/channel_versions.json` to whichever release is current, so this
+# one file is the entire update infrastructure: no server, no hostname to operate, no key.
+#
+# WHY THIS IS A SCRIPT AND NOT A WORKFLOW STEP. Heddle's GUI is built, signed, notarized and
+# published from a developer's machine (see docs/HANDOFF.md), because notarization needs
+# Apple credentials that do not live in CI. The manifest has to be published on the SAME
+# release as the `.app.zip` it describes, so it has to be producible from that same manual
+# flow. The release workflow calls this too, so there is exactly one implementation.
+#
+# The version written here must be the APP version -- the `--release-tag` passed to
+# `script/bundle`, which becomes `CFBundleShortVersionString` -- and NOT the git tag. Those
+# differ: releases have been tagged `heddle-v0.3.1-macos-arm64` while the app reports
+# `v0.3.1`. Publishing the git tag would offer users a version string their client cannot
+# parse, which `HeddleVersion::parse` treats as "do not update".
+#
+# Usage:
+#   script/heddle/generate-release-manifest v0.3.2 [output-path]
+
+set -euo pipefail
+
+VERSION="${1:-}"
+OUT="${2:-channel_versions.json}"
+
+if [[ -z "$VERSION" ]]; then
+  echo "usage: $0 vMAJOR.MINOR.PATCH [output-path]" >&2
+  exit 2
+fi
+
+# The client parses `v?MAJOR.MINOR.PATCH` and refuses everything else, treating an
+# unparseable version as "do not update". A malformed version here would therefore not fail
+# loudly -- it would silently disable updates for everyone who installed this release. Refuse
+# it at the point it is written instead.
+if ! printf '%s' "$VERSION" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "error: '$VERSION' is not vMAJOR.MINOR.PATCH." >&2
+  echo "       HeddleVersion::parse would reject it and no client would ever update." >&2
+  exit 1
+fi
+
+command -v jq >/dev/null 2>&1 || {
+  echo "error: jq is required" >&2
+  exit 2
+}
+
+# Heddle ships one channel. All three slots point at the same release so the file keeps the
+# shape `crates/channel_versions` expects, and so splitting channels later needs no format
+# change on the client.
+jq -n --arg v "$VERSION" '{
+  dev:     { version: $v },
+  preview: { version: $v },
+  stable:  { version: $v }
+}' > "$OUT"
+
+# Read it back rather than trusting what we just wrote. Three releases shipped claiming to be
+# 0.1.0 because a version was generated in one place and trusted in another.
+published="$(jq -r .stable.version "$OUT")"
+if [[ "$published" != "$VERSION" ]]; then
+  echo "error: wrote '$published' but expected '$VERSION'" >&2
+  exit 1
+fi
+
+echo "Wrote $OUT:"
+cat "$OUT"

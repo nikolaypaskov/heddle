@@ -4429,3 +4429,116 @@ fn test_tools_panel_warp_drive_toggle_updates_available_views() {
         });
     });
 }
+
+// ── The one-time update-check prompt ────────────────────────────────────────────────────
+//
+// Without this banner the consent setting stays `Unanswered` forever, the fetch returns
+// `Ok(None)` on every poll, and the entire update feature -- correct in every other respect
+// -- does nothing at all. These tests are what stop it shipping in that state.
+
+/// The banner is only reachable when the `Autoupdate` feature flag is on, which is how it
+/// ships. Unit tests start with every flag false, so each case has to turn it on.
+fn with_autoupdate_enabled() -> impl Drop {
+    FeatureFlag::Autoupdate.override_enabled(true)
+}
+
+#[test]
+fn the_update_consent_prompt_is_shown_until_it_is_answered() {
+    let _autoupdate = with_autoupdate_enabled();
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let workspace = mock_workspace(&mut app);
+
+        workspace.read(&app, |workspace, ctx| {
+            let banner = workspace
+                .render_update_consent_banner(ctx)
+                .expect("an unanswered consent must show the prompt");
+            assert_eq!(banner.banner_type, WorkspaceBanner::UpdateConsentPrompt);
+            assert_eq!(
+                banner.heading.as_deref(),
+                Some("Check for updates automatically?")
+            );
+            // Both answers must be on the banner. With only one, declining would mean
+            // dismissing -- which leaves consent `Unanswered` and re-asks next launch.
+            assert!(banner.button.is_some(), "the Yes button must be present");
+            assert!(
+                banner.secondary_button.is_some(),
+                "the No button must be present"
+            );
+        });
+    });
+}
+
+#[test]
+fn answering_yes_stops_the_prompt_and_permits_checking() {
+    let _autoupdate = with_autoupdate_enabled();
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let workspace = mock_workspace(&mut app);
+
+        workspace.update(&mut app, |workspace, ctx| {
+            workspace.handle_action(
+                &WorkspaceAction::SetUpdateConsent(UpdateConsent::Enabled),
+                ctx,
+            );
+        });
+
+        workspace.read(&app, |workspace, ctx| {
+            assert!(
+                workspace.render_update_consent_banner(ctx).is_none(),
+                "an answered consent must not keep prompting"
+            );
+            assert!(
+                UpdateSettings::as_ref(ctx).check_for_updates.should_check(),
+                "answering yes must permit the check"
+            );
+            // Persisting the answer is not enough: the user just asked to be told about
+            // updates, and the poll loop's own cadence could be hours away. Without this
+            // assertion, deleting the immediate `manually_check_for_update` call would not
+            // fail any test.
+            // `stage` is useless here: requests are queued until `start_polling` runs, so it
+            // stays at its default `NoUpdateAvailable` -- indistinguishable from never having
+            // asked. The queue depth is the real observable, and it goes to zero if the
+            // `manually_check_for_update` call is deleted.
+            assert_eq!(
+                crate::autoupdate::AutoupdateState::as_ref(ctx).pending_request_count(),
+                1,
+                "answering yes must request a check now, not wait for the next poll"
+            );
+        });
+    });
+}
+
+#[test]
+fn answering_no_stops_the_prompt_and_still_forbids_checking() {
+    let _autoupdate = with_autoupdate_enabled();
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let workspace = mock_workspace(&mut app);
+
+        workspace.update(&mut app, |workspace, ctx| {
+            workspace.handle_action(
+                &WorkspaceAction::SetUpdateConsent(UpdateConsent::Disabled),
+                ctx,
+            );
+        });
+
+        workspace.read(&app, |workspace, ctx| {
+            assert!(
+                workspace.render_update_consent_banner(ctx).is_none(),
+                "declining must not re-prompt on this or any later launch"
+            );
+            assert!(
+                !UpdateSettings::as_ref(ctx).check_for_updates.should_check(),
+                "declining must leave checking forbidden"
+            );
+        });
+    });
+}
+
+#[test]
+fn the_prompt_is_not_dismissible() {
+    // Dismissing would leave consent `Unanswered`, so the banner would return on the next
+    // launch with no way for the user to stop being asked. Both answers are on the banner.
+    assert!(!WorkspaceBanner::UpdateConsentPrompt.is_dismissible());
+}

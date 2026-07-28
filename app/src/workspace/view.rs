@@ -322,7 +322,8 @@ use crate::settings::{
     AppEditorSettings, BlockVisibilitySettings, ChangelogSettings, CodeSettings,
     CodeSettingsChangedEvent, CtrlTabBehavior, CursorBlink, DebugSettings, DefaultSessionMode,
     FontSettings, GPUSettings, InputModeSettings, InputSettings, MonospaceFontSize, PaneSettings,
-    PrivacySettings, SelectionSettings, Settings, SshSettings, ThemeSettings, active_theme_kind,
+    PrivacySettings, SelectionSettings, Settings, SshSettings, ThemeSettings, UpdateConsent,
+    UpdateSettings, active_theme_kind,
     respect_system_theme,
 };
 use crate::settings_view::environments_page::EnvironmentsPage;
@@ -685,6 +686,10 @@ pub enum WorkspaceBanner {
     WaylandCrashRecovery,
     /// to display when settings.toml has errors (parse failure or invalid values)
     InvalidSettings,
+    /// to ask, once, whether Heddle may check GitHub for new releases
+    UpdateConsentPrompt,
+    /// to report that a newer version exists, before anything is downloaded
+    UpdateOffered,
 }
 
 impl WorkspaceBanner {
@@ -701,6 +706,14 @@ impl WorkspaceBanner {
             #[cfg(target_os = "linux")]
             Self::WaylandCrashRecovery => true,
             Self::InvalidSettings => true,
+            // Not dismissible by the close button: dismissing would leave consent
+            // `Unanswered`, so the prompt would return on the next launch and the user would
+            // have no way to stop being asked. Both answers are on the banner itself, and
+            // either one is final.
+            Self::UpdateConsentPrompt => false,
+            // Dismissible. The user has been told; the next poll tells them again. Forcing
+            // the notice to stay is pressure, and this feature notifies rather than pressures.
+            Self::UpdateOffered => true,
         }
     }
 }
@@ -7505,6 +7518,14 @@ impl Workspace {
                 AutoupdateStage::Updating { new_version, .. } => menu_items.push(
                     MenuItemFields::new(format!("Updating to ({})", new_version.version))
                         .with_disabled(true)
+                        .into_item(),
+                ),
+                AutoupdateStage::UpdateOffered { new_version, .. } => menu_items.push(
+                    // "Download" rather than "Install": nothing has been fetched yet, and the
+                    // label is the only thing telling the user which of those they are about
+                    // to start.
+                    MenuItemFields::new(format!("Download update ({})", new_version.version))
+                        .with_on_select_action(WorkspaceAction::DownloadOfferedUpdate)
                         .into_item(),
                 ),
                 AutoupdateStage::UnableToUpdateToNewVersion { .. } => menu_items.push(
@@ -20565,6 +20586,9 @@ impl Workspace {
         let banner_fields = self
             .render_reauth_banner_element()
             .or_else(|| self.render_settings_error_banner(app))
+            // Ahead of the autoupdate banners: until this is answered there can be no update
+            // to report, so it can never compete with one.
+            .or_else(|| self.render_update_consent_banner(app))
             .or_else(|| self.render_autoupdate_banner_element(app));
 
         #[cfg(enable_crash_recovery)]
@@ -20628,9 +20652,83 @@ impl Workspace {
         None
     }
 
+    /// The one-time question: may Heddle check GitHub for new releases?
+    ///
+    /// Shown until it is answered, and never again after. This is the piece that makes the
+    /// rest of the update machinery reachable -- with consent stuck at `Unanswered` the
+    /// fetch returns `Ok(None)` forever and the feature, though fully implemented, does
+    /// nothing at all.
+    ///
+    /// It reuses the banner surface rather than adding a first-run slide: onboarding is
+    /// being dismantled, and a notice about updates belongs on the same surface as the
+    /// update notice itself.
+    fn render_update_consent_banner(&self, app: &AppContext) -> Option<WorkspaceBannerFields> {
+        if !FeatureFlag::Autoupdate.is_enabled() {
+            return None;
+        }
+        if !UpdateSettings::as_ref(app).check_for_updates.needs_prompt() {
+            return None;
+        }
+
+        Some(WorkspaceBannerFields {
+            banner_type: WorkspaceBanner::UpdateConsentPrompt,
+            severity: BannerSeverity::Warning,
+            heading: Some("Check for updates automatically?".to_owned()),
+            // Say what is actually sent, not what sounds best.
+            //
+            // An earlier draft claimed the request revealed "your IP address and nothing
+            // else — no identifier". That was false: the fetch used `http_client::Client`,
+            // which attaches `x-warp-client-id` and the app version to every native
+            // request. The client is now a bare reqwest with a fixed, version-less
+            // User-Agent, and the wording below describes that rather than an ideal.
+            description: "Heddle can check GitHub for new releases. The request carries no \
+                          identifier, no account and no usage data — GitHub sees your IP \
+                          address and that a Heddle build asked for the release list. \
+                          Downloading an update is a separate step you choose. You can change \
+                          this any time in Settings."
+                .to_owned(),
+            secondary_button: Some(WorkspaceBannerButtonDetails {
+                text: "No".to_owned(),
+                action: WorkspaceAction::SetUpdateConsent(UpdateConsent::Disabled),
+                variant: BannerButtonVariant::Naked,
+                icon: None,
+                more_info_button_action: None,
+            }),
+            button: Some(WorkspaceBannerButtonDetails {
+                text: "Yes".to_owned(),
+                action: WorkspaceAction::SetUpdateConsent(UpdateConsent::Enabled),
+                variant: BannerButtonVariant::Outlined,
+                icon: None,
+                more_info_button_action: None,
+            }),
+        })
+    }
+
     fn render_autoupdate_banner_element(&self, app: &AppContext) -> Option<WorkspaceBannerFields> {
         if FeatureFlag::Autoupdate.is_enabled() {
             match autoupdate::get_update_state(app) {
+                // The notice, before anything has been downloaded. Dismissible: the user has
+                // been told, and the next poll will tell them again if they ignore it.
+                AutoupdateStage::UpdateOffered { new_version, .. } => {
+                    Some(WorkspaceBannerFields {
+                        banner_type: WorkspaceBanner::UpdateOffered,
+                        severity: BannerSeverity::Warning,
+                        heading: None,
+                        description: format!(
+                            "Heddle {} is available. Downloading it fetches the application \
+                             from GitHub.",
+                            new_version.version
+                        ),
+                        secondary_button: None,
+                        button: Some(WorkspaceBannerButtonDetails {
+                            text: "Download".to_string(),
+                            action: WorkspaceAction::DownloadOfferedUpdate,
+                            variant: BannerButtonVariant::Outlined,
+                            icon: None,
+                            more_info_button_action: None,
+                        }),
+                    })
+                }
                 AutoupdateStage::UnableToUpdateToNewVersion { new_version }
                     if !self.autoupdate_unable_to_update_banner_dismissed =>
                 {
@@ -20976,6 +21074,10 @@ impl Workspace {
                 self.settings_error_banner_dismissed = true;
                 self.sync_settings_error_state_into_settings_pane(ctx);
             }
+            // Not dismissible (`is_dismissible` returns false), so this is unreachable. It
+            // must stay a no-op rather than recording an answer: dismissing is not consent.
+            WorkspaceBanner::UpdateConsentPrompt => {}
+            WorkspaceBanner::UpdateOffered => {}
         }
         ctx.notify();
     }
@@ -23415,6 +23517,26 @@ impl TypedActionView for Workspace {
             }
             FocusLeftPanel => self.focus_left_panel(ctx),
             FocusRightPanel => self.focus_right_panel(ctx),
+            DownloadOfferedUpdate => {
+                AutoupdateState::handle(ctx).update(ctx, |autoupdate, ctx| {
+                    autoupdate.download_offered_update(ctx);
+                });
+            }
+            SetUpdateConsent(answer) => {
+                let answer = *answer;
+                UpdateSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    report_if_error!(settings.check_for_updates.set_value(answer, ctx));
+                });
+                // A "yes" should take effect now rather than on the next launch: the user
+                // just asked to be told about updates, and the poll loop's own cadence could
+                // be hours away.
+                if answer.should_check() {
+                    AutoupdateState::handle(ctx).update(ctx, |autoupdate, ctx| {
+                        autoupdate.manually_check_for_update(ctx);
+                    });
+                }
+                ctx.notify();
+            }
             ViewObjectInWarpDrive(item_id) => {
                 // Focus newly created object in WD
                 self.view_in_and_focus_warp_drive(*item_id, ctx);
