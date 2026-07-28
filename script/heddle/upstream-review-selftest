@@ -2,10 +2,18 @@
 #
 # Prove the classifier can be WRONG before trusting it to be right.
 #
-# The load-bearing case is the last one: a commit touching both a collision path and a
+# Two cases are load-bearing.
+#
+# `collision beats candidate` (below): a commit touching both a collision path and a
 # candidate path must classify as `collision`. If that precedence inverts, an upstream
-# change to the Drive account gate lands in the bucket a human reads with intent to
-# accept -- the most expensive failure this script can have.
+# change to Drive lands in the bucket a human reads with intent to accept -- the most
+# expensive failure this script can have.
+#
+# `newly added file is not removed`: AUTO-REJECT is driven by the set of files that
+# existed at the merge base and are gone from HEAD. The "existed at the merge base" half
+# is what stops every file upstream newly ADDS -- which is also absent from HEAD -- from
+# being written off as touching a deleted subsystem. Get that wrong and the candidate
+# bucket empties out silently, which reads as "nothing to review".
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
@@ -24,13 +32,69 @@ expect() {
   fi
 }
 
-expect "removed surface"        auto-reject "crates/cloud_objects/src/lib.rs"
+# Same assertion, with a derived removed-path set supplied as data. The set is
+# newline-framed exactly as the report builds it; nothing here reads git, so this stays
+# hermetic and independent of what upstream has actually deleted today.
+expect_removed() {
+  local label="$1" want="$2" removed="$3"; shift 3
+  local saved="$REMOVED_PATHS_SET"
+  REMOVED_PATHS_SET=$'\n'"$removed"$'\n'
+  expect "$label" "$want" "$@"
+  REMOVED_PATHS_SET="$saved"
+}
+
+# ── Regex buckets, with no derived set at all. These must hold on their own.
+expect "removed tree"           auto-reject "crates/warp_multi_agent_client/src/lib.rs"
 expect "drive account gate"     collision   "app/src/drive/settings.rs"
+expect "drive panel"            collision   "app/src/drive/panel.rs"
+expect "privacy page"           collision   "app/src/settings_view/privacy_page.rs"
 expect "terminal core"          candidate   "crates/warp_terminal/src/pty.rs"
 expect "upstream docs only"     ignore      "docs/CONTRIBUTING.md"
 expect "collision beats candidate" collision "crates/warp_terminal/src/pty.rs" "app/src/autoupdate/mac.rs"
-expect "reject beats candidate" auto-reject "crates/warp_terminal/src/pty.rs" "crates/cloud_objects/src/x.rs"
-expect "reject beats collision" auto-reject "crates/cloud_objects/src/x.rs" "app/src/drive/settings.rs"
+expect "reject beats candidate" auto-reject "crates/warp_terminal/src/pty.rs" "crates/warp_multi_agent_client/src/x.rs"
+expect "reject beats collision" auto-reject "crates/warp_multi_agent_client/src/x.rs" "app/src/drive/settings.rs"
+
+# Subsystems this fork SHIPS must not be rejected. Both of these were in REMOVED_RE while
+# being live code here: cloud_objects is a workspace member, and app/src/ai/blocklist is
+# 201 present files. An upstream panic fix in either used to land under a heading saying
+# "touches a removed subsystem" and never be read.
+expect "cloud_objects still shipped" candidate "crates/cloud_objects/src/lib.rs"
+expect "blocklist still shipped"     candidate "app/src/ai/blocklist/controller.rs"
+
+# ── The derived set is what actually drives AUTO-REJECT.
+expect_removed "derived removal rejects" auto-reject \
+  "app/src/ai/ambient_agents/mod.rs" \
+  "app/src/ai/ambient_agents/mod.rs"
+expect_removed "derived removal beats candidate" auto-reject \
+  "app/src/ai/agent_sdk/ambient.rs" \
+  "crates/warp_terminal/src/pty.rs" "app/src/ai/agent_sdk/ambient.rs"
+# The other half of the same guard: nothing in the set means nothing derived to reject.
+expect_removed "empty derived set rejects nothing" candidate \
+  "" \
+  "app/src/ai/ambient_agents/mod.rs"
+
+# THE case. A file upstream newly ADDS is absent from HEAD too, so a rule that tested
+# only "not in HEAD" would reject it. It is not in the derived set, because it did not
+# exist at the merge base, so it must stay a candidate.
+expect_removed "newly added file is not removed" candidate \
+  "app/src/ai/ambient_agents/mod.rs" \
+  "app/src/terminal/brand_new_upstream_feature.rs"
+
+# Whole-line anchoring, both directions. The path under test is a proper prefix of a set
+# entry in the first case and a proper suffix of one in the second; neither is a removal.
+# Drop the framing newlines and the membership test degrades to a substring search, which
+# rejects both.
+expect_removed "removed path is not a prefix match" candidate \
+  "app/src/gone.rs.orig" \
+  "app/src/gone.rs"
+expect_removed "removed path is not a suffix match" candidate \
+  "crates/vendored/app/src/gone.rs" \
+  "app/src/gone.rs"
+
+# Precedence again, this time with the derived set as the rejecting side.
+expect_removed "derived removal beats collision" auto-reject \
+  "app/src/ai/agent_sdk/ambient.rs" \
+  "app/src/drive/panel.rs" "app/src/ai/agent_sdk/ambient.rs"
 
 if [ "$fails" -ne 0 ]; then
   echo "SELF-TEST FAILED: $fails case(s). A classifier that cannot be shown to fail is not evidence." >&2
