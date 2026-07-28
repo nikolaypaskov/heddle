@@ -56,9 +56,31 @@ Two artefacts.
 at the fork point `a66337f4`. Committed, so the marker survives machines and its movement
 is visible in review.
 
-The marker is hand-maintained, and it has already been wrong once. Enumeration therefore
-passes `--not HEAD` as well, so git decides what HEAD does not already contain and the
-report self-corrects against marker drift instead of compounding it.
+The marker is hand-maintained, and it has already been wrong once. Two different things
+can be wrong with it, and they need two different answers — an earlier version of this
+paragraph claimed `--not HEAD` handled "marker drift" generally, which is not true.
+
+**A marker that is too old** is corrected, silently and automatically. Enumeration passes
+`--not HEAD`, so git decides what HEAD does not already contain; a marker left behind by a
+cherry-pick, or set to upstream's root commit as this one once was, over-reports and the
+filter removes the excess. Failure direction: harmless.
+
+**A marker that is off upstream's history** is *rejected*, because it cannot be corrected.
+`MARKER..UPSTREAM_REF` excludes everything reachable from `MARKER`, so a marker pointing at
+a divergent branch — a rebase, a bad merge, a hand-edit — omits commits from the left side
+of the range before `--not HEAD` is ever consulted. Measured against real refs:
+
+```
+a66337f4..upstream/master --not HEAD                    -> 118
+upstream/factory/APP-4991-tui-byok..upstream/master ..  ->   7   (111 omitted)
+```
+
+Nothing downstream can notice: the enumeration and the independent count agree on 7,
+because 7 is the honest answer to the question the script asked. So the marker is checked
+with `git merge-base --is-ancestor` before enumeration, and a marker off upstream's history
+exits 2. The same check already guarded the `--advance` argument; the asymmetry was the
+bug — the value a human types was validated, and the value read from a tracked file, which
+is the one rebases actually corrupt, was not.
 
 **`script/heddle/upstream-review`** — bash, matching the other gates in that directory:
 self-testing, no new dependencies. Read-only with respect to the working tree and to
@@ -261,6 +283,7 @@ A (merge base)  keep.rs, gone.rs, drive/panel.rs, drive/index.rs   ← the marke
  │    B  adds app/src/feature.rs                        → candidate
  │    C  modifies app/src/gone.rs                       → auto-reject (derived)
  │    E  RENAMES drive/panel.rs → app/src/moved_out.rs  → collision
+ │    ├─ H  divergent, never merged                     ← an off-history marker
  │    G  modifies drive/index.rs, on a side branch
  │    F  MERGE of G                                     → collision
  └─ D (HEAD)     DELETES app/src/gone.rs                ← the fork side
@@ -268,16 +291,25 @@ A (merge base)  keep.rs, gone.rs, drive/panel.rs, drive/index.rs   ← the marke
 
 D makes the *derivation* testable — a file genuinely deleted between the merge base and
 HEAD, which section 1 cannot exercise because it injects the set by hand. E and F cover the
-two path-extraction flags above.
+two path-extraction flags above. H is a marker that is *plausible* rather than malformed:
+it resolves, it shares `A..E` with the tip, and pointing the marker at it drops B, C and E
+from the report while everything downstream stays internally consistent.
+
+Every other case resets the marker to A, so none of them could have caught H; and the
+`--advance` off-history case validates the *argument*, which is a different value. The
+divergent-marker case asserts the marker is still H afterwards — not merely "unchanged" —
+because with the guard removed it is rewritten to the tip, and that is the permanent damage.
 
 | Case | Expected |
 |---|---|
 | nothing broken | exit 0; `AUTO-REJECT (1)`, `COLLISION (3)`, `CANDIDATE (1)`, **and each named commit in its own bucket**; advance command printed |
+| marker points at a divergent commit (H) | exit 2, message naming the tip, **marker still H — not advanced** |
 | `git fetch` exits non-zero | exit 2, message naming `--no-fetch`, **marker untouched** |
 | default run (fetch succeeds) | exit 0, full report |
 | `git rev-list` exits non-zero | exit 2, message, **marker untouched** |
 | `git rev-list` truncates but exits **0** | exit 2, message, **marker untouched** |
 | `git show` exits non-zero for one commit | exit 2, message, **marker untouched** |
+| `git log` exits non-zero for one commit | exit 2, message, **marker untouched** |
 | `--advance` with no sha, or with a flag | exit 2, message, **marker untouched** |
 | `--advance` with an unresolvable sha | exit 2, message, **marker untouched** |
 | `--advance` with a sha off upstream's history | exit 2, message, **marker untouched** |
