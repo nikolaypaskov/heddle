@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# Prove the classifier can be WRONG before trusting it to be right.
+#
+# The load-bearing case is the last one: a commit touching both a collision path and a
+# candidate path must classify as `collision`. If that precedence inverts, an upstream
+# change to the Drive account gate lands in the bucket a human reads with intent to
+# accept -- the most expensive failure this script can have.
+set -uo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=/dev/null
+source "$REPO_ROOT/script/heddle/upstream-review"
+
+fails=0
+expect() {
+  local label="$1" want="$2"; shift 2
+  local got
+  got="$(printf '%s\n' "$@" | classify_paths)"
+  if [ "$got" != "$want" ]; then
+    echo "FAIL [$label]: expected '$want', got '$got'" >&2
+    fails=$((fails + 1))
+  else
+    echo "ok [$label]: $want"
+  fi
+}
+
+expect "removed surface"        auto-reject "crates/cloud_objects/src/lib.rs"
+expect "drive account gate"     collision   "app/src/drive/settings.rs"
+expect "terminal core"          candidate   "crates/warp_terminal/src/pty.rs"
+expect "upstream docs only"     ignore      "docs/CONTRIBUTING.md"
+expect "collision beats candidate" collision "crates/warp_terminal/src/pty.rs" "app/src/autoupdate/mac.rs"
+expect "reject beats candidate" auto-reject "crates/warp_terminal/src/pty.rs" "crates/cloud_objects/src/x.rs"
+expect "reject beats collision" auto-reject "crates/cloud_objects/src/x.rs" "app/src/drive/settings.rs"
+
+if [ "$fails" -ne 0 ]; then
+  echo "SELF-TEST FAILED: $fails case(s). A classifier that cannot be shown to fail is not evidence." >&2
+  exit 1
+fi
+echo "self-test passed"

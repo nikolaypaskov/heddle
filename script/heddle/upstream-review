@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# Which upstream commits are worth reading?
+#
+# Upstream has moved ~1800 commits since the fork at 0dbd3d56. Reading all of them
+# monthly is not a thing anyone will actually do, so this sorts them and asks a human to
+# read one bucket.
+#
+# Classification is by PATH, which is a proxy for intent and therefore imperfect. It is
+# deliberately biased: `collision` and `auto-reject` are broad, so the cost of being
+# wrong is skipping something useful rather than accepting something harmful.
+#
+# See docs/design/specs/2026-07-28-upstream-cherry-pick-design.md.
+set -uo pipefail
+
+# Subsystems this fork removed. Upstream work here is never wanted.
+REMOVED_RE='^(crates/cloud_objects/|crates/warp_multi_agent|app/src/ai/blocklist/)'
+
+# Subsystems this fork reworked deliberately. OURS WINS -- see the spec for why this is
+# a default rather than a judgement call.
+COLLISION_RE='^(app/src/drive/settings\.rs|app/src/autoupdate/|crates/warp_core/src/channel/|script/heddle/|\.github/workflows/)'
+
+# Only these trees can contain a change worth taking.
+CODE_RE='^(app/|crates/)'
+
+# Pure function: newline-separated paths on stdin -> exactly one bucket on stdout.
+# Precedence, highest first: auto-reject, collision, candidate, ignore.
+classify_paths() {
+  local paths reject=0 collide=0 code=0
+  paths="$(cat)"
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    [[ "$p" =~ $REMOVED_RE ]] && reject=1
+    [[ "$p" =~ $COLLISION_RE ]] && collide=1
+    [[ "$p" =~ $CODE_RE ]] && code=1
+  done <<< "$paths"
+
+  if [ "$reject" = 1 ]; then echo auto-reject
+  elif [ "$collide" = 1 ]; then echo collision
+  elif [ "$code" = 1 ]; then echo candidate
+  else echo ignore
+  fi
+}
+
+# Sourced by the self-test: define the functions and stop.
+[ "${BASH_SOURCE[0]}" != "${0}" ] && return 0
