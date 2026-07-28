@@ -26,6 +26,20 @@ concurrency:
   group: heddle-privacy-gate-${{ github.ref }}
   cancel-in-progress: true
 
+# Incremental compilation off, everywhere.
+#
+# CI never reuses an incremental cache the way a developer's machine does: every
+# job is a fresh checkout, so the artifacts are written and then almost never hit.
+# On the self-hosted runner, where the target dir persists deliberately, they were
+# 87G of a 144G cache -- 60% of the disk spent on a speedup CI cannot collect.
+#
+# This used to be set for us as a side-effect of Swatinem/rust-cache, which exports
+# CARGO_INCREMENTAL=0. Guarding that action to hosted runners silently turned
+# incremental back ON for self-hosted jobs. Relying on a caching action to set a
+# compiler flag was the real mistake; it is explicit now.
+env:
+  CARGO_INCREMENTAL: "0"
+
 jobs:
   # Same reasoning as ci.yml: the jobs below compile Rust -- the endpoint gate now
   # builds the GUI, the heaviest of the lot -- and a docs edit cannot change what any
