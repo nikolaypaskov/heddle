@@ -515,6 +515,7 @@ default = [
     "suggested_rules",
     "default_waterfall_mode",
     "am_workflows",
+    "autoupdate",
     "autoupdate_ui_revamp",
     "render_agent_mode_output_markdown",
     "agent_mode_primary_xml",

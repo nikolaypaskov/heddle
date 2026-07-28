@@ -1,5 +1,8 @@
 mod changelog;
 mod channel_versions;
+pub mod heddle_version;
+
+use self::heddle_version::HeddleVersion;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "macos")]
@@ -11,7 +14,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ::channel_versions::{ParsedVersion, VersionInfo};
+use ::channel_versions::VersionInfo;
 use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, FixedOffset, NaiveDate};
 use rand::Rng as _;
@@ -30,6 +33,7 @@ use crate::channel::Channel;
 use crate::features::FeatureFlag;
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::TelemetryEvent;
+use crate::settings::{UpdateConsent, UpdateSettings};
 use crate::workspace::Workspace;
 use crate::{ChannelState, send_telemetry_from_ctx, send_telemetry_sync_from_app_ctx};
 
@@ -49,6 +53,18 @@ pub enum AutoupdateStage {
     CheckingForUpdate,
     /// The new version is being downloaded.
     DownloadingUpdate,
+    /// A newer version exists and has been reported to the user, but nothing has been
+    /// downloaded yet.
+    ///
+    /// This state exists so that "we found an update" and "we fetched ~100 MB of application"
+    /// are separate events with the user's decision between them. Upstream went straight from
+    /// the version check to `download_new_update`, which meant enabling update checks silently
+    /// enabled update DOWNLOADS -- and the consent text this fork shows describes a request
+    /// for the release list, not for the release.
+    UpdateOffered {
+        new_version: VersionInfo,
+        update_id: String,
+    },
     /// An update exists but the user does not have authorization to install it.
     UnableToUpdateToNewVersion { new_version: VersionInfo },
     /// An update has been downloaded and is ready for relaunch.
@@ -222,6 +238,17 @@ impl AutoupdateState {
         );
     }
 
+    /// How many update checks are queued but not yet executed.
+    ///
+    /// Test-only. Requests are queued until `start_polling` runs, so in a unit test an
+    /// enqueued request is the only observable proof that a check was actually requested --
+    /// `stage` stays at its default `NoUpdateAvailable`, which is indistinguishable from
+    /// never having asked.
+    #[cfg(test)]
+    pub fn pending_request_count(&self) -> usize {
+        self.request_queue.len()
+    }
+
     /// User-initiated check for updates.
     pub fn manually_check_for_update(&mut self, ctx: &mut ModelContext<Self>) {
         self.enqueue_request(RequestType::ManualCheck, ctx);
@@ -247,6 +274,14 @@ impl AutoupdateState {
     /// The caller is responsible for checking that we _should_ check for an update. Generally, the
     /// only caller should be [`Self::try_execute_request`].
     fn check_for_update(&mut self, request_type: RequestType, ctx: &mut ModelContext<Self>) {
+        // Consent first, before any work is scheduled. Read here rather than inside the
+        // spawned task so that declining costs nothing at all -- no task, no stage change,
+        // no error to log on every poll.
+        let consent = *UpdateSettings::as_ref(ctx).check_for_updates;
+        if !consent.should_check() {
+            return;
+        }
+
         let current_date = chrono::Local::now().date_naive();
         let is_daily = self.should_make_daily_request(
             request_type,
@@ -262,13 +297,15 @@ impl AutoupdateState {
         self.stage = AutoupdateStage::CheckingForUpdate;
         ctx.notify();
 
-        let server_api = self.server_api.clone();
+        // No `server_api` here any more: the manifest comes from GitHub over plain HTTPS,
+        // not from Warp's `/client_version` endpoint. The field is still held by the struct
+        // for the download path.
         ctx.spawn(
             async move {
                 let update_id = new_update_id();
                 let channel = ChannelState::channel();
                 log::info!("Checking for update on channel {channel}. Update id is {update_id}");
-                let version = fetch_version(&channel, is_daily, &update_id, server_api)
+                let version = fetch_version(&channel, consent)
                     .await
                     .context("Error checking for new version");
                 report_if_error!(version);
@@ -325,24 +362,27 @@ impl AutoupdateState {
             download.version.update_by = version.update_by;
         }
 
-        if version.version == current_version {
-            log::info!("Already up to date with {}", version.version);
+        // Monotonicity. This is the ONLY thing standing between a user and being walked back
+        // to a build with a known bug: an older Heddle release is validly signed and validly
+        // notarized, so both Apple checks pass on a downgrade. `is_upgrade` fails closed, so
+        // an unparseable version on either side also stops here.
+        //
+        // This replaces `is_current_version_ahead_of_latest_version`, which was not merely
+        // weaker but inert: it parsed with `ParsedVersion::try_from`, whose regex matches
+        // upstream's dated scheme and rejects `v0.3.1`. Every call returned `Err`, the
+        // `if let Ok(true)` never matched, and the guard never ran.
+        //
+        // Upstream's `is_rollback` escape hatch is deliberately gone with it. It existed so
+        // Warp could walk users back off a bad release; keeping it would mean the manifest
+        // could authorise a downgrade, which is exactly the hole monotonicity closes.
+        if !is_upgrade(current_version, &version.version) {
+            log::info!(
+                "Not updating: {} is not newer than the running {}",
+                version.version,
+                current_version
+            );
             UpdateReady::No
         } else {
-            if let Ok(true) =
-                self.is_current_version_ahead_of_latest_version(&version, current_version)
-            {
-                let is_rollback = version.is_rollback.unwrap_or(false);
-                if !is_rollback {
-                    log::info!(
-                        "Current version ({}) is ahead of version in channel versions({}), not updating",
-                        current_version,
-                        version.version
-                    );
-                    return UpdateReady::No;
-                }
-            }
-
             // We should update - the only thing left to do is check if this version is already
             // downloaded.
             match &self.downloaded_update {
@@ -371,18 +411,6 @@ impl AutoupdateState {
         }
     }
 
-    /// Returns whether the current version is ahead of the version reported by the server as the "latest" version
-    /// in channel versions.
-    fn is_current_version_ahead_of_latest_version(
-        &self,
-        new_version: &VersionInfo,
-        current_version: &str,
-    ) -> Result<bool> {
-        let current_version = ParsedVersion::try_from(current_version)?;
-        let new_version = ParsedVersion::try_from(new_version.version.as_str())?;
-        Ok(current_version > new_version)
-    }
-
     fn on_update_check_complete(
         &mut self,
         request_type: RequestType,
@@ -406,9 +434,13 @@ impl AutoupdateState {
                 new_version,
                 update_id,
             }) => {
-                self.download_new_update(update_id.clone(), request_type, new_version.clone(), ctx);
-                // We report the update status after attempting to download the update.
-                return;
+                // Offer it; do not fetch it. `download_offered_update` runs when the user
+                // acts on the notice.
+                self.stage = AutoupdateStage::UpdateOffered {
+                    new_version: new_version.clone(),
+                    update_id: update_id.clone(),
+                };
+                ctx.emit(AutoupdateStateEvent::UpdateAvailable);
             }
             Ok(UpdateReady::Yes {
                 new_version,
@@ -453,6 +485,22 @@ impl AutoupdateState {
         };
 
         self.on_check_complete(update_available, request_type, ctx);
+    }
+
+    /// Begin downloading the update the user was offered.
+    ///
+    /// Only valid from `UpdateOffered`: this is the user acting on the notice, so there is
+    /// always something already offered. Doing nothing in any other state keeps a stray
+    /// dispatch from starting a download out of nowhere.
+    pub fn download_offered_update(&mut self, ctx: &mut ModelContext<Self>) {
+        let AutoupdateStage::UpdateOffered {
+            new_version,
+            update_id,
+        } = self.stage.clone()
+        else {
+            return;
+        };
+        self.download_new_update(update_id, RequestType::ManualCheck, new_version, ctx);
     }
 
     fn download_new_update(
@@ -751,10 +799,7 @@ pub fn get_update_state(app: &AppContext) -> AutoupdateStage {
     AutoupdateState::as_ref(app).stage.clone()
 }
 
-fn get_curr_parsed_version() -> Option<ParsedVersion> {
-    let curr_version = ChannelState::app_version();
-    curr_version.and_then(|v| ParsedVersion::try_from(v).ok())
-}
+
 
 /// Generate a new random update ID.
 fn new_update_id() -> String {
@@ -766,30 +811,41 @@ fn new_update_id() -> String {
         .collect()
 }
 
+/// Whether `offered` is strictly newer than `running`.
+///
+/// Fails closed: if either side cannot be parsed, the answer is `false`. An unknown version
+/// must never be treated as an upgrade, because the signature checks cannot tell old from
+/// new -- an older Heddle release carries a perfectly valid Developer ID signature and a
+/// valid notarization ticket. This comparison is the only thing that distinguishes them.
+pub(crate) fn is_upgrade(running: &str, offered: &str) -> bool {
+    match (HeddleVersion::parse(running), HeddleVersion::parse(offered)) {
+        (Some(running), Some(offered)) => offered > running,
+        _ => false,
+    }
+}
+
 /// Fetch the current version on the given channel.
-async fn fetch_version(
-    channel: &Channel,
-    is_daily: bool,
-    update_id: &str,
-    server_api: Arc<ServerApi>,
-) -> Result<VersionInfo> {
-    let versions = fetch_channel_versions(update_id, server_api.clone(), false, is_daily).await?;
+///
+/// The caller must already have checked consent; this asserts it rather than assuming, so a
+/// future call site cannot reach the network by forgetting.
+async fn fetch_version(channel: &Channel, consent: UpdateConsent) -> Result<VersionInfo> {
+    let Some(versions) = fetch_channel_versions(consent).await? else {
+        anyhow::bail!("no update check was permitted");
+    };
 
     let channel_version = match channel {
         Channel::Stable => versions.stable,
         Channel::Preview => versions.preview,
         Channel::Dev => versions.dev,
-        Channel::Integration | Channel::Local | Channel::Oss => {
-            // These channels don't ship release artifacts, so there's no
-            // version to fetch. This branch is normally unreachable because
-            // `AutoupdateState::register` gates the poll loop on the
-            // `Autoupdate` feature flag, but builds (e.g. local wasm bundles)
-            // can end up with `Autoupdate` enabled while running on one of
-            // these channels. Return an error rather than panicking so the
-            // poll loop just logs and bails.
-            anyhow::bail!(
-                "Local, integration, and open-source channel binaries don't support autoupdate"
-            );
+        // Heddle ships on `Oss` and publishes one release, mirrored into all three channel
+        // slots of the manifest. Upstream bailed here because the OSS build had no release
+        // artifacts; this fork does, so reading the stable slot is the correct behaviour
+        // rather than a workaround.
+        Channel::Oss => versions.stable,
+        Channel::Integration | Channel::Local => {
+            // These genuinely ship no release artifacts. Return an error rather than
+            // panicking so the poll loop just logs and bails.
+            anyhow::bail!("Local and integration channel binaries don't support autoupdate");
         }
     };
     let version_info = channel_version.version_info();
@@ -1126,17 +1182,25 @@ impl Entity for RelaunchModel {
 
 impl SingletonEntity for RelaunchModel {}
 
+/// Whether `version` is past the running build -- used for the manifest's `soft_cutoff` and
+/// `last_prominent_update` fields, which escalate how insistently an update is presented.
+///
+/// Parsed with `HeddleVersion`, not `ParsedVersion`. The latter reads upstream's dated
+/// scheme and cannot parse `v0.3.1`, so on every Heddle build this returned `false`
+/// unconditionally -- the same silent-inert shape as the downgrade guard above.
+///
+/// It still returns `false` in practice, because Heddle's manifest publishes only `version`
+/// and leaves both of these fields unset: this fork notifies about updates, it does not
+/// pressure. The difference is that it is now false because there is nothing to compare,
+/// rather than because the comparison could never run.
 pub fn is_incoming_version_past_current(version: Option<&str>) -> bool {
-    let installed_version = get_curr_parsed_version();
-
-    let Ok(incoming_version): Result<ParsedVersion> = version
-        .ok_or(anyhow!("version is None"))
-        .and_then(|cutoff| cutoff.try_into())
-    else {
+    let Some(installed) = ChannelState::app_version().and_then(HeddleVersion::parse) else {
         return false;
     };
-
-    installed_version.is_some_and(|curr_version| incoming_version > curr_version)
+    let Some(incoming) = version.and_then(HeddleVersion::parse) else {
+        return false;
+    };
+    incoming > installed
 }
 
 /// Returns the base URL that contains release assets for the given version
