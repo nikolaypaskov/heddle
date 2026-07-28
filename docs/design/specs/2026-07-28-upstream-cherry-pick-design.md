@@ -353,9 +353,18 @@ value is written to a temporary file **in the same directory** — same filesyst
 one, never a partial write.
 
 **This is a property of the structure, not a claim about test coverage,** and the
-distinction matters because the previous version had the claim without the property. The
-marker is never opened for writing at all, so no failure before the rename can damage it —
-there is no path to enumerate and no path left untested.
+distinction matters because the previous version had the claim without the property. Under
+normal conditions the marker is never opened for writing, so no failure before the rename
+can damage it.
+
+**One caveat, because the unqualified version of that sentence was false.** The temporary
+name is predictable (`${MARKER_FILE}.tmp.$$`) and is opened with an ordinary truncating
+redirect. If a file already exists at that path as a symlink or hardlink to the marker,
+the redirect follows it and truncates the real marker after all. An exclusively-created
+`mktemp` file would make the guarantee unconditional; until that lands, the structural
+claim holds against crashes and write errors but not against a pre-placed temporary path.
+Recorded rather than quietly dropped: this document asserted the unconditional form for
+one revision, and an adversarial review disproved it.
 
 The read-only-*file* row above is a characterisation test, not an oddity: `rename(2)`
 needs write permission on the **directory**, not on the target file, so a read-only marker

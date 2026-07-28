@@ -283,3 +283,29 @@ delete a subsystem.
 the workflows. Ours wins; the bucket is listed so repeated upstream activity there is
 visible, not so it gets re-litigated each pass. Widen `COLLISION_RE` in the script when
 you rework something new, and add a case to `upstream-review-selftest`.
+
+### Known limits of upstream-review
+
+Recorded from an adversarial review pass, accepted rather than fixed. None affects the
+current 118-commit range; all three are latent and would need a hostile or unusual
+upstream to matter. Fix them when the tool next gets attention.
+
+- **The temporary marker file is a predictable path.** `${MARKER_FILE}.tmp.$$` is opened
+  with an ordinary truncating redirect, so a symlink or hardlink pre-placed at that exact
+  path would be followed and the real marker truncated. `mktemp` with exclusive creation
+  closes it. Until then the atomic-rename guarantee holds against crashes and write
+  errors, but not against a pre-placed temp path.
+- **The subject sanitizer strips C0 and DEL only.** `LC_ALL=C tr -d '\000-\037\177'`
+  leaves raw C1 controls (`0x80`-`0x9f`) intact, which some terminals interpret as 8-bit
+  OSC/ST. A commit subject crafted with 8-bit C1 sequences could still affect the terminal
+  rendering the report. Note also that the fixture injects only ESC, so the suite's
+  "no BEL byte" assertion would pass against a sanitizer that filters ESC alone — that
+  assertion is weaker than its name suggests.
+- **Only `upstream/master` is exercised by the self-test**, so the fallback that selects
+  the upstream default branch is not covered against a stale or unusual remote layout.
+
+The first two were disproved claims before they were known limits: the spec asserted the
+marker "is never opened for writing" and the suite asserted control bytes were filtered,
+and both were true only under conditions nobody had checked. That is the failure mode this
+tool exists to guard against, so it is worth naming here rather than in a commit message
+nobody re-reads.
