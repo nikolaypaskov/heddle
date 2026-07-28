@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heddle — a terminal with no account, no telemetry, and no company server</title>
+<meta name="description" content="Heddle is a fork of the Warp terminal with everything commercial taken out. No sign-in, nothing uploaded, and Warp's web addresses are not in the app at all.">
+<meta name="color-scheme" content="dark">
+
+<meta property="og:title" content="Heddle">
+<meta property="og:description" content="A terminal with no account, no telemetry, and no company server behind it.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nikolaypaskov.github.io/heddle/">
+
+<!--
+  No webfont link, deliberately.
+
+  The design this is built from pulled IBM Plex Mono from Google Fonts. On a page whose entire
+  claim is that nothing about you is sent anywhere, opening a connection to a third party to
+  fetch a typeface is the wrong first impression -- and it would be a real request, made before
+  the reader has agreed to anything. The system monospace stack below needs no network, renders
+  instantly, and is the font the reader's own terminal already uses.
+-->
+<style>
+  :root {
+    --bg:      #1a1814;
+    --bg-deep: #12100d;
+    --rule:    rgba(217, 210, 197, .14);
+    --fg:      #d9d2c5;
+    --fg-hi:   #f2ede2;
+    --fg-dim:  #a89f8e;
+    --fg-mute: #8f887a;
+    --fg-faint:#5f594e;
+    --amber:   #e0a84e;
+    --amber-hi:#f2c06a;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+            "DejaVu Sans Mono", "Liberation Mono", monospace;
+    --pad: clamp(20px, 5vw, 48px);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.65;
+    /* Terminals do not hyphenate or justify. Neither does this. */
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection { background: var(--amber); color: var(--bg); }
+
+  a { color: var(--amber); }
+  a:hover, a:focus-visible { color: var(--amber-hi); }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* ── man-page chrome ─────────────────────────────────────────────────── */
+  .manline {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px var(--pad);
+    border-bottom: 1px solid var(--rule);
+    font-size: 11.5px;
+    letter-spacing: .06em;
+    color: var(--fg-mute);
+  }
+  .manline--foot { border-bottom: 0; border-top: 1px solid var(--rule); }
+  /* The centre column is the first thing to go when the line gets tight. */
+  .manline span:nth-child(2) { display: none; }
+  @media (min-width: 620px) { .manline span:nth-child(2) { display: inline; } }
+
+  section { padding: 0 var(--pad); }
+
+  /* ── hero ────────────────────────────────────────────────────────────── */
+  .hero { padding-top: clamp(36px, 7vw, 64px); }
+
+  .loom {
+    margin: 0;
+    font-size: clamp(10px, 2.4vw, 13px);
+    line-height: 1.5;
+    color: var(--amber);
+    overflow-x: auto;
+  }
+
+  .define {
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--fg-mute);
+    max-width: 60ch;
+  }
+
+  h1 {
+    margin: 28px 0 0;
+    font-size: clamp(24px, 5.2vw, 34px);
+    line-height: 1.25;
+    font-weight: 600;
+    color: var(--fg-hi);
+    text-wrap: pretty;
+  }
+
+  .lede {
+    margin: 20px 0 0;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--fg-dim);
+    max-width: 66ch;
+  }
+
+  /* A prompt that does nothing except look like the thing you are downloading. */
+  .prompt {
+    margin: 32px 0 0;
+    font-size: 13.5px;
+    color: var(--fg-mute);
+  }
+  .prompt .sigil { color: var(--amber); }
+  .prompt .cmd { color: var(--fg-hi); }
+  .caret {
+    display: inline-block;
+    width: .6em;
+    height: 1.05em;
+    margin-left: 2px;
+    background: var(--amber);
+    vertical-align: text-bottom;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .caret { animation: none; }
+  }
+
+  .cta-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  .cta {
+    display: inline-block;
+    background: var(--amber);
+    color: var(--bg);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 14px 26px;
+  }
+  .cta:hover, .cta:focus-visible { background: var(--amber-hi); color: var(--bg); }
+  .cta-note { font-size: 12px; color: var(--fg-mute); }
+
+  /* ── section headings ────────────────────────────────────────────────── */
+  .sec { margin-top: clamp(44px, 8vw, 60px); }
+  .sec > h2 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--fg-mute);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  /* ── the warning box ─────────────────────────────────────────────────── */
+  .warn {
+    margin-top: clamp(44px, 8vw, 56px);
+    border: 1px solid var(--amber);
+    padding: 22px clamp(18px, 3vw, 28px);
+  }
+  .warn h2 {
+    margin: 0 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--amber);
+    text-transform: uppercase;
+  }
+  .warn p { margin: 0 0 12px; font-size: 13px; line-height: 1.7; }
+  .warn p:last-child { margin-bottom: 0; }
+  strong { color: var(--fg-hi); font-weight: 600; }
+
+  /* ── install ─────────────────────────────────────────────────────────── */
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 22px;
+    margin-top: 24px;
+  }
+  @media (min-width: 760px) { .steps { grid-template-columns: repeat(3, 1fr); gap: 28px; } }
+  .step-t { color: var(--amber); font-weight: 600; margin-bottom: 6px; font-size: 13px; }
+  .step-d { color: var(--fg-dim); font-size: 13px; line-height: 1.65; }
+
+  pre.console {
+    margin: 24px 0 0;
+    background: var(--bg-deep);
+    border: 1px solid var(--rule);
+    padding: 18px clamp(14px, 2.5vw, 22px);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--fg-dim);
+    overflow-x: auto;
+  }
+  pre.console .c { color: var(--fg-faint); }
+  pre.console .sigil { color: var(--amber); }
+  pre.console .ok { color: #7fbf6a; }
+
+  /* ── two-column blocks ───────────────────────────────────────────────── */
+  .cols { display: grid; grid-template-columns: 1fr; gap: 36px; }
+  @media (min-width: 820px) { .cols { grid-template-columns: 1fr 1fr; gap: 44px; } }
+
+  .kv { margin-top: 18px; font-size: 13px; line-height: 1.6; }
+  .kv b { color: var(--amber); font-weight: 600; display: block; }
+  .kv span { color: var(--fg-dim); }
+
+  .gone { margin: 18px 0 0; font-size: 12.5px; line-height: 1.9; color: var(--fg-mute); }
+
+  /* ── status table ────────────────────────────────────────────────────── */
+  .row {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    padding: 11px 0;
+    border-bottom: 1px dashed rgba(217, 210, 197, .12);
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .row .mark { width: 3ch; flex: none; font-weight: 600; }
+  .row .mark.yes { color: var(--amber); }
+  .row .mark.no  { color: var(--fg-faint); }
+  .row .what { flex: 1 1 16ch; color: var(--fg); }
+  .row .note { color: var(--fg-mute); font-size: 12.5px; }
+
+  /* ── faq ─────────────────────────────────────────────────────────────── */
+  .qa { margin-top: 20px; font-size: 13px; line-height: 1.7; }
+  .qa dt { color: var(--fg-hi); font-weight: 600; }
+  .qa dd { margin: 4px 0 0; color: var(--fg-dim); max-width: 72ch; }
+  .qa dd + dt { margin-top: 20px; }
+
+  /* ── footer ──────────────────────────────────────────────────────────── */
+  footer { margin-top: clamp(52px, 9vw, 72px); }
+  .legal {
+    padding: 22px var(--pad) 0;
+    font-size: 11.5px;
+    line-height: 1.8;
+    color: var(--fg-mute);
+    max-width: 90ch;
+  }
+  .selvedge {
+    padding: 26px var(--pad) 40px;
+    text-align: center;
+    color: var(--fg-faint);
+    font-size: 12px;
+    overflow-x: hidden;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="manline">
+    <span>HEDDLE(1)</span>
+    <span>User Commands</span>
+    <span>HEDDLE(1)</span>
+  </div>
+
+  <section class="hero">
+    <pre class="loom" aria-hidden="true">     │  │  │  │  │  │  │  │
+   ╔═╪══╪══╪══╪══╪══╪══╪══╪═╗
+   ║ ●  │  ●  │  ●  │  ●  │ ║
+   ╚═╪══╪══╪══╪══╪══╪══╪══╪═╝
+     │  │  │  │  │  │  │  │</pre>
+
+    <p class="define">
+      h e d d l e &nbsp;/ˈhɛd(ə)l/&nbsp; n. — the loom component that lifts and separates
+      the warp threads. The part that controls the warp.
+    </p>
+
+    <h1>A terminal with no account, no&nbsp;telemetry, and no company server behind&nbsp;it.</h1>
+
+    <p class="lede">
+      Heddle is a fork of the <a href="https://github.com/warpdotdev/Warp">Warp</a> terminal with
+      everything commercial taken out. There is no sign-in, nothing is uploaded, and Warp's web
+      addresses are not in the app at all — not switched off, not present.
+    </p>
+
+    <p class="prompt">
+      <span class="sigil">$</span> <span class="cmd">heddle</span><span class="caret" aria-hidden="true"></span>
+    </p>
+
+    <div class="cta-row">
+      <a class="cta" href="https://github.com/nikolaypaskov/heddle/releases/latest">↓ Get the latest release</a>
+      <span class="cta-note">macOS · Apple Silicon (M1+) · signed &amp; notarized</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="warn">
+      <h2>Two things to know before you download</h2>
+      <p><strong>The built-in AI agent does not work.</strong> It was designed to talk to Warp's
+        server, and this version has no server to talk to. Claude Code, Codex, Gemini CLI and
+        similar run as ordinary programs and are unaffected.</p>
+      <p><strong>Apple Silicon Macs only.</strong> No Intel Mac, no Windows. Linux is built
+        automatically but not published as a ready-to-run download yet.</p>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Install</h2>
+    <div class="steps">
+      <div>
+        <div class="step-t">1. Download the app</div>
+        <div class="step-d"><code>Heddle-aarch64-apple-darwin.app.zip</code> — start here. A
+          terminal-only <code>tar.gz</code> is also published.</div>
+      </div>
+      <div>
+        <div class="step-t">2. Unzip with Archive Utility</div>
+        <div class="step-d">Double-click it. Avoid third-party unzip tools — some strip the Apple
+          signature, after which macOS refuses to open the app.</div>
+      </div>
+      <div>
+        <div class="step-t">3. Drag Heddle.app to Applications</div>
+        <div class="step-d">Signed with an Apple Developer ID and notarized by Apple — it opens
+          with a double-click, no security warning.</div>
+      </div>
+    </div>
+
+<pre class="console"><span class="c"># prefer the command line? verify, then unpack:</span>
+<span class="sigil">$</span> shasum -a 256 -c Heddle-aarch64-apple-darwin.app.zip.sha256
+<span class="sigil">$</span> ditto -x -k Heddle-aarch64-apple-darwin.app.zip .
+<span class="sigil">$</span> open Heddle.app</pre>
+  </section>
+
+  <section class="sec">
+    <div class="cols">
+      <div>
+        <h2 style="margin:0;font-size:12px;font-weight:600;letter-spacing:.12em;color:var(--fg-mute);border-bottom:1px solid var(--rule);padding-bottom:10px;text-transform:uppercase">What you get</h2>
+        <div class="kv"><b>No account</b><span>Nothing to sign up for, nothing to sign in to</span></div>
+        <div class="kv"><b>No telemetry</b><span>Nothing about how you use it leaves your machine</span></div>
+        <div class="kv"><b>No cloud</b><span>Your history, settings and sessions stay on your computer</span></div>
+        <div class="kv"><b>Free and open</b><span>AGPL-3.0. Read it, change it, build it yourself</span></div>
+      </div>
+      <div>
+        <h2 style="margin:0;font-size:12px;font-weight:600;letter-spacing:.12em;color:var(--fg-mute);border-bottom:1px solid var(--rule);padding-bottom:10px;text-transform:uppercase">What is not here</h2>
+        <p style="margin:18px 0 0;font-size:13px;line-height:1.7">
+          <strong>This is not a way to get Warp's paid plan for free.</strong> Warp's paid features
+          ran on Warp's servers; removing the sign-in screen does not move them to your machine.
+        </p>
+        <p class="gone">Removed: sign-in and accounts, Drive's cloud sync and sharing, usage analytics,
+          crash reporting, remote configuration, billing and upgrade prompts, and every
+          <code>warp.dev</code> address.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>How much of it works today</h2>
+    <div class="row"><span class="mark yes">ok</span><span class="what">The terminal</span><span class="note">Works</span></div>
+    <div class="row"><span class="mark yes">ok</span><span class="what">Themes, settings, keyboard shortcuts</span><span class="note">Works</span></div>
+    <div class="row"><span class="mark yes">ok</span><span class="what">Claude Code, Codex and other CLI agents</span><span class="note">Run as ordinary programs</span></div>
+    <div class="row"><span class="mark ok">ok</span><span class="what">Update notifications</span><span class="note">Opt-in, asked once, macOS</span></div>
+    <div class="row"><span class="mark no">--</span><span class="what">Warp's built-in AI agent</span><span class="note">Needs Warp's server</span></div>
+    <div class="row"><span class="mark ok">ok</span><span class="what">Drive — workflows, notebooks, env vars</span><span class="note">Works, stored on your machine</span></div>
+    <div class="row"><span class="mark no">--</span><span class="what">Cloud sync and object sharing</span><span class="note">Removed on purpose</span></div>
+    <div class="row"><span class="mark no">--</span><span class="what">Windows, Intel Mac</span><span class="note">Not built</span></div>
+    <p class="gone">Heddle is a terminal today, not an AI environment. A replacement agent that
+      talks to a local program instead of a company server is designed but not built; until it is
+      finished and safe, it will not be described as working.</p>
+  </section>
+
+  <section class="sec">
+    <h2>Is this really private?</h2>
+    <p class="lede" style="margin-top:18px">It is checked automatically, not just claimed. Every
+      time the code changes, a program reads the raw bytes of the built app and fails the build if
+      any Warp address, credential or analytics destination appears in it.</p>
+
+<pre class="console"><span class="sigil">$</span> ./script/heddle/verify-no-warp-endpoints
+<span class="ok">PASS: no Warp endpoints, credentials, or telemetry destinations found.</span></pre>
+
+    <p class="gone" style="max-width:72ch"><strong>Being straight about the limits:</strong> this
+      proves those addresses are not in the app. It does not prove the app opens no connections at
+      all — a service <em>you</em> configure yourself is contacted because you asked for it. Fully
+      proving network silence needs system-call tracing that has not been done yet, and that is
+      stated plainly rather than glossed over.</p>
+  </section>
+
+  <section class="sec">
+    <h2>Questions</h2>
+    <dl class="qa">
+      <dt>Is this legal?</dt>
+      <dd>Yes. Warp open-sourced the client under AGPL-3.0, which exists precisely to allow open
+        forks. Heddle keeps the license files and upstream copyright notices, and does not use the
+        “Warp” trademark.</dd>
+
+      <dt>Does this unlock paid Warp features?</dt>
+      <dd>No. Paid entitlements are enforced on Warp's servers, and there is no server here. The
+        value is privacy and independence, not free Pro.</dd>
+
+      <dt>Can I use it fully offline?</dt>
+      <dd>Yes — that is the entire point. No sign-in, no cloud sync, no telemetry, and no server
+        for it to talk to.</dd>
+
+      <dt>Will it get an AI agent?</dt>
+      <dd>A local replacement over ACP is designed but deliberately not shipped — a half-finished
+        agent that runs commands without working permission prompts is worse than none.</dd>
+    </dl>
+  </section>
+
+  <footer>
+    <div class="legal">
+      AGPL-3.0, inherited from Warp and unchanged. “Warp” is a trademark of Denver Technologies,
+      Inc. Heddle is an independent fork and is not affiliated with, endorsed by, or supported by
+      them. Report Heddle problems
+      <a href="https://github.com/nikolaypaskov/heddle/issues">here</a>, never to Warp.
+      Source: <a href="https://github.com/nikolaypaskov/heddle">github.com/nikolaypaskov/heddle</a>.
+    </div>
+    <div class="manline manline--foot" style="margin-top:22px">
+      <span>heddle</span>
+      <span>AGPL-3.0</span>
+      <span>HEDDLE(1)</span>
+    </div>
+    <div class="selvedge" aria-hidden="true">┄┄┄┄┄┄┄ the warp is only half the cloth ┄┄┄┄┄┄┄</div>
+  </footer>
+
+</div>
+
+</body>
+</html>
