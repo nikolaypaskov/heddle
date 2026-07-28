@@ -161,6 +161,26 @@ Neither flag changes any classification on the current range: no commit among th
 contains a rename or is a merge, and bucket membership is byte-identical before and after.
 That is what makes them cheap to add now rather than after they matter.
 
+### Commit subjects are untrusted input
+
+The subjects printed in the report are attacker-controlled text from another organisation's
+repository, and rendering them is this tool's whole job. Git preserves whatever bytes the
+committer wrote — verified: a subject containing `ESC [ 3 1 m` comes back with the raw
+`0x1B` intact. A crafted subject can therefore recolour or overwrite the report, hide a
+line from the person deciding what to cherry-pick, or push an OSC 52 clipboard sequence at
+whoever runs the monthly pass.
+
+Subjects are filtered through `LC_ALL=C tr -d '\000-\037\177'` before display. In the C
+locale `tr` operates on bytes, and no UTF-8 lead or continuation byte falls in `0x00-0x1F`
+or at `0x7F`, so non-ASCII subjects survive intact — measured: `fix: résumé — café`
+round-trips unchanged while the `ESC` bytes beside it are removed. Deleting rather than
+escaping keeps the report a fixed shape.
+
+The self-test's fixture contains a commit whose subject carries real `ESC` sequences, and
+asserts the **specific bytes** `0x1B` and `0x07` are absent from the output, that the
+readable characters survive, and that the commit is still classified — a filter that
+dropped the whole subject, or the whole commit, would be its own defect.
+
 One prefix rule survives alongside the derived set, because the derived set cannot see
 files upstream *adds* inside a tree this fork deleted wholesale:
 
@@ -281,6 +301,7 @@ being wrong fail:
 A (merge base)  keep.rs, gone.rs, drive/panel.rs, drive/index.rs   ← the marker starts here
  ├─ upstream/master:
  │    B  adds app/src/feature.rs                        → candidate
+ │    Bx adds evil.rs, subject carries raw ESC bytes     → candidate, sanitized
  │    C  modifies app/src/gone.rs                       → auto-reject (derived)
  │    E  RENAMES drive/panel.rs → app/src/moved_out.rs  → collision
  │    ├─ H  divergent, never merged                     ← an off-history marker
@@ -302,7 +323,7 @@ because with the guard removed it is rewritten to the tip, and that is the perma
 
 | Case | Expected |
 |---|---|
-| nothing broken | exit 0; `AUTO-REJECT (1)`, `COLLISION (3)`, `CANDIDATE (1)`, **and each named commit in its own bucket**; advance command printed |
+| nothing broken | exit 0; `AUTO-REJECT (1)`, `COLLISION (3)`, `CANDIDATE (2)`, **and each named commit in its own bucket**; advance command printed; **no ESC or BEL byte in the output** |
 | marker points at a divergent commit (H) | exit 2, message naming the tip, **marker still H — not advanced** |
 | `git fetch` exits non-zero | exit 2, message naming `--no-fetch`, **marker untouched** |
 | default run (fetch succeeds) | exit 0, full report |
@@ -314,12 +335,40 @@ because with the guard removed it is rewritten to the tip, and that is the perma
 | `--advance` with an unresolvable sha | exit 2, message, **marker untouched** |
 | `--advance` with a sha off upstream's history | exit 2, message, **marker untouched** |
 | `--advance` with a sha that is not the report's tip | exit 2, message, **marker untouched** |
-| `--advance` with the marker read-only | exit 2, message, **marker untouched** |
+| `--advance` with the marker file read-only | exit 0, marker replaced — see below |
+| `--advance` with the marker's directory read-only | exit 2, message, **marker byte-identical, no temp left** |
 | `--advance <reviewed tip>` | exit 0, marker becomes that sha |
 
 Every failure case asserts all three of exit status, stderr, and marker — any one alone
-would let the defect through. The last row is not decoration: a guard that blocks
-everything is not a guard.
+would let the defect through. The `--advance <reviewed tip>` row is not decoration: a guard
+that blocks everything is not a guard.
+
+### The marker write is a rename, not a truncate
+
+`printf … > "$MARKER_FILE"` truncates the tracked file the moment the shell opens the
+redirect, whether or not the write then succeeds. An interrupted or failing write left the
+marker empty or partial, and exiting 2 afterwards does not put the old value back. So the
+value is written to a temporary file **in the same directory** — same filesystem, so
+`rename(2)` is atomic — and moved over the marker. Any reader sees the old sha or the new
+one, never a partial write.
+
+**This is a property of the structure, not a claim about test coverage,** and the
+distinction matters because the previous version had the claim without the property. The
+marker is never opened for writing at all, so no failure before the rename can damage it —
+there is no path to enumerate and no path left untested.
+
+The read-only-*file* row above is a characterisation test, not an oddity: `rename(2)`
+needs write permission on the **directory**, not on the target file, so a read-only marker
+is replaced successfully where a redirect would fail at open. Reverting to the truncating
+form fails that row. The old read-only-file test asserted the opposite and **passed against
+the broken implementation**, because a read-only file fails at *open* — before truncation.
+It was a test that could not observe the thing it was named for.
+
+**What is still not directly tested, stated plainly:** a write that fails *after* a
+successful open — ENOSPC, a signal mid-write. I could not construct one portably. The
+read-only-directory row makes the temp *creation* fail, which is an open failure again. The
+guarantee no longer rests on covering that case: whatever happens to the temp file, the
+marker has not been opened.
 
 **Bucket counts are not asserted alone.** An earlier version of the clean-run case checked
 only `AUTO-REJECT (1)` and `CANDIDATE (1)`, which cannot fail the way the case is named: a
@@ -329,10 +378,20 @@ three count assertions still pass and only the two by-name assertions fail. The 
 names which commit must be in which bucket.
 
 **Known limit, deliberate.** Neither section verifies that the report's *contents* are
-right — only that the buckets are as expected for a four-commit fixture, that the counts
+right — only that the buckets are as expected for a six-commit fixture, that the counts
 are internally consistent, and that failures are loud. A green self-test is evidence the
 classifier and the failure paths behave; it is not evidence that any particular real
 upstream commit was bucketed correctly. That check is the human reading pass.
+
+**A consistency check between two computations proves nothing about the question.** This is
+worth stating on its own, because it is the lesson of the divergent-marker defect and it
+generalises. The enumeration is cross-checked against an independent `git rev-list --count`,
+and that guard is real — it catches a stream that truncates while exiting 0. But when the
+marker pointed at a divergent branch, *both* computations returned 7 and **agreed**, because
+7 is the honest answer to the question the script asked. The cross-check could never have
+caught it, and no amount of strengthening it would. Agreement between two evaluations of the
+same wrong question is not evidence; only validating the inputs — which is what the
+`is-ancestor` guards do — attacks that class.
 
 An earlier version of this section claimed the derivation could not be covered here at all.
 That was wrong: the fixture just needed a deletion in it.
