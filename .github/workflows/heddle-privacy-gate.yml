@@ -27,11 +27,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Same reasoning as ci.yml: the jobs below compile Rust -- the endpoint gate now
+  # builds the GUI, the heaviest of the lot -- and a docs edit cannot change what any
+  # of them find. `.github/workflows/ci.yml` is excluded here because a change to the
+  # test battery cannot affect what is in this binary; the reverse exclusion lives in
+  # ci.yml. Fails OPEN: if the diff cannot be computed, everything runs, because a
+  # filter that guesses "nothing changed" would skip the gate that catches the mistake.
+  changes:
+    name: what changed
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: detect
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+          if [ -z "${BASE:-}" ]; then
+            echo "not a pull_request -- running everything"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! files=$(git diff --name-only "$BASE" "$HEAD" 2>/dev/null) || [ -z "$files" ]; then
+            echo "could not diff -- failing open"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "changed files:"; printf '%s\n' "$files" | sed 's/^/  /'
+          if printf '%s\n' "$files" | grep -qvE '^(docs/|README\.md$|FAQ\.md$|CONTRIBUTING\.md$|CODE_OF_CONDUCT\.md$|SECURITY\.md$|AGENTS\.md$|\.github/workflows/ci\.yml$)'; then
+            echo "-> build-affecting changes present"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "-> documentation only; skipping the binary gates"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Cheapest job, and it gates the thing that would compromise every other job's result: if the
   # build can execute code Warp controls, no downstream scan proves anything about what shipped.
   # Needs no toolchain, so it fails in seconds rather than after a 90-minute build.
   supply-chain:
     name: No Warp-controlled code path
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -52,6 +93,8 @@ jobs:
 
   no-warp-endpoints:
     name: Binary contains no Warp endpoints
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -202,6 +245,8 @@ jobs:
 
   gui-surface:
     name: GUI compiles and its commercial UI only shrinks
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
