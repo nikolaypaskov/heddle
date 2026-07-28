@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heddle — a terminal with no account, no telemetry, and no company server</title>
+<meta name="description" content="Heddle is a fork of the Warp terminal with everything commercial taken out. No sign-in, nothing uploaded, and Warp's web addresses are not in the app at all.">
+<meta name="color-scheme" content="dark">
+
+<meta property="og:title" content="Heddle">
+<meta property="og:description" content="A terminal with no account, no telemetry, and no company server behind it.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nikolaypaskov.github.io/heddle/">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2316130f'/%3E%3Cg stroke='%23e0a84e'%3E%3Cpath d='M3 0v16M6.5 0v16M10 0v16M13.5 0v16'/%3E%3C/g%3E%3Crect x='1' y='6' width='14' height='4' fill='%2316130f' stroke='%23e0a84e'/%3E%3C/svg%3E">
+<style>
+/* ───────────────────────────────────────────────────────────────────────────
+   A heddle lifts and separates the warp threads.
+
+   That is the layout here, not decoration on top of it: warp threads run the
+   full height behind everything, the hero is a heddle bar with some threads
+   lifted and some left down, and every section boundary is a weft pass that
+   interlaces over and under the warp. The page is the mechanism it is named
+   after.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:       #16130f;
+  --bg-lift:  #1c1814;
+  --bg-deep:  #100e0b;
+  --fg:       #ddd6c8;
+  --fg-hi:    #f6f1e6;
+  --fg-dim:   #a89f8e;
+  --fg-mute:  #8a8375;
+  --fg-faint: #574f45;
+  --amber:    #e0a84e;
+  --amber-hi: #f5c877;
+  --amber-dim:#8a6a32;
+  --sage:     #8fa87c;
+  --rule:     rgba(221, 214, 200, .13);
+  --thread:   rgba(221, 214, 200, .055);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --pad: clamp(20px, 5vw, 56px);
+  --measure: 74ch;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: clamp(14px, 1.05vw, 15.5px);
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* The warp: fixed vertical threads the page is woven onto. Fixed rather than
+   scrolling, so the content passes through them the way weft passes through a
+   real warp. */
+.warp {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    to right, var(--thread) 0 1px, transparent 1px 46px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 90px, #000 calc(100% - 90px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 90px, #000 calc(100% - 90px), transparent 100%);
+}
+@media (max-width: 640px) {
+  .warp { background-image: repeating-linear-gradient(to right, var(--thread) 0 1px, transparent 1px 32px); }
+}
+
+.page { position: relative; z-index: 1; }
+.wrap { max-width: 1100px; margin: 0 auto; padding-inline: var(--pad); }
+.measure { max-width: var(--measure); }
+
+a { color: var(--amber); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover, a:focus-visible { color: var(--amber-hi); }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 2px; }
+::selection { background: var(--amber); color: var(--bg); }
+code { color: var(--fg-hi); }
+
+/* Weft: a section boundary. Segments alternate between covering the warp
+   threads and passing behind them — an actual interlace, not a plain rule. */
+.weft {
+  position: relative;
+  height: 30px;
+  border-top: 1px solid var(--rule);
+  background-image: repeating-linear-gradient(to right, var(--bg) 0 23px, transparent 23px 46px);
+}
+.weft::after {
+  content: "";
+  position: absolute; left: 0; right: 0; top: -1px; height: 1px;
+  background: repeating-linear-gradient(to right, var(--amber-dim) 0 23px, transparent 23px 46px);
+  opacity: .5;
+}
+
+.masthead {
+  display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: baseline;
+  padding: 13px var(--pad);
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg-deep);
+  color: var(--fg-mute);
+  font-size: .8rem; letter-spacing: .09em; text-transform: uppercase;
+}
+.masthead b { color: var(--fg-dim); font-weight: 600; }
+.masthead .sp { margin-left: auto; }
+
+/* Hero: the shed — the opening the heddle makes when it lifts. */
+.hero { padding: clamp(52px, 9vw, 104px) 0 clamp(40px, 6vw, 72px); }
+
+.heddle { --h: 62px; position: relative; height: var(--h); margin-bottom: clamp(34px, 5vw, 56px); max-width: 430px; }
+.heddle .bar {
+  position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+  height: 26px; border: 1px solid var(--amber-dim);
+  background: linear-gradient(var(--bg-lift), var(--bg-deep)); border-radius: 1px;
+}
+.heddle .eyes { position: absolute; inset: 0; display: flex; align-items: center; }
+.heddle .eye { flex: 1 1 0; height: var(--h); position: relative; display: flex; align-items: center; justify-content: center; }
+.heddle .eye::before { content: ""; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--fg-faint); }
+.heddle .eye.lift::before { background: var(--amber); box-shadow: 0 0 7px rgba(224,168,78,.4); }
+.heddle .eye .o { position: relative; z-index: 2; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--amber-dim); background: var(--bg-deep); }
+.heddle .eye.lift .o { border-color: var(--amber); background: var(--amber); }
+
+.hero h1 { margin: 0 0 6px; font-size: clamp(2.1rem, 6.4vw, 4rem); line-height: 1.02; letter-spacing: -.035em; font-weight: 600; color: var(--fg-hi); }
+.hero .ipa { color: var(--fg-mute); font-size: .95rem; }
+.hero .gloss { margin: 20px 0 0; max-width: 60ch; color: var(--fg-dim); font-size: .96rem; border-left: 1px solid var(--amber-dim); padding-left: 16px; }
+.hero .lede { margin: clamp(30px, 4vw, 44px) 0 0; font-size: clamp(1.12rem, 2.5vw, 1.5rem); line-height: 1.4; color: var(--fg-hi); max-width: 30ch; letter-spacing: -.012em; }
+.hero .sub { margin: 20px 0 0; max-width: 62ch; color: var(--fg-dim); }
+
+.cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: clamp(30px, 4vw, 42px); }
+.btn {
+  display: inline-flex; align-items: center; gap: 11px; padding: 13px 24px;
+  background: var(--amber); color: #1a1408; border: 1px solid var(--amber);
+  font-weight: 600; font-size: .96rem; text-decoration: none; border-radius: 2px;
+  transition: background .12s, transform .12s;
+}
+.btn:hover, .btn:focus-visible { background: var(--amber-hi); color: #1a1408; transform: translateY(-1px); }
+.cta .note { color: var(--fg-mute); font-size: .85rem; }
+
+section { padding: clamp(46px, 7vw, 82px) 0; }
+h2 { margin: 0 0 8px; font-size: clamp(1.28rem, 3vw, 1.75rem); letter-spacing: -.022em; color: var(--fg-hi); font-weight: 600; }
+h2 .n { color: var(--amber-dim); font-weight: 400; margin-right: 12px; font-size: .78em; }
+.dek { margin: 0 0 clamp(26px, 3.4vw, 38px); color: var(--fg-mute); max-width: 62ch; }
+h3 { margin: 0 0 8px; font-size: 1rem; color: var(--fg-hi); font-weight: 600; }
+p { margin: 0 0 15px; }
+
+/* The separation: what the heddle lifted, and what it left down. */
+.sep { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 720px) { .sep { grid-template-columns: 1fr; } }
+.sep > div { background: var(--bg); padding: clamp(22px, 3vw, 30px); }
+.sep .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; }
+.sep .kept .hd { color: var(--sage); }
+.sep .cut .hd { color: var(--fg-mute); }
+.sep .hd .sw { width: 22px; height: 2px; }
+.sep .kept .hd .sw { background: var(--sage); }
+.sep .cut .hd .sw { background: var(--fg-faint); }
+.sep ul { margin: 0; padding: 0; list-style: none; }
+.sep li { padding: 6px 0 6px 20px; position: relative; color: var(--fg-dim); font-size: .93rem; }
+.sep li::before { position: absolute; left: 0; top: 6px; }
+.sep .kept li::before { content: "│"; color: var(--sage); }
+.sep .cut li::before { content: "╌"; color: var(--fg-faint); }
+
+.rows { border: 1px solid var(--rule); }
+.row { display: flex; align-items: baseline; gap: 14px; padding: 12px clamp(14px, 2vw, 20px); border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+.row:last-child { border-bottom: 0; }
+.row .mk { flex: 0 0 auto; width: 20px; font-size: .8rem; }
+.row .mk.y { color: var(--sage); }
+.row .mk.n { color: var(--fg-faint); }
+.row .wt { flex: 1 1 15rem; color: var(--fg); }
+.row .nt { flex: 0 1 auto; color: var(--fg-mute); font-size: .87rem; }
+
+.sh { background: var(--bg-deep); border: 1px solid var(--rule); padding: clamp(15px, 2vw, 20px); overflow-x: auto; font-size: .87rem; line-height: 1.75; border-radius: 2px; }
+.sh .p { color: var(--amber-dim); user-select: none; }
+.sh .c { color: var(--fg-hi); }
+.sh .ok { color: var(--sage); }
+.sh .cm { color: var(--fg-faint); }
+
+.steps { counter-reset: s; display: grid; gap: 18px; }
+.step { display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: start; }
+.step .num { counter-increment: s; width: 25px; height: 25px; border: 1px solid var(--amber-dim); color: var(--amber); display: grid; place-items: center; font-size: .8rem; border-radius: 50%; }
+.step .num::before { content: counter(s); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+.card { background: var(--bg); padding: clamp(18px, 2.4vw, 24px); }
+.card b { display: block; color: var(--fg-hi); margin-bottom: 5px; }
+.card span { color: var(--fg-mute); font-size: .89rem; }
+
+.callout { border-left: 2px solid var(--amber); padding: 3px 0 3px 18px; color: var(--fg-dim); }
+.limits { border: 1px dashed var(--rule); padding: clamp(16px, 2.2vw, 22px); color: var(--fg-mute); font-size: .92rem; }
+.limits b { color: var(--fg-dim); }
+
+details { border-top: 1px solid var(--rule); }
+details summary { padding: 15px 0; cursor: pointer; color: var(--fg-hi); list-style: none; display: flex; gap: 12px; align-items: baseline; }
+details summary::-webkit-details-marker { display: none; }
+details summary::before { content: "+"; color: var(--amber); font-weight: 600; }
+details[open] summary::before { content: "−"; }
+details .body { padding: 0 0 18px 24px; color: var(--fg-dim); max-width: 68ch; }
+
+footer { border-top: 1px solid var(--rule); background: var(--bg-deep); padding: clamp(34px, 5vw, 52px) 0 clamp(26px, 4vw, 40px); color: var(--fg-mute); font-size: .87rem; }
+footer .sig { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--fg-faint); text-align: center; letter-spacing: .16em; font-size: .76rem; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="warp" aria-hidden="true"></div>
+
+<div class="page">
+
+  <div class="masthead">
+    <b>HEDDLE(1)</b><span>User Commands</span><span class="sp">AGPL-3.0</span>
+  </div>
+
+  <header class="hero wrap">
+    <div class="heddle" aria-hidden="true">
+      <div class="bar"></div>
+      <div class="eyes">
+        <div class="eye lift"><span class="o"></span></div>
+        <div class="eye"><span class="o"></span></div>
+        <div class="eye lift"><span class="o"></span></div>
+        <div class="eye"><span class="o"></span></div>
+        <div class="eye lift"><span class="o"></span></div>
+        <div class="eye"><span class="o"></span></div>
+        <div class="eye lift"><span class="o"></span></div>
+        <div class="eye"><span class="o"></span></div>
+      </div>
+    </div>
+
+    <h1>heddle</h1>
+    <div class="ipa">/ˈhɛd(ə)l/ &nbsp;<i>n.</i></div>
+    <p class="gloss">the loom component that lifts and separates the warp threads — the part that
+    decides which threads rise and which stay down.</p>
+
+    <p class="lede">A terminal with no account, no telemetry, and no company server behind it.</p>
+    <p class="sub">Heddle is a fork of the <a href="https://github.com/warpdotdev/Warp">Warp</a>
+    terminal with everything commercial taken out. There is no sign-in, nothing is uploaded, and
+    Warp's web addresses are not in the app at all — not switched off, <em>not present</em>.</p>
+
+    <div class="cta">
+      <a class="btn" href="https://github.com/nikolaypaskov/heddle/releases/latest">↓ Get the latest release</a>
+      <span class="note">macOS · Apple Silicon (M1+) · signed &amp; notarized</span>
+    </div>
+  </header>
+
+  <div class="weft"></div>
+
+  <section class="wrap">
+    <h2><span class="n">01</span>What the heddle separated</h2>
+    <p class="dek">Warp's paid features ran on Warp's servers. Removing the sign-in screen does not
+    move them to your machine — this is not a way to get Warp's paid plan for free. What is left is
+    a terminal that works entirely on its own.</p>
+
+    <div class="sep">
+      <div class="kept">
+        <div class="hd"><span class="sw"></span>Threads kept — local</div>
+        <ul>
+          <li>The terminal: blocks, editor, keyboard shortcuts</li>
+          <li>Themes and settings</li>
+          <li>Drive — workflows, notebooks, environment variables</li>
+          <li>Claude Code, Codex, Gemini CLI as ordinary programs</li>
+          <li>Update notifications, opt-in and asked once</li>
+        </ul>
+      </div>
+      <div class="cut">
+        <div class="hd"><span class="sw"></span>Threads cut — remote</div>
+        <ul>
+          <li>Sign-in and accounts</li>
+          <li>Drive's cloud sync and object sharing</li>
+          <li>Usage analytics and crash reporting</li>
+          <li>Remote configuration</li>
+          <li>Billing and upgrade prompts</li>
+          <li>Every <code>warp.dev</code> address</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="callout" style="margin-top:26px"><b>Drive itself stayed.</b> Its workflows, notebooks
+    and environment variables are local information, so removing the cloud sync they used to travel
+    over was never a reason to remove the library. It is on by default and everything in it lives on
+    your machine.</p>
+  </section>
+
+  <div class="weft"></div>
+
+  <section class="wrap">
+    <h2><span class="n">02</span>How much of it works today</h2>
+    <p class="dek">Stated as it is, including the parts that are not finished.</p>
+    <div class="rows">
+      <div class="row"><span class="mk y">ok</span><span class="wt">The terminal</span><span class="nt">Works</span></div>
+      <div class="row"><span class="mk y">ok</span><span class="wt">Themes, settings, keyboard shortcuts</span><span class="nt">Works</span></div>
+      <div class="row"><span class="mk y">ok</span><span class="wt">Drive — workflows, notebooks, env vars</span><span class="nt">Works, stored on your machine</span></div>
+      <div class="row"><span class="mk y">ok</span><span class="wt">Claude Code, Codex and other CLI agents</span><span class="nt">Run as ordinary programs</span></div>
+      <div class="row"><span class="mk y">ok</span><span class="wt">Update notifications</span><span class="nt">Opt-in, asked once, macOS</span></div>
+      <div class="row"><span class="mk n">--</span><span class="wt">Warp's built-in AI agent</span><span class="nt">Needs Warp's server</span></div>
+      <div class="row"><span class="mk n">--</span><span class="wt">Cloud sync and object sharing</span><span class="nt">Removed on purpose</span></div>
+      <div class="row"><span class="mk n">--</span><span class="wt">Windows, Intel Mac</span><span class="nt">Not built</span></div>
+    </div>
+    <p class="dek" style="margin-top:24px">Heddle is a terminal today, not an AI environment. A
+    replacement agent that talks to a local program instead of a company server is designed but not
+    built; until it is finished and safe, it will not be described as working.</p>
+  </section>
+
+  <div class="weft"></div>
+
+  <section class="wrap">
+    <h2><span class="n">03</span>Install</h2>
+    <p class="dek">Two artefacts ship for macOS: the app, and a terminal-only frontend.</p>
+    <div class="steps">
+      <div class="step"><span class="num"></span><div>
+        <h3>Download the app</h3>
+        <p><code>Heddle-aarch64-apple-darwin.app.zip</code> — start here. A terminal-only
+        <code>tar.gz</code> is published alongside it.</p>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Unzip with Archive Utility</h3>
+        <p>Double-click it. Avoid third-party unzip tools — some strip the Apple signature, after
+        which macOS refuses to open the app.</p>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Drag Heddle.app to Applications</h3>
+        <p>Signed with an Apple Developer ID and notarized by Apple, with the ticket stapled — it
+        opens with a double-click, no security warning to click past.</p>
+      </div></div>
+    </div>
+
+    <div class="sh" style="margin-top:26px">
+      <div class="cm"># prefer the command line? verify, then unpack:</div>
+      <div><span class="p">$</span> <span class="c">shasum -a 256 -c Heddle-aarch64-apple-darwin.app.zip.sha256</span></div>
+      <div><span class="p">$</span> <span class="c">ditto -x -k Heddle-aarch64-apple-darwin.app.zip .</span></div>
+      <div><span class="p">$</span> <span class="c">open Heddle.app</span></div>
+    </div>
+
+    <div class="cards" style="margin-top:26px">
+      <div class="card"><b>No account</b><span>Nothing to sign up for, nothing to sign in to</span></div>
+      <div class="card"><b>No telemetry</b><span>Nothing about how you use it leaves your machine</span></div>
+      <div class="card"><b>No cloud</b><span>History, settings and sessions stay on your computer</span></div>
+      <div class="card"><b>Free and open</b><span>AGPL-3.0. Read it, change it, build it yourself</span></div>
+    </div>
+  </section>
+
+  <div class="weft"></div>
+
+  <section class="wrap">
+    <h2><span class="n">04</span>Finding out about new versions</h2>
+    <p class="dek">Heddle asks <b>once</b>, on first run, and does nothing until you answer.</p>
+    <div class="measure">
+      <p>Change your mind any time in <b>Settings → Privacy</b>. If you say yes, it fetches a small
+      file from this repository over HTTPS. It sends no account, no identifier and no usage data —
+      the request deliberately avoids the app's normal HTTP client, which would have attached a
+      client ID.</p>
+      <p>Before anything is installed, a downloaded build must be notarized by Apple <em>and</em>
+      signed by this project's Developer ID — a validly-signed build from anyone else is refused —
+      and its version is read from the downloaded bundle itself, so a manifest cannot advertise one
+      version and ship another. You are told what is available before the download starts.</p>
+      <p>If you say no, it never contacts anything.</p>
+    </div>
+  </section>
+
+  <div class="weft"></div>
+
+  <section class="wrap">
+    <h2><span class="n">05</span>Is this really private?</h2>
+    <p class="dek">It is checked automatically, not just claimed.</p>
+    <p class="measure">Every time the code changes, a program reads the raw bytes of the built app
+    and fails the build if any Warp address, credential or analytics destination appears in it.</p>
+    <div class="sh">
+      <div><span class="p">$</span> <span class="c">./script/heddle/verify-no-warp-endpoints</span></div>
+      <div class="ok">PASS: no Warp endpoints, credentials, or telemetry destinations found.</div>
+    </div>
+    <p class="limits" style="margin-top:22px"><b>Being straight about the limits:</b> this proves
+    those addresses are not in the app. It does not prove the app opens no connections at all — a
+    service <em>you</em> configure yourself is contacted because you asked for it. Fully proving
+    network silence needs system-call tracing that has not been done yet, and that is stated plainly
+    rather than glossed over.</p>
+  </section>
+
+  <div class="weft"></div>
+
+  <section class="wrap">
+    <h2><span class="n">06</span>Questions</h2>
+    <details><summary>Is this legal?</summary><div class="body">Yes. Warp open-sourced the client
+      under AGPL-3.0, which exists precisely to allow open forks. Heddle keeps the license files and
+      upstream copyright notices, and does not use the “Warp” trademark.</div></details>
+    <details><summary>Does this unlock paid Warp features?</summary><div class="body">No. Paid
+      entitlements are enforced on Warp's servers, and there is no server here. The value is privacy
+      and independence, not free Pro.</div></details>
+    <details><summary>Can I use it fully offline?</summary><div class="body">Yes — that is the
+      entire point. No sign-in, no cloud sync, no telemetry, and no server for it to talk to. The
+      opt-in update check is the only thing that ever reaches the network on its own, and only after
+      you say yes.</div></details>
+    <details><summary>Will it get an AI agent?</summary><div class="body">A local replacement over
+      ACP is designed but deliberately not shipped — a half-finished agent that runs commands
+      without working permission prompts is worse than none.</div></details>
+    <details><summary>Why is the built-in agent gone but Claude Code fine?</summary><div class="body">
+      The built-in agent was a client for Warp's server; with no server, it has nothing to talk to.
+      Claude Code, Codex and Gemini CLI are separate programs that run in any terminal — Heddle does
+      not mediate them, so they are unaffected.</div></details>
+  </section>
+
+  <footer>
+    <div class="wrap measure">
+      <p>AGPL-3.0, inherited from Warp and unchanged. The <code>warpui</code> and
+      <code>warpui_core</code> crates remain MIT, as upstream licensed them.</p>
+      <p>“Warp” is a trademark of Denver Technologies, Inc. Heddle is an independent fork and is
+      <b>not</b> affiliated with, endorsed by, or supported by them. Please report Heddle problems
+      <a href="https://github.com/nikolaypaskov/heddle/issues">here</a>, never to Warp.</p>
+      <p>Source: <a href="https://github.com/nikolaypaskov/heddle">github.com/nikolaypaskov/heddle</a></p>
+    </div>
+    <div class="wrap sig">┄┄┄┄┄┄┄ the warp is only half the cloth ┄┄┄┄┄┄┄</div>
+  </footer>
+
+</div>
+</body>
+</html>

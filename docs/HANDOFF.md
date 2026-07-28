@@ -101,6 +101,36 @@ Facts that cost time to learn:
   unzip tools strip the signature and macOS then refuses to launch the app.
 - Publish with `--repo <owner>/<name>` **explicitly**. See §6.
 
+Then publish the update manifest **on the same release as the `.app.zip`, and only after it**:
+
+```bash
+# 1. the payload first
+gh release upload <tag> Heddle-aarch64-apple-darwin.app.zip --repo <owner>/<name>
+# 2. only then the thing that advertises it
+./script/heddle/generate-release-manifest vX.Y.Z channel_versions.json
+gh release upload <tag> channel_versions.json --repo <owner>/<name> --clobber
+```
+
+The order is not cosmetic. Clients read `releases/latest/download/`, so a release carrying the
+manifest but not the app tells every running Heddle that a new version exists and then 404s
+when it goes to fetch it — and it keeps doing that until the next release. The release
+workflow enforces the same rule for its own runs: it skips the manifest when no
+`Heddle-*.app.zip` is present, because it builds only the TUI.
+
+The version passed here is the **app** version — the same `vX.Y.Z` given to `--release-tag`,
+which becomes `CFBundleShortVersionString`. It is NOT the git tag: releases have been tagged
+`heddle-v0.3.1-macos-arm64` while the app reports `v0.3.1`. The script refuses anything that
+is not `v?MAJOR.MINOR.PATCH`, because `HeddleVersion::parse` refuses it too and an
+unparseable version means "do not update" — a malformed manifest would silently disable
+updates for everyone who installed that release, with no error anywhere.
+
+The client reads `releases/latest/download/channel_versions.json`, so the manifest must be on
+the release GitHub considers *latest*. It downloads
+`releases/latest/download/Heddle-<arch>-apple-darwin.app.zip` from that same release, then
+reads the version out of the downloaded bundle and refuses to install anything that is not
+strictly newer than what is running — so the manifest tells the client to look, and the
+payload itself is what authorises the install.
+
 ### Gates
 
 ```bash

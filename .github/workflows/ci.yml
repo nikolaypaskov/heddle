@@ -39,6 +39,55 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # ── Does this diff touch anything that can change a build?
+  #
+  # Every job here used to run on every change, so a one-file docs edit compiled
+  # 1.5M lines of Rust, built the GUI, and ran 6240 tests -- none of which an HTML
+  # file can affect. The cheap gates still always run: they take seconds, and a
+  # workflow that decides what to skip should not itself be skippable.
+  #
+  # Computed with `git diff` rather than a third-party action, so this adds no new
+  # pinned dependency to a repo that pins every `uses:` to a full SHA.
+  #
+  # Fails OPEN. If the comparison cannot be made -- a shallow clone, a missing base
+  # ref, a first push -- it reports `code=true` and everything runs. A filter that
+  # guesses "nothing changed" when it cannot tell would skip the tests that catch
+  # the mistake, so the safe direction is to do too much work rather than too little.
+  changes:
+    name: what changed
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: detect
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+          if [ -z "${BASE:-}" ]; then
+            echo "not a pull_request (push or dispatch) -- running everything"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! files=$(git diff --name-only "$BASE" "$HEAD" 2>/dev/null) || [ -z "$files" ]; then
+            echo "could not diff $BASE..$HEAD -- failing open, running everything"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "changed files:"; printf '%s\n' "$files" | sed 's/^/  /'
+          # Anything outside this list cannot change what the compiler produces.
+          # Note ci.yml itself counts: a change to how the battery runs must run it.
+          if printf '%s\n' "$files" | grep -qvE '^(docs/|README\.md$|FAQ\.md$|CONTRIBUTING\.md$|CODE_OF_CONDUCT\.md$|SECURITY\.md$|AGENTS\.md$|\.github/workflows/heddle-(privacy-gate|release)\.yml$)'; then
+            echo "-> build-affecting changes present"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "-> documentation/unrelated-workflow only; skipping the Rust battery"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ── Fast, no-toolchain checks. These fail in seconds, so they run first rather than
   # ── waiting behind a multi-minute Rust build.
   workflow-audit:
@@ -131,6 +180,8 @@ jobs:
   # ── splitting them would rebuild 1.5M lines per job.
   rust:
     name: rust battery
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # Trusted code builds on the self-hosted runner (voltron/roles/heddle_runner);
     # untrusted code does not. `pull_request.head.repo.fork` is the trust boundary:
     #

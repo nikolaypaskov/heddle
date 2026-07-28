@@ -12,7 +12,16 @@ name: Heddle release
 
 on:
   push:
-    tags: ["v*"]
+    # `heddle-v*`, not `v*`. Every tag this project has ever cut is
+    # `heddle-vX.Y.Z-macos-arm64`, so the old `v*` glob matched none of them and
+    # this workflow never ran -- not once, across six releases. Everything below
+    # it was written, reviewed and merged without ever executing: the Linux
+    # artefacts it exists to build were never produced, and the manifest guard
+    # that stops a release advertising an update it cannot serve never fired.
+    #
+    # A trigger that cannot match is indistinguishable from a workflow that
+    # passes. Keep this glob in step with the tag shape in docs/HANDOFF.md.
+    tags: ["heddle-v*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -38,19 +47,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux only, deliberately.
+          #
+          # This used to also build aarch64-apple-darwin, shipped UNSIGNED and NOT
+          # NOTARIZED with a comment explaining why that was an acceptable trade.
+          # It no longer is: macOS releases are the signed, notarized Heddle.app,
+          # built and stapled on a developer machine (docs/HANDOFF.md). Publishing
+          # an unsigned macOS binary beside it would hand users a quarantined
+          # download next to one that opens cleanly, and undercut the provenance
+          # claim the signed artefact makes.
+          #
+          # Linux has no GUI build, so the TUI is the only thing to ship there --
+          # and shipping it is what makes "Linux is built automatically" true
+          # rather than aspirational.
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
-          # Apple Silicon. This artefact is UNSIGNED and NOT NOTARIZED:
-          # notarization needs a paid Apple Developer ID this project does not
-          # have. That is a real limitation, not a formality -- macOS will
-          # quarantine the download, and a checksum published beside an artefact
-          # cannot prove provenance the way a signature can. It is shipped
-          # anyway, clearly labelled, because forcing every macOS user to build
-          # a 1.5M-line Rust workspace is its own barrier. Build from source if
-          # you want a binary whose provenance you established yourself; the
-          # README documents both paths and the trade-off.
-          - target: aarch64-apple-darwin
-            runner: macos-14
 
     steps:
       # Check out the exact ref being released. Without this, a manual run
@@ -198,6 +209,30 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # The update manifest. One implementation, shared with the manual GUI release flow
+      # (docs/HANDOFF.md) -- the GUI is signed and notarized on a developer's machine, so the
+      # manifest must be producible there too, and a second copy of this logic would be a
+      # second thing to get out of step.
+      - name: Generate the release manifest
+        env:
+          # Interpolated through the environment, never directly into the run: block.
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        # Derive the APP version from the git tag. They are not the same string and
+        # the difference is load-bearing: tags are `heddle-vX.Y.Z-macos-arm64`, while
+        # the client parses `v?MAJOR.MINOR.PATCH` and refuses anything else, so the
+        # manifest must carry `vX.Y.Z`. Passing $RELEASE_TAG straight through -- as
+        # this did -- makes generate-release-manifest reject it and fail the release
+        # at the one step that decides whether anyone is ever told about it.
+        run: |
+          set -euo pipefail
+          version="$(printf '%s' "$RELEASE_TAG" | sed -E 's/^heddle-//; s/-[a-z0-9]+-[a-z0-9]+$//')"
+          if ! printf '%s' "$version" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::could not derive vX.Y.Z from tag '$RELEASE_TAG' (got '$version')." >&2
+            exit 1
+          fi
+          echo "tag $RELEASE_TAG -> app version $version"
+          ./script/heddle/generate-release-manifest "$version" dist/channel_versions.json
+
       - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
@@ -210,4 +245,32 @@ jobs:
             gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 \
               --title "Heddle $RELEASE_TAG" \
               --notes-file docs/RELEASE_NOTES.md
+          fi
+
+      # The manifest is published ONLY onto a release that already carries the payload it
+      # advertises.
+      #
+      # This workflow builds `heddle-tui` and nothing else; the GUI `.app.zip` is signed and
+      # notarized on a developer's machine and uploaded by hand (docs/HANDOFF.md). Publishing
+      # the manifest unconditionally therefore produced a release that told every running
+      # Heddle a new version existed, and then 404'd when it went to fetch it -- and because
+      # the client reads `releases/latest/download/`, one such release poisons the check for
+      # everyone until the next one.
+      #
+      # A TUI-only release is perfectly legitimate. It just must not advertise a GUI update,
+      # so this skips rather than fails.
+      - name: Publish the update manifest, if the app it points at is here
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$assets" | grep -q 'Heddle-.*-apple-darwin\.app\.zip$'; then
+            gh release upload "$RELEASE_TAG" dist/channel_versions.json --clobber
+            echo "Published the manifest: the app bundle is on this release."
+          else
+            echo "::notice::No Heddle-*.app.zip on $RELEASE_TAG, so the update manifest was \
+          NOT published. Upload the signed app bundle, then publish the manifest with \
+          script/heddle/generate-release-manifest as described in docs/HANDOFF.md."
           fi

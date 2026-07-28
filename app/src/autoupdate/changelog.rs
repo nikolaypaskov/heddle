@@ -10,6 +10,7 @@ use warp_errors::report_error;
 use super::channel_versions::fetch_channel_versions;
 use super::release_assets_directory_url;
 use crate::channel::{Channel, ChannelState};
+use crate::settings::UpdateConsent;
 use crate::server::server_api::ServerApi;
 
 pub async fn get_current_changelog(server_api: Arc<ServerApi>) -> Result<Option<Changelog>> {
@@ -24,6 +25,15 @@ pub async fn get_current_changelog(server_api: Arc<ServerApi>) -> Result<Option<
 
     let channel = ChannelState::channel();
 
+    // Bail before any request on the channels whose changelog is `None` by construction --
+    // see the match below. Upstream fetched the manifest first and discarded it, which in
+    // this fork would mean a network request made without asking the user, to produce
+    // nothing. Consent governs update checks; the cheapest way to keep the changelog path
+    // honest is not to have one here at all.
+    if matches!(channel, Channel::Integration | Channel::Oss) {
+        return Ok(None);
+    }
+
     if should_fetch_changelog_json(channel) {
         log::info!("Attempting to fetch changelog.json");
         match fetch_current_changelog(server_api.http_client(), rand.as_str()).await {
@@ -36,8 +46,12 @@ pub async fn get_current_changelog(server_api: Arc<ServerApi>) -> Result<Option<
         };
     }
 
-    let versions: ChannelVersions =
-        fetch_channel_versions(rand.as_str(), server_api, true, false).await?;
+    // Unreachable for `Oss`: the early return above covers it. Kept for the other channels,
+    // which a downstream fork or a future Heddle channel could still use.
+    let Some(versions) = fetch_channel_versions(UpdateConsent::Enabled).await? else {
+        return Ok(None);
+    };
+    let versions: ChannelVersions = versions;
 
     let res = versions.changelogs.and_then(|changelogs| {
         match channel {

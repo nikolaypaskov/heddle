@@ -43,7 +43,9 @@ use crate::channel::ChannelState;
 use crate::modal::{Modal, ModalEvent, ModalViewState};
 use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::TelemetryEvent;
-use crate::settings::{AISettings, CustomSecretRegex, PrivacySettings, RegexDisplayInfo};
+use crate::settings::{
+    AISettings, CustomSecretRegex, PrivacySettings, RegexDisplayInfo, UpdateConsent, UpdateSettings,
+};
 use crate::settings_view::privacy::AddRegexModalViewState;
 use crate::settings_view::render_body_item_label;
 use crate::settings_view::settings_page::CONTENT_FONT_SIZE;
@@ -226,6 +228,7 @@ impl PrivacyPageView {
             Box::new(SecretRedactionWidget::default()),
             Box::new(AppAnalyticsWidget::default()),
             Box::new(CrashReportsWidget::default()),
+            Box::new(UpdateChecksWidget::default()),
             Box::new(CloudConversationStorageWidget::default()),
         ];
         if ContextFlag::NetworkLogConsole.is_enabled() {
@@ -499,6 +502,7 @@ pub enum PrivacyPageAction {
     SetSecretDisplayMode(SecretDisplayMode),
     ToggleTelemetry,
     ToggleCrashReporting,
+    ToggleUpdateChecks,
     ToggleCloudConversationStorage,
     LaunchNetworkLogging,
     RemoveCustomRegex(usize),
@@ -580,6 +584,20 @@ impl TypedActionView for PrivacyPageView {
             }
             PrivacyPageAction::ToggleTelemetry => self.toggle_telemetry(ctx),
             PrivacyPageAction::ToggleCrashReporting => self.toggle_crash_reporting(ctx),
+            PrivacyPageAction::ToggleUpdateChecks => {
+                // Either way this is an ANSWER, so the first-run prompt stops appearing.
+                // There is no path back to `Unanswered` and there should not be: the user
+                // has told us, and re-asking would be pestering.
+                let next = if UpdateSettings::as_ref(ctx).check_for_updates.should_check() {
+                    UpdateConsent::Disabled
+                } else {
+                    UpdateConsent::Enabled
+                };
+                UpdateSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    report_if_error!(settings.check_for_updates.set_value(next, ctx));
+                });
+                ctx.notify();
+            }
             PrivacyPageAction::ToggleCloudConversationStorage => {
                 self.toggle_cloud_conversation_storage(ctx)
             }
@@ -1622,6 +1640,80 @@ impl SettingsWidget for CrashReportsWidget {
                 ui_builder
                     .paragraph(
                         "Crash reports assist with debugging and stability improvements."
+                            .to_owned(),
+                    )
+                    .with_style(UiComponentStyles {
+                        font_color: Some(
+                            appearance
+                                .theme()
+                                .sub_text_color(appearance.theme().surface_2())
+                                .into_solid(),
+                        ),
+                        margin: Some(
+                            Coords::default()
+                                .top(styles::DESCRIPTION_NEGATIVE_MARGIN_OFFSET)
+                                .bottom(styles::DESCRIPTION_MARGIN_BOTTOM),
+                        ),
+                        ..Default::default()
+                    })
+                    .build()
+                    .finish(),
+            )
+            .finish()
+    }
+}
+
+#[derive(Default)]
+struct UpdateChecksWidget {
+    switch_state: SwitchStateHandle,
+    local_only_icon_state: MouseStateHandle,
+}
+
+impl SettingsWidget for UpdateChecksWidget {
+    type View = PrivacyPageView;
+
+    fn search_terms(&self) -> &str {
+        "update updates check for updates new version release github network"
+    }
+
+    fn render(
+        &self,
+        _view: &Self::View,
+        appearance: &Appearance,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        let ui_builder = appearance.ui_builder();
+        let enabled = UpdateSettings::as_ref(app).check_for_updates.should_check();
+        Flex::column()
+            .with_child(render_body_item::<PrivacyPageAction>(
+                "Check for updates".into(),
+                None,
+                // Never synced anywhere -- a decision about network access is the last thing
+                // that should travel over a network.
+                LocalOnlyIconState::Visible {
+                    mouse_state: self.local_only_icon_state.clone(),
+                    custom_tooltip: Some("This setting is stored only on this device.".to_owned()),
+                },
+                ToggleState::Enabled,
+                appearance,
+                ui_builder
+                    .switch(self.switch_state.clone())
+                    .check(enabled)
+                    .build()
+                    .on_click(move |ctx, _, _| {
+                        ctx.dispatch_typed_action(PrivacyPageAction::ToggleUpdateChecks)
+                    })
+                    .finish(),
+                None,
+            ))
+            .with_child(
+                ui_builder
+                    .paragraph(
+                        "Heddle checks GitHub for new releases. The request carries no \
+                         identifier, no account and no usage data — GitHub sees your IP \
+                         address and that a Heddle build asked for the release list. \
+                         Downloading an update is a separate step you choose. With this off, \
+                         Heddle makes no network request of its own."
                             .to_owned(),
                     )
                     .with_style(UiComponentStyles {

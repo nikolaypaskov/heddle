@@ -464,6 +464,10 @@ pub enum WorkspaceAction {
     FocusLeftPanel,
     /// Moves focus to the panel on the right
     FocusRightPanel,
+    /// Record the answer to the one-time update-check prompt.
+    SetUpdateConsent(crate::settings::UpdateConsent),
+    /// Start downloading an update the user has been offered and accepted.
+    DownloadOfferedUpdate,
     /// An action to view a newly created/edited workflow in WD from the toast
     ViewObjectInWarpDrive(WarpDriveItemId),
     UndoTrash(CloudObjectTypeAndId),
@@ -1079,6 +1083,8 @@ impl WorkspaceAction {
             | UndoTrash(_)
             | OpenFilePath { .. }
             | ViewObjectInWarpDrive(_)
+            | SetUpdateConsent(_)
+            | DownloadOfferedUpdate
             | TerminateApp
             | SignInAnonymousWebUser
             | TabHoverWidthStart { .. }
