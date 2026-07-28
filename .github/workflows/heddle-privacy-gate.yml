@@ -118,7 +118,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config unzip \
             libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
-            libfontconfig1-dev libasound2-dev libclang-dev
+            libfontconfig1-dev libasound2-dev libclang-dev \
+            clang
 
       # protoc must come from the official release, NOT apt. Debian/Ubuntu's
       # protobuf-compiler ships the binary without the well-known type
@@ -295,7 +296,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config unzip \
             libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
-            libfontconfig1-dev libasound2-dev libclang-dev
+            libfontconfig1-dev libasound2-dev libclang-dev \
+            clang
 
       - name: Install protoc with well-known types
         env:
