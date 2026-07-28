@@ -293,7 +293,21 @@ while IFS= read -r sha; do
     echo "error: cannot read the file list for $sha" >&2
     exit 2
   }
-  subject="$(git log -1 --format='%h %s' "$sha")" || {
+  # Subjects are UNTRUSTED INPUT. They are attacker-controlled text from another
+  # organisation's repository, printed straight to a terminal, and this tool's entire job
+  # is rendering them. Git preserves whatever bytes the committer put there -- verified:
+  # a commit subject containing ESC [ 3 1 m comes back with the raw 0x1B intact -- so a
+  # crafted subject can recolour or overwrite the report, hide a line, or push an OSC 52
+  # clipboard sequence at whoever runs the monthly pass.
+  #
+  # `LC_ALL=C tr` deletes bytes 0x00-0x1F and 0x7F. In the C locale tr works on bytes, and
+  # no UTF-8 lead or continuation byte falls in those ranges, so non-ASCII subjects survive
+  # intact. Deleting rather than escaping keeps the report a fixed shape. Tabs go too:
+  # they are not worth a special case in a one-line subject.
+  #
+  # `set -o pipefail` is on, so git log's failure still reaches the guard below even though
+  # tr succeeds.
+  subject="$(git log -1 --format='%h %s' "$sha" | LC_ALL=C tr -d '\000-\037\177')" || {
     echo "error: cannot read the subject for $sha" >&2
     exit 2
   }
@@ -339,17 +353,28 @@ if [ "$ADVANCE" = true ]; then
   # Advances past REJECTED commits too. Rejections are decisions; resurfacing them makes
   # each pass grow rather than shrink.
   #
-  # There is NO git command inside this redirect, deliberately. The original form was
-  # `git rev-parse "$UPSTREAM_REF" > "$MARKER_FILE"`, which truncates the tracked marker the
-  # moment the shell opens the redirect, whether or not the command then succeeds -- so a
-  # failed resolve emptied the file and still printed the success message below. Writing a
-  # value that was resolved and validated hundreds of lines earlier removes the class
-  # rather than guarding it: by the time control reaches here there is nothing left that
-  # can fail except the write itself.
-  printf '%s\n' "$ADVANCE_RESOLVED" > "$MARKER_FILE" || {
-    echo "error: failed to write $MARKER_FILE" >&2
+  # Written to a temporary file and RENAMED over the marker. `> "$MARKER_FILE"` truncates
+  # the tracked file the moment the shell opens the redirect -- so an interrupted or failed
+  # write left it empty or partial, and exiting 2 afterwards does not put the old value
+  # back. Two earlier versions of this block were wrong in that way, and the read-only-file
+  # test that was supposed to cover it could not: a read-only file fails at OPEN, before
+  # truncation, so it passed against the broken implementation too.
+  #
+  # The temp file is in the SAME DIRECTORY, so it is on the same filesystem and rename(2)
+  # is atomic: any reader sees either the old sha or the new one, never a partial write.
+  # The marker itself is never opened for writing, which is what makes "no failure here can
+  # damage the marker" a property of the structure rather than a claim about test coverage.
+  marker_tmp="${MARKER_FILE}.tmp.$$"
+  if ! printf '%s\n' "$ADVANCE_RESOLVED" > "$marker_tmp"; then
+    rm -f "$marker_tmp"
+    echo "error: failed to write $marker_tmp — $MARKER_FILE is unchanged" >&2
     exit 2
-  }
+  fi
+  if ! mv -f "$marker_tmp" "$MARKER_FILE"; then
+    rm -f "$marker_tmp"
+    echo "error: failed to replace $MARKER_FILE — it is unchanged" >&2
+    exit 2
+  fi
   echo
   echo "marker advanced to ${upstream_short} — commit .upstream-sync with any picks"
 else

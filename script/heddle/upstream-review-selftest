@@ -144,6 +144,15 @@ check_contains() {
   esac
 }
 
+check_absent() {
+  local label="$1" needle="$2" hay="$3"
+  case "$hay" in
+    *"$needle"*) echo "FAIL [$label]: output still contains the byte it must not" >&2
+                 fails=$((fails + 1)) ;;
+    *) echo "ok [$label]" ;;
+  esac
+}
+
 # Which bucket did the commit whose subject contains $1 land in? Bucket COUNTS cannot
 # distinguish a correct classification from two commits swapped between buckets, so the
 # assertions below name commits rather than counting them.
@@ -188,7 +197,7 @@ trap cleanup EXIT
 # `ignore`. Upstream squash-merges and has no merges today; this is one cheap case, not a
 # redesign.
 #
-# The range is exactly 5, which is what makes silent truncation to 1 detectable.
+# The range is exactly 6, which is what makes silent truncation to 1 detectable.
 build_fixture() {
   [ -n "$REAL_GIT" ] || return 1
   FIXTURE="$(mktemp -d)" || return 1
@@ -221,6 +230,13 @@ build_fixture() {
   # equal to the value the marker is reset to. Using the base there would have let
   # "keeps marker" pass by coincidence -- a broken guard would write the same value back.
   FIX_MID="$("$g" -C "$r" rev-parse HEAD)" || return 1
+
+  # Bx — a HOSTILE SUBJECT: raw ESC sequences, as a compromised upstream could write.
+  # Verified that git stores and returns the 0x1B bytes untouched, so this is what the
+  # report is actually handed.
+  echo evil > "$r/app/src/evil.rs"
+  "$g" -C "$r" add -A || return 1
+  "$g" -C "$r" commit -q -m "$(printf 'evil \033[31mSUBJECT\033[0m tail')" || return 1
 
   # C — touches the file the fork deletes.
   echo gone-upstream > "$r/app/src/gone.rs"
@@ -322,13 +338,13 @@ else
   # case below could be passing for the wrong reason.
   run_case "" --no-fetch
   check          "clean run exits 0"           0                            "$RUN_STATUS"
-  check_contains "clean run counts 5 commits"  "commits not yet in HEAD: 5" "$RUN_OUT"
+  check_contains "clean run counts 6 commits"  "commits not yet in HEAD: 6" "$RUN_OUT"
   check          "clean run leaves the marker" "$RUN_BEFORE"                "$RUN_AFTER"
 
   # Counts first...
   check_contains "one commit auto-rejected" "AUTO-REJECT (1)" "$RUN_OUT"
   check_contains "three collide"            "COLLISION (3)"   "$RUN_OUT"
-  check_contains "one candidate"            "CANDIDATE (1)"   "$RUN_OUT"
+  check_contains "two candidates"           "CANDIDATE (2)"   "$RUN_OUT"
 
   # ...and then WHICH commit is in WHICH bucket, which is the assertion that matters.
   # Counts alone cannot fail the way their name implies: a derivation that put feature.rs
@@ -344,6 +360,15 @@ else
   check_contains "report prints the advance command" \
     "--advance $FIX_TIP" "$RUN_OUT"
 
+  # ── Untrusted upstream text must not reach the terminal as control bytes. Asserted on
+  # the SPECIFIC bytes, not on a count or on the absence of a whole string: ESC (0x1B) is
+  # what drives colour, cursor and OSC 52 clipboard sequences, and 0x07 (BEL) terminates
+  # an OSC. The visible characters must survive, or the fix would just be censorship.
+  check_absent   "no ESC byte reaches the report"   "$(printf '\033')" "$RUN_OUT"
+  check_absent   "no BEL byte reaches the report"   "$(printf '\007')" "$RUN_OUT"
+  check_contains "the readable text survives"       "evil [31mSUBJECT[0m tail" "$RUN_OUT"
+  check          "and the hostile commit is still classified" candidate "$(bucket_of SUBJECT)"
+
   # ── Fetching. Every other case here passes --no-fetch, or uses --advance which disables
   # fetching internally, so without these two the fetch guard was covered by nothing at
   # all: deleting it left the suite green while permitting exactly the stale report the
@@ -351,7 +376,7 @@ else
   # real fetch works and a real failure can be simulated.
   run_case ""
   check          "default run fetches and succeeds" 0     "$RUN_STATUS"
-  check_contains "and still reports"  "commits not yet in HEAD: 5" "$RUN_OUT"
+  check_contains "and still reports"  "commits not yet in HEAD: 6" "$RUN_OUT"
 
   run_case fail-fetch
   check          "failed fetch exits 2"      2                          "$RUN_STATUS"
@@ -370,7 +395,7 @@ else
   # independently can.
   run_case truncate-rev-list --advance "$FIX_TIP"
   check          "silent truncation exits 2"          2                             "$RUN_STATUS"
-  check_contains "silent truncation is counted"       "enumerated 1 commits but git counts 5" "$RUN_ERR"
+  check_contains "silent truncation is counted"       "enumerated 1 commits but git counts 6" "$RUN_ERR"
   check          "silent truncation keeps marker"     "$RUN_BEFORE"                 "$RUN_AFTER"
 
   # git show dies for one commit. classify_paths returns `ignore` for an empty path list
@@ -441,13 +466,18 @@ else
   check_contains "stale sha says so"             "is not what this report covers" "$RUN_ERR"
   check          "stale sha keeps marker"        "$RUN_BEFORE"            "$RUN_AFTER"
 
-  # The write path's own failure branch, which no simulated resolve failure reaches: every
-  # case above exits before the write. A read-only marker is the only way to make the
-  # write itself fail without a shim.
+  # ── The marker write. Two cases, and the first is a CHARACTERISATION test: it asserts
+  # the write is a rename rather than a truncate.
+  #
+  # rename(2) needs write permission on the DIRECTORY, not on the target file, so a
+  # read-only marker file is replaced successfully. `> "$MARKER_FILE"` would fail at open
+  # and exit 2. Reverting to the truncating form therefore fails this case -- which is what
+  # the old read-only-file test could not do: it fails at OPEN, before truncation, so it
+  # passed against the broken implementation it was supposed to be guarding.
   if [ "$(id -u)" = 0 ]; then
     # Loud, not silent. A skipped case that prints nothing is indistinguishable from a
     # case that passed.
-    echo "skip [marker write failure]: running as root, a read-only file still writes"
+    echo "skip [marker write]: running as root, file and directory modes do not bind"
   else
     printf '%s\n' "$FIX_BASE" > "$FIXTURE/repo/.upstream-sync"
     chmod 444 "$FIXTURE/repo/.upstream-sync"
@@ -455,9 +485,26 @@ else
     run_case "" --advance "$FIX_TIP"
     RUN_NO_RESET=false
     chmod 644 "$FIXTURE/repo/.upstream-sync"
-    check          "unwritable marker exits 2"   2                        "$RUN_STATUS"
-    check_contains "unwritable marker says so"   "failed to write"        "$RUN_ERR"
-    check          "unwritable marker unchanged" "$RUN_BEFORE"            "$RUN_AFTER"
+    check "read-only marker file is replaced" 0          "$RUN_STATUS"
+    check "and holds the reviewed sha"        "$FIX_TIP" "$RUN_AFTER"
+
+    # A read-only DIRECTORY blocks the temp file, which is the write failing for real.
+    # The marker must be byte-identical afterwards and no debris left behind.
+    printf '%s\n' "$FIX_BASE" > "$FIXTURE/repo/.upstream-sync"
+    chmod 555 "$FIXTURE/repo"
+    RUN_NO_RESET=true
+    run_case "" --advance "$FIX_TIP"
+    RUN_NO_RESET=false
+    chmod 755 "$FIXTURE/repo"
+    check          "unwritable directory exits 2"    2                  "$RUN_STATUS"
+    check_contains "unwritable directory says so"    "failed to write"  "$RUN_ERR"
+    check_contains "and says the marker is unharmed" "is unchanged"     "$RUN_ERR"
+    check          "unwritable directory keeps marker" "$FIX_BASE"      "$RUN_AFTER"
+    leftover=""
+    for f in "$FIXTURE/repo"/.upstream-sync.tmp.*; do
+      [ -e "$f" ] && leftover="$leftover $f"
+    done
+    check "no temp file left behind" "" "$leftover"
   fi
 
   # And the other half of the guard: on a clean run --advance MUST still move the marker.
