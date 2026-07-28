@@ -136,7 +136,19 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      # Hosted runners only -- this ACTION DELETED THE SELF-HOSTED RUNNER'S TOOLCHAIN.
+      #
+      # On a hosted runner the cargo home is disposable, so rust-cache restoring and
+      # pruning it is free. On the self-hosted runner it is persistent and shared:
+      # restoring a cached ~/.cargo/bin over the top left `cargo` and `rustc` but no
+      # `rustup`, so every later job died at `rustup show` with "command not found".
+      #
+      # ci.yml already guards this the same way; the guard was missed here, and then
+      # the endpoint job was routed to the self-hosted runner, which is what broke it.
+      # There is also nothing to gain: that runner keeps CARGO_TARGET_DIR outside the
+      # workspace, so its cache already survives between jobs.
+      - if: runner.environment == 'github-hosted'
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           key: heddle-privacy-gate
 
@@ -309,7 +321,19 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      - uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      # Hosted runners only -- this ACTION DELETED THE SELF-HOSTED RUNNER'S TOOLCHAIN.
+      #
+      # On a hosted runner the cargo home is disposable, so rust-cache restoring and
+      # pruning it is free. On the self-hosted runner it is persistent and shared:
+      # restoring a cached ~/.cargo/bin over the top left `cargo` and `rustc` but no
+      # `rustup`, so every later job died at `rustup show` with "command not found".
+      #
+      # ci.yml already guards this the same way; the guard was missed here, and then
+      # the endpoint job was routed to the self-hosted runner, which is what broke it.
+      # There is also nothing to gain: that runner keeps CARGO_TARGET_DIR outside the
+      # workspace, so its cache already survives between jobs.
+      - if: runner.environment == 'github-hosted'
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
         with:
           key: heddle-gui-surface
 
