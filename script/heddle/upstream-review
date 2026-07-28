@@ -106,7 +106,22 @@ printf '  %s\n' "${b_candidate[@]:-  (none)}"
 if [ "$ADVANCE" = true ]; then
   # Advances past REJECTED commits too. Rejections are decisions; resurfacing them makes
   # each pass grow rather than shrink, which is how 1799 accumulated.
-  git rev-parse "$UPSTREAM_REF" > "$MARKER_FILE"
+  #
+  # Resolve and validate BEFORE the redirection touches the file. A bare
+  # `git rev-parse ... > "$MARKER_FILE"` truncates the file the moment the shell opens the
+  # redirect, regardless of whether the command itself succeeds -- so a failed or empty
+  # resolve would clobber the tracked marker to empty while still falling through to the
+  # success message below. Resolving into a variable first, and only writing once that has
+  # been validated, means a failed resolve exits 2 with the marker untouched.
+  #
+  # Both checks are required. Plain `git rev-parse <bad-ref>` (no `--verify`) exits
+  # non-zero but still echoes the input back on stdout, so emptiness alone would not catch
+  # it -- an unresolvable ref would write the literal ref *string* into the marker file
+  # while still reporting success.
+  if ! sha="$(git rev-parse "$UPSTREAM_REF")" || [ -z "$sha" ] || ! printf '%s\n' "$sha" > "$MARKER_FILE"; then
+    echo "error: failed to write marker" >&2
+    exit 2
+  fi
   echo
-  echo "marker advanced to $(git rev-parse --short "$UPSTREAM_REF") — commit .upstream-sync with any picks"
+  echo "marker advanced to $(git rev-parse --short "$sha") — commit .upstream-sync with any picks"
 fi
