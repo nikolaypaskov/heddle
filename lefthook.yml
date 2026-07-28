@@ -135,6 +135,18 @@ gate:
     - name: workflow security audit
       run: zizmor .github/workflows/
 
+    # The upstream-review SELF-TEST only. The tool itself is a review aid run by hand
+    # during a sync pass, needs the `upstream` remote, and fetches -- none of which
+    # belongs in a gate. The self-test is hermetic (the classifier is a pure function
+    # over a path list) and runs in under a second.
+    #
+    # It is here because the classifier decides what a human reads with intent to accept.
+    # Invert its precedence and an upstream Drive change lands in CANDIDATE; break the
+    # "existed at the merge base" half of the removal rule and CANDIDATE empties out,
+    # which reads as "nothing to review". An unrun test protects neither.
+    - name: upstream review classifier
+      run: script/heddle/upstream-review-selftest
+
     # Heddle's own privacy gates. Each has a self-test that plants a real violation and
     # requires rejection -- run the self-test, not just the gate.
     - name: privacy — supply chain
