@@ -249,7 +249,22 @@ while IFS= read -r sha; do
   # `classify_paths` succeeds. That matters: classify_paths given an empty path list
   # returns `ignore` quite happily, so an unguarded failure here does not look like a
   # failure -- it silently files the commit under the one bucket nobody reads.
-  bucket="$(git show --name-only --pretty=format: "$sha" | classify_paths)" || {
+  #
+  # `--no-renames` for the same reason the removed-path derivation uses it, and it is not
+  # theoretical. Measured on a throwaway repo: renaming app/src/drive/panel.rs to
+  # app/src/elsewhere.rs makes plain `git show --name-only` print ONE path, the
+  # destination. COLLISION_RE never sees app/src/drive/ and the commit becomes a
+  # candidate -- a guarded subsystem walking out of its guard. With --no-renames both
+  # paths are printed and the collision fires.
+  #
+  # `-m` so a merge is described by its diff against each parent rather than by the
+  # combined diff, which reports only paths that differ from ALL parents. Measured on
+  # this repo's own merge 5d1035fa5: 7 paths without -m, 37 with it. Upstream has 0
+  # merges (`git rev-list --count --merges upstream/master`) because it squash-merges, so
+  # nothing today depends on this; it is here because a monthly tool outlives the
+  # assumption that upstream never changes its merge policy. Root commits are unaffected
+  # -- `-m` still lists all 4982 paths of 0dbd3d56.
+  bucket="$(git show -m --name-only --no-renames --pretty=format: "$sha" | classify_paths)" || {
     echo "error: cannot read the file list for $sha" >&2
     exit 2
   }
