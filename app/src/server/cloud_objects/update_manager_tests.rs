@@ -35,7 +35,6 @@ use crate::cloud_object::{
 };
 use crate::drive::CloudObjectTypeAndId;
 use crate::drive::folders::{CloudFolder, CloudFolderModel, FolderId};
-use cloud_objects::drive::sharing::{Subject, UserKind};
 use crate::drive::sharing::SharingAccessLevel;
 use crate::notebooks::{CloudNotebook, CloudNotebookModel, NotebookId};
 use crate::persistence::ModelEvent;
@@ -58,6 +57,7 @@ use crate::workflows::workflow_enum::{
 };
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel, WorkflowId};
 use crate::workspaces::user_profiles::{UserProfileWithUID, UserProfiles};
+use cloud_objects::drive::sharing::{Subject, UserKind};
 
 fn create_object<K, M>(
     app: &mut App,
@@ -2623,10 +2623,26 @@ fn test_pending_metadata_update_with_polling() {
         let notebook: ServerNotebook =
             mock_server_notebook(notebook_id, Owner::mock_current_user(), metadata);
 
+        // Signal when the spawned trash request actually reaches the client.
+        //
+        // `times(1)` is verified when the mock drops at the end of this test, and
+        // nothing here drives the task that makes the call -- the request is
+        // deliberately left in flight (see below). `Background` runs real OS
+        // threads, so whether that task gets polled before the test ends is a
+        // scheduling accident: it passed on a 4-core hosted runner and failed on a
+        // 32-core one running the whole suite, with `called 0 time(s) which is
+        // fewer than expected 1`.
+        //
+        // Waiting on this channel at the end turns "hope it ran" into "wait until
+        // it did", without changing the ordering any assertion below depends on.
+        let (trashed_tx, trashed_rx) = futures::channel::oneshot::channel();
         server_api
             .expect_trash_object()
             .times(1)
-            .return_once(move |_| Ok(true));
+            .return_once(move |_| {
+                let _ = trashed_tx.send(());
+                Ok(true)
+            });
 
         CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
             cloud_model.add_object(sync_id, CloudNotebook::new_from_server(notebook));
@@ -2748,6 +2764,14 @@ fn test_pending_metadata_update_with_polling() {
         assert!(matches!(&events[2], ModelEvent::UpsertWorkflows(_)));
         assert!(matches!(&events[3], ModelEvent::UpsertFolders(_)));
         assert!(matches!(&events[4], ModelEvent::DeleteObjects { ids: _ }));
+
+        // Now let the in-flight trash request land. Everything above asserted the
+        // state while it was still outstanding, which is what this test is for; the
+        // mock's `times(1)` is checked as it drops on the next line, so this is the
+        // last point at which waiting is both safe and necessary.
+        trashed_rx
+            .await
+            .expect("trash_object should have been called on the client");
     });
 }
 
