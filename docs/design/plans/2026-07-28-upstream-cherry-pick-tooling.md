@@ -286,11 +286,18 @@ esac
 
 And at the end of the script:
 
+> **Do not copy the block below.** It was the plan's instruction and it is a bug:
+> `git rev-parse … > "$MARKER_FILE"` truncates the tracked marker the moment the shell
+> opens the redirect, whether or not the command succeeds — so a failed resolve empties
+> the file and still prints the success message. Fixed in `053bcdfcd`; see
+> `script/heddle/upstream-review` for the shipped form, which resolves into a variable,
+> validates it, and only then writes.
+
 ```bash
 if [ "$ADVANCE" = true ]; then
   # Advances past REJECTED commits too. Rejections are decisions; resurfacing them makes
   # each pass grow rather than shrink, which is how a backlog accumulates.
-  git rev-parse "$UPSTREAM_REF" > "$MARKER_FILE"
+  git rev-parse "$UPSTREAM_REF" > "$MARKER_FILE"      # BUG — see the note above
   echo
   echo "marker advanced to $(git rev-parse --short "$UPSTREAM_REF") — commit .upstream-sync with any picks"
 fi
@@ -300,10 +307,15 @@ fi
 
 ```bash
 ./script/heddle/upstream-review --advance | tail -2
-./script/heddle/upstream-review | head -3   # expect 0 in every bucket
+./script/heddle/upstream-review              # expect 0 in every bucket
 git checkout .upstream-sync                  # restore for the real first pass
 ```
-Expected: the second run reports empty buckets, proving the marker took effect.
+Expected: the second run reports `commits not yet in HEAD: 0` and `(none)` under all three
+listed buckets.
+
+`head -3` was the original instruction here. It cannot show all four bucket counts — the
+CANDIDATE line is last — so it could not prove the claim it was attached to. Read the whole
+report, or grep for the counts; do not truncate the output you are asserting on.
 
 - [ ] **Step 3: Document the pass in `docs/HANDOFF.md`**
 

@@ -61,7 +61,11 @@ passes `--not HEAD` as well, so git decides what HEAD does not already contain a
 report self-corrects against marker drift instead of compounding it.
 
 **`script/heddle/upstream-review`** — bash, matching the other gates in that directory:
-read-only, self-testing, no new dependencies.
+self-testing, no new dependencies. Read-only with respect to the working tree and to
+upstream; the two things it does write are the `upstream` remote's refs (it fetches) and,
+under `--advance` only, `.upstream-sync`. An earlier draft called it "read-only" flatly,
+which was wrong in exactly the direction that matters — the marker write is the one action
+here with lasting consequences.
 
 ### Classification
 
@@ -203,6 +207,35 @@ The last two rows are the ones that matter. The first is precedence: get it back
 an upstream Drive change lands in the bucket read with intent to accept. The second is the
 "existed at the merge base" half of the removal rule: get it wrong and everything new
 upstream is written off, which reads to a human as "nothing to review".
+
+### The second half of the self-test, and what neither half covers
+
+The sourcing guard returns before the report body, so sourcing the script cannot reach the
+enumeration, the report, or the marker write at all. Those are tested by a second section
+that runs the script as a subprocess against a disposable repository under `$TMPDIR`, with
+a `git` shim on `PATH` that breaks one call on demand:
+
+| Broken call | Expected |
+|---|---|
+| `git rev-list` exits non-zero | exit 2, message, **marker untouched** |
+| `git rev-list` truncates but exits **0** | exit 2, message, **marker untouched** |
+| `git show` exits non-zero for one commit | exit 2, message, **marker untouched** |
+| nothing broken, `--advance` | exit 0, marker moves to the upstream tip |
+
+Every failure case asserts all three of exit status, stderr, and marker — any one alone
+would let the defect through. The last row is not decoration: a guard that blocks
+everything is not a guard.
+
+**Known limit, deliberate.** Neither section verifies that the report's *contents* are
+right — only that the counts are consistent and that failures are loud. A green self-test
+is evidence the classifier and the failure paths behave; it is not evidence that any
+particular commit was bucketed correctly. That check is the human reading pass.
+
+**Follow-up idea, not implemented.** `--advance` re-resolves `upstream/master` rather than
+taking the sha that was actually reviewed, so a fetch landing between the report and the
+advance would record commits nobody saw. The fetch-on-start behaviour narrows the window
+but does not close it. Binding the marker to the reviewed sha — `--advance <sha>`, defaulting
+to the tip the report was built from — would close it, at the cost of a longer runbook line.
 
 ## Recorded uncertainty
 
