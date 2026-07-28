@@ -95,7 +95,12 @@ jobs:
     name: Binary contains no Warp endpoints
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    # Trusted code builds on the self-hosted runner; fork PRs stay hosted. This job
+    # now compiles the GUI, which is far heavier than the TUI it used to build, and
+    # the 32-core builder with a persistent target dir is what makes that affordable.
+    # The fork test is the same trust boundary ci.yml uses -- untrusted code must
+    # never reach that machine.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'voltron-linux' }}
     timeout-minutes: 90
 
     steps:
@@ -134,8 +139,18 @@ jobs:
         with:
           key: heddle-privacy-gate
 
-      - name: Build the OSS binary
-        run: cargo build -p warp_tui --bin heddle-tui --features standalone
+      # Scan what users install.
+      #
+      # This built `warp_tui --bin heddle-tui` and scanned that. The TUI is not what
+      # anyone downloads -- the release ships Heddle.app -- so the headline claim,
+      # the README badge and the landing page's "checked automatically" line all
+      # rested on a binary nobody runs. The GUI could have carried an endpoint the
+      # TUI does not and this gate would have passed.
+      #
+      # The feature list matches script/heddle/gui-surface-gate, which type-checks
+      # the same target; keep them in step.
+      - name: Build the shipped GUI binary
+        run: cargo build -p warp --bin heddle --features release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2
 
       # Prove the scanner CAN fail before trusting it to pass. A verification
       # tool that cannot distinguish "checked and clean" from "did not really
@@ -144,7 +159,7 @@ jobs:
       - name: Self-test the scanner against a planted canary
         run: |
           set -euo pipefail
-          cp target/debug/heddle-tui /tmp/heddle-canary
+          cp target/debug/heddle /tmp/heddle-canary
           printf 'oz.warp.dev' >> /tmp/heddle-canary
           if ./script/heddle/verify-no-warp-endpoints /tmp/heddle-canary; then
             echo "::error::Scanner PASSED a binary containing a planted endpoint."
@@ -154,8 +169,11 @@ jobs:
           echo "Scanner correctly rejected the canary."
           rm -f /tmp/heddle-canary
 
-      - name: Verify no Warp endpoints in the binary
-        run: ./script/heddle/verify-no-warp-endpoints
+      # Pass the path explicitly. The script defaults to target/debug/heddle-tui,
+      # so calling it bare would have scanned a binary this job no longer builds --
+      # the exact silent-wrong-target failure this change exists to remove.
+      - name: Verify no Warp endpoints in the shipped binary
+        run: ./script/heddle/verify-no-warp-endpoints target/debug/heddle
 
       - name: Verify bundled binary assets match the reviewed manifest
         run: ./script/heddle/verify-bundled-assets
