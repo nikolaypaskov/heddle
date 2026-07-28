@@ -27,7 +27,6 @@ so it opens with a double-click — no security warning to click past.
 | File | What it is |
 |---|---|
 | `Heddle-aarch64-apple-darwin.app.zip` | **The app. Start here.** |
-| `heddle-aarch64-apple-darwin.tar.gz` | Terminal-only version, runs in an existing window |
 
 Unzip it with **Archive Utility** (double-click) or `ditto`, then drag `Heddle.app` to your
 Applications folder. Avoid third-party unzip tools — some strip the Apple signature, after which
