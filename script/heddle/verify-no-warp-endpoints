@@ -23,7 +23,12 @@
 # never as "verified silent".
 #
 # Usage: script/heddle/verify-no-warp-endpoints [path-to-binary]
-#        defaults to target/debug/heddle-tui
+#        defaults to target/debug/heddle
+#
+# The default is the GUI binary, because the GUI is what ships -- Heddle.app on
+# macOS, an AppImage on Linux. It used to default to `heddle-tui`, so the
+# headline claim, the README badge and the landing page's "checked
+# automatically" line all rested on a binary nobody downloads.
 #
 # Exit codes: 0 = clean, 1 = forbidden strings found, 2 = inconclusive.
 
@@ -32,11 +37,17 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)"
 cd "${REPO_ROOT}"
 
-BINARY="${1:-target/debug/heddle-tui}"
+BINARY="${1:-target/debug/heddle}"
+
+# The feature list the GUI is actually built with. Kept identical to
+# script/heddle/gui-surface-gate and the build step in
+# .github/workflows/heddle-privacy-gate.yml, so the advice printed on failure
+# reproduces the binary this scans rather than some other one.
+GUI_FEATURES="release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2"
 
 if [[ ! -f "${BINARY}" ]]; then
     echo "INCONCLUSIVE: binary not found at ${BINARY}"
-    echo "Build it first: cargo build -p warp_tui --bin heddle-tui"
+    echo "Build it first: cargo build -p warp --bin heddle --features ${GUI_FEATURES}"
     exit 2
 fi
 
@@ -51,7 +62,7 @@ NEWER_SOURCES="$(find app/src crates -name '*.rs' -newer "${BINARY}" -print -qui
 if [[ -n "${NEWER_SOURCES}" ]]; then
     echo "INCONCLUSIVE: ${BINARY} is older than the sources."
     echo "At least one file changed after it was built: ${NEWER_SOURCES}"
-    echo "Rebuild before scanning: cargo build -p warp_tui --bin heddle-tui"
+    echo "Rebuild before scanning: cargo build -p warp --bin heddle --features ${GUI_FEATURES}"
     exit 2
 fi
 
