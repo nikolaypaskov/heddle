@@ -20,19 +20,35 @@ struct EnvVarGuard {
     original: Option<OsString>,
 }
 #[test]
-fn local_claude_child_prompt_includes_oz_cli_messaging_instructions() {
+fn local_claude_child_prompt_does_not_instruct_a_command_that_always_fails() {
+    // The prompt used to tell the child to report "at start, when blocked, and
+    // when complete" via `oz run message send`. Every one of those calls is
+    // rejected by `run_task` in `ai/agent_sdk/mod.rs`, because the mailbox is
+    // Warp's server-side relay. Instructing a guaranteed failure is worse than
+    // instructing nothing: the child burns turns on it and may report itself
+    // blocked on infrastructure the user cannot install.
     let prompt = local_claude_child_prompt("List files");
 
-    assert!(prompt.contains("OZ_CLI"));
-    assert!(prompt.contains("OZ_RUN_ID"));
-    assert!(prompt.contains("OZ_PARENT_RUN_ID"));
-    assert!(prompt.contains("run message send --sender-run-id"));
-    assert!(prompt.contains("All four send arguments are required"));
-    assert!(prompt.contains("Do not pass \"$OZ_PARENT_RUN_ID\" as a positional argument to send"));
-    assert!(prompt.contains("run message list \"$OZ_RUN_ID\" --limit 25"));
-    assert!(prompt.contains("do not rely on --unread"));
-    assert!(!prompt.contains("--unread --limit"));
-    assert!(prompt.contains("Do not use Claude Code Agent or SendMessage tools"));
+    // Assert on what makes a line copy-pasteable rather than on bare mentions:
+    // the prompt may still *name* the mailbox in order to warn the child off it,
+    // but it must not hand over an invocation with its arguments filled in.
+    assert!(!prompt.contains("--sender-run-id"));
+    assert!(!prompt.contains("--to \"$OZ_PARENT_RUN_ID\""));
+    assert!(!prompt.contains("mark-delivered"));
+    assert!(!prompt.contains("\"$OZ_CLI\" run message"));
+    assert!(!prompt.contains("--limit 25"));
+}
+
+#[test]
+fn local_claude_child_prompt_names_the_channel_that_works() {
+    // The lead reads the child's conversation locally, so the final response is
+    // the reporting channel. The child has to be told that, and told not to wait
+    // for a reply that can never arrive.
+    let prompt = local_claude_child_prompt("List files");
+
+    assert!(prompt.contains("final response"));
+    assert!(prompt.contains("no run mailbox"));
+    assert!(prompt.to_lowercase().contains("do not stand by"));
     assert!(prompt.ends_with("Task:\nList files"));
 }
 
@@ -289,12 +305,11 @@ async fn prepare_local_claude_child_merges_anthropic_model_env_var() {
             .env_vars
             .contains_key(&OsString::from("OZ_PARENT_LISTENER_MANAGED_EXTERNALLY"))
     );
-    assert!(
-        prepared
-            .command
-            .contains("run message send --sender-run-id")
-    );
-    assert!(prepared.command.contains("OZ_PARENT_RUN_ID"));
+    // The launched command carries the child's instructions, so it must not
+    // smuggle back the mailbox commands `run_task` rejects outright.
+    assert!(!prepared.command.contains("--sender-run-id"));
+    assert!(!prepared.command.contains("mark-delivered"));
+    assert!(prepared.command.contains("final response"));
 }
 
 #[tokio::test]
