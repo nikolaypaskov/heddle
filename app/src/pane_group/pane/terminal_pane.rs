@@ -51,8 +51,6 @@ use crate::pane_group::child_agent::{
 };
 use crate::pane_group::{self, Direction, PaneGroup};
 use crate::persistence::{BlockCompleted, ModelEvent};
-#[cfg(not(target_family = "wasm"))]
-use crate::server::server_api::ServerApiProvider;
 use crate::session_management::SessionNavigationData;
 use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::general_settings::GeneralSettings;
@@ -1660,7 +1658,6 @@ fn launch_local_harness_child(
     ctx: &mut ViewContext<PaneGroup>,
 ) {
     let startup_directory = group.startup_path_for_new_session(Some(terminal_pane_id), ctx);
-    let ai_client = ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client();
     let request_id = request.id;
     let agent_name = normalize_orchestrator_agent_name(&request.name);
     let request_name = agent_name.clone().unwrap_or_default();
@@ -1680,7 +1677,6 @@ fn launch_local_harness_child(
         .and_then(|view| host_terminal_shared_session_source_type(&view, ctx));
 
     let model_id_for_harness_env = model_id.clone();
-    let agent_name_for_task = agent_name.clone();
     let _ = ctx.spawn(
         async move {
             prepare_local_harness_child_launch(
@@ -1688,10 +1684,8 @@ fn launch_local_harness_child(
                 harness_type,
                 model_id_for_harness_env,
                 parent_run_id,
-                agent_name_for_task,
                 shell_type,
                 startup_directory,
-                ai_client,
             )
             .await
         },

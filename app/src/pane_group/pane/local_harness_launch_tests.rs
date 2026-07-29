@@ -1,6 +1,5 @@
 use std::ffi::OsString;
 use std::fs;
-use std::sync::Arc;
 
 use tempfile::TempDir;
 use warp_cli::agent::Harness;
@@ -8,14 +7,12 @@ use warp_core::features::FeatureFlag;
 
 use super::{
     build_local_claude_child_command, build_local_codex_child_command,
-    build_local_opencode_child_command, local_child_task_config, local_claude_child_prompt,
-    normalize_local_child_harness, prepare_local_harness_child_launch,
-    validate_local_harness_shell,
+    build_local_opencode_child_command, local_claude_child_prompt, normalize_local_child_harness,
+    prepare_local_harness_child_launch, validate_local_harness_shell,
 };
 use crate::ai::agent_sdk::driver::OZ_MESSAGE_LISTENER_MANAGED_EXTERNALLY_ENV;
-use crate::ai::ambient_agents::task::{HarnessConfig, normalize_orchestrator_agent_name};
+use crate::ai::ambient_agents::task::normalize_orchestrator_agent_name;
 use crate::ai::local_harness_setup::LOCAL_CODEX_HARNESS_DISABLED_MESSAGE;
-use crate::server::server_api::ai::MockAIClient;
 use crate::terminal::shell::ShellType;
 
 struct EnvVarGuard {
@@ -23,19 +20,35 @@ struct EnvVarGuard {
     original: Option<OsString>,
 }
 #[test]
-fn local_claude_child_prompt_includes_oz_cli_messaging_instructions() {
+fn local_claude_child_prompt_does_not_instruct_a_command_that_always_fails() {
+    // The prompt used to tell the child to report "at start, when blocked, and
+    // when complete" via `oz run message send`. Every one of those calls is
+    // rejected by `run_task` in `ai/agent_sdk/mod.rs`, because the mailbox is
+    // Warp's server-side relay. Instructing a guaranteed failure is worse than
+    // instructing nothing: the child burns turns on it and may report itself
+    // blocked on infrastructure the user cannot install.
     let prompt = local_claude_child_prompt("List files");
 
-    assert!(prompt.contains("OZ_CLI"));
-    assert!(prompt.contains("OZ_RUN_ID"));
-    assert!(prompt.contains("OZ_PARENT_RUN_ID"));
-    assert!(prompt.contains("run message send --sender-run-id"));
-    assert!(prompt.contains("All four send arguments are required"));
-    assert!(prompt.contains("Do not pass \"$OZ_PARENT_RUN_ID\" as a positional argument to send"));
-    assert!(prompt.contains("run message list \"$OZ_RUN_ID\" --limit 25"));
-    assert!(prompt.contains("do not rely on --unread"));
-    assert!(!prompt.contains("--unread --limit"));
-    assert!(prompt.contains("Do not use Claude Code Agent or SendMessage tools"));
+    // Assert on what makes a line copy-pasteable rather than on bare mentions:
+    // the prompt may still *name* the mailbox in order to warn the child off it,
+    // but it must not hand over an invocation with its arguments filled in.
+    assert!(!prompt.contains("--sender-run-id"));
+    assert!(!prompt.contains("--to \"$OZ_PARENT_RUN_ID\""));
+    assert!(!prompt.contains("mark-delivered"));
+    assert!(!prompt.contains("\"$OZ_CLI\" run message"));
+    assert!(!prompt.contains("--limit 25"));
+}
+
+#[test]
+fn local_claude_child_prompt_names_the_channel_that_works() {
+    // The lead reads the child's conversation locally, so the final response is
+    // the reporting channel. The child has to be told that, and told not to wait
+    // for a reply that can never arrive.
+    let prompt = local_claude_child_prompt("List files");
+
+    assert!(prompt.contains("final response"));
+    assert!(prompt.contains("no run mailbox"));
+    assert!(prompt.to_lowercase().contains("do not stand by"));
     assert!(prompt.ends_with("Task:\nList files"));
 }
 
@@ -171,59 +184,6 @@ fn build_local_codex_child_command_quotes_the_prompt() {
 }
 
 #[test]
-fn local_child_task_config_records_supported_third_party_harnesses() {
-    for harness in [Harness::Claude, Harness::OpenCode, Harness::Codex] {
-        assert_eq!(
-            local_child_task_config(harness, None),
-            Some(crate::ai::ambient_agents::task::AgentConfigSnapshot {
-                harness: Some(HarnessConfig::from_harness_type(harness)),
-                ..Default::default()
-            }),
-        );
-    }
-}
-
-#[test]
-fn local_child_task_config_stamps_orchestrator_name() {
-    for harness in [Harness::Claude, Harness::OpenCode, Harness::Codex] {
-        assert_eq!(
-            local_child_task_config(harness, Some("frontend-tests".to_string())),
-            Some(crate::ai::ambient_agents::task::AgentConfigSnapshot {
-                name: Some("frontend-tests".to_string()),
-                harness: Some(HarnessConfig::from_harness_type(harness)),
-                ..Default::default()
-            }),
-        );
-    }
-}
-
-#[test]
-fn local_child_task_config_trims_whitespace_only_name() {
-    assert_eq!(
-        local_child_task_config(Harness::Claude, Some("  frontend-tests  ".to_string())),
-        Some(crate::ai::ambient_agents::task::AgentConfigSnapshot {
-            name: Some("frontend-tests".to_string()),
-            harness: Some(HarnessConfig::from_harness_type(Harness::Claude)),
-            ..Default::default()
-        }),
-    );
-    assert_eq!(
-        local_child_task_config(Harness::Claude, Some("   ".to_string())),
-        Some(crate::ai::ambient_agents::task::AgentConfigSnapshot {
-            name: None,
-            harness: Some(HarnessConfig::from_harness_type(Harness::Claude)),
-            ..Default::default()
-        }),
-    );
-}
-
-#[test]
-fn local_child_task_config_returns_none_for_oz_and_unknown() {
-    assert!(local_child_task_config(Harness::Oz, Some("name".to_string())).is_none());
-    assert!(local_child_task_config(Harness::Unknown, Some("name".to_string())).is_none());
-}
-
-#[test]
 fn normalize_orchestrator_agent_name_trims_and_drops_empty() {
     assert_eq!(
         normalize_orchestrator_agent_name("frontend-tests"),
@@ -250,18 +210,13 @@ async fn prepare_local_codex_child_launch_rejects_without_rewriting_global_codex
     let _home = EnvVarGuard::set("HOME", fake_home.path().as_os_str().to_os_string());
     let _path = EnvVarGuard::set("PATH", fake_bin_dir.path().as_os_str().to_os_string());
 
-    let mut ai_client = MockAIClient::new();
-    ai_client.expect_create_agent_task().times(0);
-
     let result = prepare_local_harness_child_launch(
         "hello world".to_string(),
         "codex".to_string(),
         None,
         Some("parent-run".to_string()),
-        None,
         Some(ShellType::Zsh),
         Some(working_dir),
-        Arc::new(ai_client),
     )
     .await;
 
@@ -285,21 +240,13 @@ async fn prepare_local_codex_child_launch_succeeds_when_testing_flag_is_enabled(
     let _home = EnvVarGuard::set("HOME", fake_home.path().as_os_str().to_os_string());
     let _path = EnvVarGuard::set("PATH", fake_bin_dir.path().as_os_str().to_os_string());
 
-    let mut ai_client = MockAIClient::new();
-    ai_client
-        .expect_create_agent_task()
-        .times(1)
-        .returning(|_, _, _, _| Ok("550e8400-e29b-41d4-a716-446655440000".parse().unwrap()));
-
     let prepared = prepare_local_harness_child_launch(
         "hello world".to_string(),
         "codex".to_string(),
         Some("ignored-model".to_string()),
         Some("parent-run".to_string()),
-        None,
         Some(ShellType::Zsh),
         Some(working_dir),
-        Arc::new(ai_client),
     )
     .await
     .unwrap();
@@ -313,7 +260,7 @@ async fn prepare_local_codex_child_launch_succeeds_when_testing_flag_is_enabled(
             .env_vars
             .contains_key(&OsString::from("ANTHROPIC_MODEL"))
     );
-    assert_eq!(prepared.run_id, "550e8400-e29b-41d4-a716-446655440000");
+    assert_eq!(prepared.run_id, prepared.task_id.to_string());
     assert!(!fake_home.path().join(".codex").exists());
 }
 
@@ -333,21 +280,13 @@ async fn prepare_local_claude_child_merges_anthropic_model_env_var() {
     );
     let _path = EnvVarGuard::set("PATH", fake_bin_dir.path().as_os_str().to_os_string());
 
-    let mut ai_client = MockAIClient::new();
-    ai_client
-        .expect_create_agent_task()
-        .times(1)
-        .returning(|_, _, _, _| Ok("550e8400-e29b-41d4-a716-446655440000".parse().unwrap()));
-
     let prepared = prepare_local_harness_child_launch(
         "hello world".to_string(),
         "claude".to_string(),
         Some("opus".to_string()),
         Some("parent-run".to_string()),
-        None,
         Some(ShellType::Zsh),
         Some(working_dir),
-        Arc::new(ai_client),
     )
     .await
     .unwrap();
@@ -366,12 +305,11 @@ async fn prepare_local_claude_child_merges_anthropic_model_env_var() {
             .env_vars
             .contains_key(&OsString::from("OZ_PARENT_LISTENER_MANAGED_EXTERNALLY"))
     );
-    assert!(
-        prepared
-            .command
-            .contains("run message send --sender-run-id")
-    );
-    assert!(prepared.command.contains("OZ_PARENT_RUN_ID"));
+    // The launched command carries the child's instructions, so it must not
+    // smuggle back the mailbox commands `run_task` rejects outright.
+    assert!(!prepared.command.contains("--sender-run-id"));
+    assert!(!prepared.command.contains("mark-delivered"));
+    assert!(prepared.command.contains("final response"));
 }
 
 #[tokio::test]
@@ -390,21 +328,13 @@ async fn prepare_local_claude_child_no_anthropic_model_when_empty() {
     );
     let _path = EnvVarGuard::set("PATH", fake_bin_dir.path().as_os_str().to_os_string());
 
-    let mut ai_client = MockAIClient::new();
-    ai_client
-        .expect_create_agent_task()
-        .times(1)
-        .returning(|_, _, _, _| Ok("550e8400-e29b-41d4-a716-446655440000".parse().unwrap()));
-
     let prepared = prepare_local_harness_child_launch(
         "hello world".to_string(),
         "claude".to_string(),
         None,
         Some("parent-run".to_string()),
-        None,
         Some(ShellType::Zsh),
         Some(working_dir),
-        Arc::new(ai_client),
     )
     .await
     .unwrap();
@@ -418,7 +348,6 @@ async fn prepare_local_claude_child_no_anthropic_model_when_empty() {
 
 #[tokio::test]
 async fn prepare_local_harness_child_launch_rejects_disabled_codex_before_shell_validation() {
-    let ai_client = Arc::new(MockAIClient::new());
     let result = prepare_local_harness_child_launch(
         "hello world".to_string(),
         "codex".to_string(),
@@ -426,8 +355,6 @@ async fn prepare_local_harness_child_launch_rejects_disabled_codex_before_shell_
         Some("parent-run".to_string()),
         None,
         None,
-        None,
-        ai_client,
     )
     .await;
 
@@ -435,4 +362,53 @@ async fn prepare_local_harness_child_launch_rejects_disabled_codex_before_shell_
         Ok(_) => panic!("disabled local codex should be rejected"),
         Err(err) => assert_eq!(err, LOCAL_CODEX_HARNESS_DISABLED_MESSAGE),
     }
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn prepare_local_claude_child_needs_no_task_service() {
+    // Launching a local child used to require `AIClient::create_agent_task`,
+    // a GraphQL round-trip behind an account this build never has — so every
+    // local harness launch failed before the subprocess was ever built. The
+    // run id is now minted locally: unique per launch, and never nil.
+    let fake_home = TempDir::new().unwrap();
+    let fake_bin_dir = TempDir::new().unwrap();
+    let working_dir = fake_home.path().join("workspace");
+    fs::create_dir_all(&working_dir).unwrap();
+    write_fake_cli(fake_bin_dir.path(), "claude");
+
+    let _home = EnvVarGuard::set("HOME", fake_home.path().as_os_str().to_os_string());
+    let _claude_home = EnvVarGuard::set(
+        "CLAUDE_HOME",
+        fake_home.path().join(".claude").as_os_str().to_os_string(),
+    );
+    let _path = EnvVarGuard::set("PATH", fake_bin_dir.path().as_os_str().to_os_string());
+
+    let prepare = || {
+        prepare_local_harness_child_launch(
+            "hello world".to_string(),
+            "claude".to_string(),
+            None,
+            Some("parent-run".to_string()),
+            Some(ShellType::Zsh),
+            Some(working_dir.clone()),
+        )
+    };
+
+    let first = prepare().await.unwrap();
+    let second = prepare().await.unwrap();
+
+    assert_eq!(first.run_id, first.task_id.to_string());
+    assert_ne!(
+        first.run_id, second.run_id,
+        "every local child needs its own run id to address its parent"
+    );
+    assert_eq!(
+        first.env_vars.get(&OsString::from("OZ_RUN_ID")),
+        Some(&OsString::from(first.run_id.clone()))
+    );
+    assert_eq!(
+        first.env_vars.get(&OsString::from("OZ_PARENT_RUN_ID")),
+        Some(&OsString::from("parent-run"))
+    );
 }

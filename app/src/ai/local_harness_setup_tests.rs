@@ -50,3 +50,41 @@ fn codex_remains_product_disabled() {
         }
     );
 }
+
+#[test]
+fn opencode_is_ready_when_cli_is_installed() {
+    assert_eq!(
+        local_harness_setup_state_with_cli_resolver(Harness::OpenCode, |_| true),
+        LocalHarnessSetupState::Ready
+    );
+}
+
+#[test]
+fn opencode_is_disabled_for_missing_cli() {
+    // The launch path already refuses to start OpenCode without its CLI;
+    // before this the picker still offered it as selectable.
+    assert_eq!(
+        local_harness_setup_state_with_cli_resolver(Harness::OpenCode, |_| false),
+        LocalHarnessSetupState::MissingHarness {
+            tooltip: LOCAL_OPENCODE_HARNESS_INSTALLATION_REQUIRED_TOOLTIP,
+        }
+    );
+}
+
+#[test]
+fn cli_probes_are_per_harness() {
+    // A resolver that only knows about `claude` must not make `opencode` look
+    // installed — the harness-to-command mapping has to be exact.
+    let only_claude = |command: &str| command == "claude";
+
+    assert_eq!(
+        local_harness_setup_state_with_cli_resolver(Harness::Claude, only_claude),
+        LocalHarnessSetupState::Ready
+    );
+    assert_eq!(
+        local_harness_setup_state_with_cli_resolver(Harness::OpenCode, only_claude),
+        LocalHarnessSetupState::MissingHarness {
+            tooltip: LOCAL_OPENCODE_HARNESS_INSTALLATION_REQUIRED_TOOLTIP,
+        }
+    );
+}

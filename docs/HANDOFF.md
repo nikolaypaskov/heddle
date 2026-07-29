@@ -23,6 +23,25 @@ deliberately not kept current.
 
 Removal work has repeatedly come close to breaking these by accident. See §4.
 
+**Where "local model / harness selection" actually holds.** It means the GUI. Stated plainly so
+nobody reads the bullet above as a claim about both frontends:
+
+- **GUI — works.** The harness catalog is derived client-side
+  (`ai/harness_availability.rs::local_harness_catalog`), CLI presence is probed live per render
+  (`local_harness_setup_state`), and Claude's model choice reaches the child as `ANTHROPIC_MODEL`.
+- **TUI — local harness selection does not exist.** `page_sequence` in
+  `warp_tui/src/orchestration_block.rs` gives Local only `[Location, Model]`, and
+  `normalize_tui_local_harness` (`orchestration_block/configuration.rs`) rewrites any non-Oz local
+  harness back to `oz` and clears the model id. This is **upstream design, not a Heddle
+  regression** — it arrived whole in upstream `4b33a6a78` — so the constraint was never true there
+  to break. Local *model* selection does work in the TUI (Oz models).
+- The consequence worth knowing: the TUI's Harness page is built and wired
+  (`configuration.rs` handles `ConfigPage::Harness`), but `page_sequence` only offers it for
+  Remote — and Remote needs a backend this fork does not talk to. So in the TUI that page is now
+  unreachable in practice. Making local harness selection work there is a small change on paper
+  (add `ConfigPage::Harness` to the Local sequence, drop the normaliser) but it is a **product
+  decision plus a TUI test surface**, not a bug fix. Nobody has taken it.
+
 **Non-goals.** This does not unlock Warp's paid features, does not reimplement Warp Drive, and does
 not fork Warp's server. Entitlements were enforced server-side; removing paywall UI removes nags, not
 restrictions. Anyone framing this as "free Pro" has misunderstood the project.

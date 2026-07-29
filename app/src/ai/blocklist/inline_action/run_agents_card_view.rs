@@ -484,8 +484,7 @@ impl RunAgentsCardView {
                     me.refresh_accept_button_state(ctx);
                     ctx.notify();
                 }
-                HarnessAvailabilityEvent::Changed
-                | HarnessAvailabilityEvent::AuthSecretsLoaded
+                HarnessAvailabilityEvent::AuthSecretsLoaded
                 | HarnessAvailabilityEvent::AuthSecretsFetchFailed
                 | HarnessAvailabilityEvent::AuthSecretDeleted { .. } => {
                     // Repopulate even on fetch failure to replace "Loading…".

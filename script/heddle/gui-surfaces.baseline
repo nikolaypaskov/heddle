@@ -83,6 +83,7 @@
 ./app/src/ai/execution_profiles/profiles_tests.rs	login
 ./app/src/ai/execution_profiles/profiles_tests.rs	login
 ./app/src/ai/execution_profiles/profiles_tests.rs	login
+./app/src/ai/harness_availability_tests.rs	logged-out
 ./app/src/ai/llms.rs	upgrade
 ./app/src/ai/llms.rs	upgrade
 ./app/src/ai/orchestration/remote_child.rs	cloud agent

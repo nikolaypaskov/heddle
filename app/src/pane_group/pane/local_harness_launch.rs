@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use shell_words::quote as shell_quote;
 use uuid::Uuid;
@@ -14,12 +13,9 @@ use crate::ai::agent_sdk::driver::harness::{
     remove_claude_externally_managed_listener_env_vars,
 };
 use crate::ai::agent_sdk::{task_env_vars, validate_cli_installed};
-use crate::ai::ambient_agents::task::{
-    HarnessConfig, HarnessModelConfig, normalize_orchestrator_agent_name,
-};
-use crate::ai::ambient_agents::{AgentConfigSnapshot, AmbientAgentTaskId};
+use crate::ai::ambient_agents::AmbientAgentTaskId;
+use crate::ai::ambient_agents::task::HarnessModelConfig;
 use crate::ai::local_harness_setup::local_harness_product_disabled_message;
-use crate::server::server_api::ai::AIClient;
 use crate::terminal::cli_agent_sessions::plugin_manager::{
     CliAgentPluginManager, plugin_manager_for,
 };
@@ -83,31 +79,36 @@ pub(super) fn validate_local_harness_shell(shell_type: Option<ShellType>) -> Res
     }
 }
 
-const LOCAL_CLAUDE_CHILD_ORCHESTRATION_INSTRUCTIONS: &str = r#"You are a local Claude Code child agent launched by a lead agent in Warp.
+// The child used to be told to coordinate over `oz run message send|list|read`.
+// That mailbox is Warp's server-side relay between runs, and this build rejects
+// every `TaskCommand::Message` outright (`ai/agent_sdk/mod.rs`) — so the child
+// was being handed a command guaranteed to fail, on the very path it was told to
+// use for reporting "at start, when blocked, and when complete". Minting a run id
+// locally gets the child launched; it does not conjure a mailbox.
+//
+// What does work locally: the child is a real conversation in this app, linked to
+// its lead by `parent_conversation_id`, so the lead can read the child's transcript
+// and final response through `BlocklistAIHistoryModel::child_conversations_of`.
+// That makes the final response the reporting channel, and the instructions say so.
+const LOCAL_CLAUDE_CHILD_ORCHESTRATION_INSTRUCTIONS: &str = r#"You are a local Claude Code child agent launched by a lead agent.
 
-Coordinate with the lead agent through the Oz CLI messaging environment:
-- Your run id is in OZ_RUN_ID.
-- The lead agent id is in OZ_PARENT_RUN_ID.
-- The Oz CLI command is in OZ_CLI.
+You run on this machine as an ordinary subprocess. There is no message bus between
+you and the lead agent: this build has no run mailbox, so `oz run message send`,
+`run message list` and `run message read` all fail. Do not call them, and do not
+look for another CLI to reach the lead agent — there isn't one.
 
-If OZ_CLI, OZ_RUN_ID, or OZ_PARENT_RUN_ID is missing, report that blocker in your final response.
-Do not use Claude Code Agent or SendMessage tools to contact the lead agent; use the Oz CLI commands below.
-Do not ask to inspect help before messaging. The command shapes below are complete.
+Report through your final response instead. The lead agent reads it directly.
+Because it is your only channel, make it self-contained:
+- State whether you succeeded, partially succeeded, or failed.
+- List what you changed, with file paths.
+- If you were blocked, say exactly what blocked you and what you had already done.
+- Do not end by saying you will report separately, or by waiting for a reply.
 
-Send a message to the lead agent at start, when blocked, and when complete:
-"$OZ_CLI" run message send --sender-run-id "$OZ_RUN_ID" --to "$OZ_PARENT_RUN_ID" --subject "<subject>" --body "<body>"
-All four send arguments are required: --sender-run-id "$OZ_RUN_ID", --to "$OZ_PARENT_RUN_ID", --subject, and --body.
-Do not pass "$OZ_PARENT_RUN_ID" as a positional argument to send.
+Do not stand by for instructions after finishing; nothing can send you any. Complete
+the task as specified, or explain precisely why you could not.
 
-After sending a message, and before ending or standing by, check recent inbox messages:
-"$OZ_CLI" run message list "$OZ_RUN_ID" --limit 25
-
-The plugin may already have read incoming messages while staging them, so do not rely on --unread.
-If recent messages from "$OZ_PARENT_RUN_ID" are present and you have not handled them, read them and use the latest lead-agent mailbox message as task context:
-"$OZ_CLI" run message read "$MESSAGE_ID"
-
-If a surfaced message requires acknowledgement, mark it delivered:
-"$OZ_CLI" run message mark-delivered "$MESSAGE_ID"
+OZ_RUN_ID and OZ_PARENT_RUN_ID are set so the app can correlate you with your lead
+agent in its own records. They are bookkeeping, not an address you can write to.
 "#;
 
 pub(super) fn local_claude_child_prompt(task_prompt: &str) -> String {
@@ -135,35 +136,14 @@ pub(super) fn build_local_codex_child_command(prompt: &str) -> String {
     format!("codex --dangerously-bypass-approvals-and-sandbox {quoted_prompt}")
 }
 
-pub(super) fn local_child_task_config(
-    harness: Harness,
-    agent_name: Option<String>,
-) -> Option<AgentConfigSnapshot> {
-    let agent_name = agent_name
-        .as_deref()
-        .and_then(normalize_orchestrator_agent_name);
-    match harness {
-        Harness::Oz | Harness::Unknown => None,
-        Harness::Claude | Harness::OpenCode | Harness::Gemini | Harness::Codex => {
-            Some(AgentConfigSnapshot {
-                name: agent_name,
-                harness: Some(HarnessConfig::from_harness_type(harness)),
-                ..Default::default()
-            })
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn prepare_local_harness_child_launch(
     prompt: String,
     harness_type: String,
     model_id: Option<String>,
     parent_run_id: Option<String>,
-    agent_name: Option<String>,
     shell_type: Option<ShellType>,
     startup_directory: Option<PathBuf>,
-    ai_client: Arc<dyn AIClient>,
 ) -> Result<PreparedLocalHarnessLaunch, String> {
     let harness_model_config =
         model_id
@@ -240,20 +220,11 @@ pub(super) async fn prepare_local_harness_child_launch(
         Harness::Gemini => unreachable!("normalize_local_child_harness filters out Gemini"),
     };
 
-    let task_id = ai_client
-        .create_agent_task(
-            prompt.clone(),
-            None,
-            parent_run_id.clone(),
-            local_child_task_config(harness, agent_name),
-        )
-        .await
-        .map_err(|error| {
-            format!(
-                "Failed to create local {} child task: {error}",
-                harness.display_name()
-            )
-        })?;
+    // The child is a plain local subprocess: it runs on this machine, inherits
+    // the user's own CLI auth, and reports back over the local Oz CLI. Its run
+    // id therefore only has to be unique here, so mint it locally rather than
+    // making task creation a hard precondition of launching.
+    let task_id = AmbientAgentTaskId::new_local();
 
     let mut env_vars = task_env_vars(Some(&task_id), parent_run_id.as_deref(), harness);
     if harness == Harness::Claude {

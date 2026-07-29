@@ -238,8 +238,7 @@ impl TuiOrchestrationBlock {
         ctx.subscribe_to_model(
             &HarnessAvailabilityModel::handle(ctx),
             |me, _, event, ctx| match event {
-                HarnessAvailabilityEvent::Changed
-                | HarnessAvailabilityEvent::AuthSecretsLoaded
+                HarnessAvailabilityEvent::AuthSecretsLoaded
                 | HarnessAvailabilityEvent::AuthSecretsFetchFailed
                 | HarnessAvailabilityEvent::AuthSecretCreated { .. }
                 | HarnessAvailabilityEvent::AuthSecretDeleted { .. } => {
