@@ -7,7 +7,7 @@
 # This script is invoked by `./script/run`, which handles cross-platform
 # setup (install_channel_config, binary name detection, feature-to-env-var
 # mapping). The following env vars are expected to be set by the caller:
-#   WARP_BIN_NAME  — "warp" (internal local build) or "warp-oss"
+#   WARP_BIN_NAME  — "warp" (internal local build) or "heddle"
 #   WARP_CHANNEL   — "local" or "oss"
 #   FEATURES       — comma-separated cargo features (already normalized)
 # Must be called from the root directory of the warp repo.
@@ -34,7 +34,13 @@ if [ "$WARP_CHANNEL" = "local" ]; then
     WARP_SCHEME_NAME="warplocal"
 else
     WARP_APP_PATH="${TARGET_DIR}/debug/bundle/osx/Heddle.app"
-    WARP_SCHEME_NAME="warposs"
+    # MUST equal `ChannelState::url_scheme()` for Channel::Oss. script/update_plist
+    # writes this into the dev bundle's CFBundleURLSchemes, and the app drops any
+    # URL whose scheme is not its own -- so a mismatch here does not fail the
+    # build, it just makes every custom URL delivered to a ./script/run build
+    # vanish. Pinned by url_scheme_matches_what_the_bundlers_register in
+    # crates/warp_core/src/channel/state_tests.rs.
+    WARP_SCHEME_NAME="heddle"
 fi
 DONT_OPEN=false
 # Launches the binary with "open", meaning the Warp process is

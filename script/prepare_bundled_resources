@@ -58,12 +58,18 @@ if [ -d "$RESOURCES_SRC/bundled" ]; then
   echo "Copying bundled resources to $DEST_DIR/bundled"
   rm -rf "$DEST_DIR/bundled"
   cp -R "$RESOURCES_SRC/bundled" "$DEST_DIR/bundled"
-  # Heddle: NO_SKILLS drops bundled agent skills (e.g. the Oz platform skill),
-  # which have no place in a build with no agent backend.
-  if [ -n "${NO_SKILLS:-}" ]; then
-    echo "NO_SKILLS set: removing bundled skills"
-    rm -rf "$DEST_DIR/bundled/skills"
-  fi
+  # The bundled skills ALL ship. There used to be a NO_SKILLS flag here that
+  # `rm -rf`'d the whole skills directory, justified as dropping "the Oz platform
+  # skill" -- a skill that is not in resources/bundled/skills and never was. What
+  # it actually deleted was eleven local capabilities: editing keybindings,
+  # settings, tab configs and MCP config; the BYOK Claude API reference; skill
+  # authoring; PR comments via the user's own `gh`. None of them contacts a Warp
+  # or Oz backend (audited file by file).
+  #
+  # It was only ever set on the Linux release path, so Linux shipped zero skills
+  # while macOS shipped all eleven -- from the same channel, calling itself the
+  # same app. If a future skill genuinely does need a backend, delete THAT skill
+  # by name here. Do not reintroduce a switch that removes the directory.
 else
   echo "Warning: No bundled directory found at $RESOURCES_SRC/bundled" >&2
 fi

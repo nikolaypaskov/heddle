@@ -1,0 +1,35 @@
+[Desktop Entry]
+# The version of the desktop entry spec this conforms to.
+Version=1.0
+
+Type=Application
+
+Name=Heddle
+GenericName=TerminalEmulator
+
+# The package name, which the deb/rpm post-install symlinks into /usr/bin. An
+# AppImage has no such symlink, so script/linux/bundle_appimage rewrites this to
+# the binary name before handing the file to linuxdeploy.
+Exec=heddle %U
+
+# Must equal the string the app sets as its WM_CLASS (X11) / app_id (Wayland),
+# which is `ChannelState::app_id()` rendered as "<qualifier>.<org>.<name>" --
+# see app/src/lib.rs and AppId's Display impl. If it does not match, the window
+# never associates with this entry: no launcher icon, nothing to pin.
+StartupWMClass=dev.heddle.Heddle
+
+Keywords=shell;prompt;command;commandline;cmd;
+
+# Resolved against the installed icon file names, which
+# script/linux/bundle_install writes as $BUNDLE_ID.png.
+Icon=dev.heddle.Heddle
+
+Categories=System;TerminalEmulator;
+
+# Don't run this application within a terminal.
+Terminal=false
+
+# Register ourselves as the handler for heddle:// URLs. This must equal
+# `ChannelState::url_scheme()` for the OSS channel: the app compares an incoming
+# URL's scheme against its own and drops anything else (app/src/lib.rs).
+MimeType=x-scheme-handler/heddle;

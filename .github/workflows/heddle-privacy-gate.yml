@@ -217,9 +217,12 @@ jobs:
           echo "Scanner correctly rejected the canary."
           rm -f /tmp/heddle-canary
 
-      # Pass the path explicitly. The script defaults to target/debug/heddle-tui,
-      # so calling it bare would have scanned a binary this job no longer builds --
-      # the exact silent-wrong-target failure this change exists to remove.
+      # Pass the path explicitly. The script's default is target/debug/heddle --
+      # correct here, but only for a runner that keeps its target directory in
+      # the workspace. The self-hosted runner sets CARGO_TARGET_DIR elsewhere, so
+      # a bare call would scan a path that does not exist, or worse, a stale one.
+      # (The default used to be target/debug/heddle-tui, which was the exact
+      # silent-wrong-target failure this job exists to remove.)
       - name: Verify no Warp endpoints in the shipped binary
         run: ./script/heddle/verify-no-warp-endpoints "${CARGO_TARGET_DIR:-target}/debug/heddle"
 

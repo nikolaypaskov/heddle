@@ -42,7 +42,15 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    # A release-LTO build of the GUI from a cold cache, plus cargo-about and the
+    # AppImage packaging. The TUI this replaced built in a fraction of the time;
+    # 120 minutes was sized for that, not for this.
+    timeout-minutes: 300
+    env:
+      # linuxdeploy and appimagetool are themselves AppImages, and GitHub's
+      # hosted runners have no FUSE. Without this they abort with "failed to set
+      # up fuse"; with it they unpack themselves and run from a temp directory.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -57,9 +65,11 @@ jobs:
           # download next to one that opens cleanly, and undercut the provenance
           # claim the signed artefact makes.
           #
-          # Linux has no GUI build, so the TUI is the only thing to ship there --
-          # and shipping it is what makes "Linux is built automatically" true
-          # rather than aspirational.
+          # Linux ships the SAME GUI, as an AppImage. It previously shipped the
+          # TUI because a comment here asserted "Linux has no GUI build" -- which
+          # was already false: heddle-privacy-gate.yml has been compiling
+          # `-p warp --bin heddle --features ...,gui` on Linux for some time. The
+          # TUI is no longer released on any platform.
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
 
@@ -77,29 +87,24 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
 
+      # `clang` is NOT redundant with libclang-dev. heddle-privacy-gate.yml
+      # installs both to compile the same GUI target; this list was missing it
+      # because the TUI never needed it.
+      #
+      # The last three are linuxdeploy's runtime helpers: it shells out to
+      # `file` for ELF detection, `desktop-file-validate` to check the entry it
+      # is given, and `patchelf` to rewrite rpaths on the bundled libraries.
       - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config unzip \
             libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
-            libfontconfig1-dev libasound2-dev libclang-dev
+            libfontconfig1-dev libasound2-dev libclang-dev \
+            clang \
+            file desktop-file-utils patchelf
 
-      # On macOS the Metal Toolchain is a separate Xcode component and the
-      # build fails without it. `xcrun -f metal` resolves even when the
-      # component is absent, so its presence proves nothing -- only the
-      # download does.
-      - name: Install macOS build dependencies
-        if: runner.os == 'macOS'
-        run: |
-          set -euxo pipefail
-          brew install protobuf cmake
-          protoc --version
-          xcodebuild -downloadComponent MetalToolchain
-
-      - name: Install protoc with well-known types (Linux)
-        if: runner.os == 'Linux'
+      - name: Install protoc with well-known types
         env:
           PROTOC_VERSION: "25.1"
         run: |
@@ -113,43 +118,109 @@ jobs:
       #
       # `save-if: false` would stop this workflow POISONING the shared cache, but not
       # stop it CONSUMING a cache another workflow poisoned -- and what this job produces
-      # is a signed, notarized binary that the release notes make provenance claims
-      # about. A release build starts cold so that what ships is built only from the
-      # committed source. The cost is a slower release build, which is the right trade
-      # for the one workflow whose output users install.
+      # is an artefact the release notes make provenance claims about, published under a
+      # checksum users are told to verify. A release build starts cold so that what ships
+      # is built only from the committed source. The cost is a slower release build, which
+      # is the right trade for the one workflow whose output users install.
 
-      - name: Build release binary
+      # `cargo about` is invoked by script/prepare_bundled_resources, which the
+      # bundler calls while staging the AppImage. Install it BEFORE the bundle
+      # step, not after: a missing cargo-about fails the build an hour in,
+      # after the whole GUI has compiled.
+      - name: Install cargo-about
+        run: cargo install cargo-about --locked --features cli
+
+      # linuxdeploy builds the AppDir and invokes appimagetool. Same pinned
+      # version a developer gets from script/linux/bootstrap.
+      #
+      # The pin is checked against the download before it is installed -- it
+      # previously checked only an ALREADY-CACHED copy, which on a fresh runner
+      # is never the case, so this job downloaded and executed an unchecked
+      # binary to build the artefact users install. That check establishes the
+      # upstream build, not its provenance: the commit id is read by running the
+      # binary. See the header of script/linux/install_linuxdeploy.
+      - name: Install linuxdeploy
+        run: |
+          set -euxo pipefail
+          ./script/linux/install_linuxdeploy
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build and bundle the GUI AppImage
+        id: bundle
         # GIT_RELEASE_TAG is read via option_env! in warp_core, so the binary can report its own
         # version. Without it app_version() is None and the build claims to be whatever Cargo.toml
         # says, which is 0.1.0 and has never been bumped -- every release before v0.3.1 shipped
         # reporting 0.1.0. Cargo records this in the crate's dep-info as an env-dep, so changing the
         # tag correctly invalidates the build rather than silently reusing a cached one.
+        #
+        # `--release-tag` gets the APP version, not the git tag. This step used to
+        # pass $RELEASE_TAG straight through, so the Linux artefact reported itself
+        # as "heddle-v0.3.1-macos-arm64" -- a string HeddleVersion::parse rejects,
+        # which the update client reads as "do not update". Same derivation as the
+        # publish job below; see script/heddle/generate-release-manifest.
+        #
+        # This step used to set NO_SKILLS=1 and SKIP_SETTINGS_SCHEMA=1. Both are
+        # gone, and the pair is why: NO_SKILLS deleted all eleven bundled skills
+        # -- every one of them a LOCAL capability, none of them backed by a Warp
+        # or Oz server -- so Linux shipped none while macOS shipped all eleven.
+        # SKIP_SETTINGS_SCHEMA was justified BY that deletion ("its only consumer
+        # is a bundled skill"), which stops being true the moment the skills come
+        # back: `modify-settings` and `tui-migrate-setup` both render
+        # {{settings_schema_path}} and would point at a file that is not there.
+        #
+        # SETTINGS_SCHEMA_CACHE makes the cost one generation instead of two --
+        # this step and the Package step below both call
+        # script/prepare_bundled_resources, and the second copies from the cache.
+        # See script/prepare_bundled_resources for the flag's contract.
         env:
-          GIT_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: cargo build --release -p warp_tui --bin heddle-tui --features standalone
-
-      # A release artefact that phones home is worse than no release at all.
-      - name: Privacy gate (self-test, then scan)
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          SETTINGS_SCHEMA_CACHE: ${{ runner.temp }}/settings_schema.json
         run: |
           set -euo pipefail
-          cp target/release/heddle-tui /tmp/heddle-canary
+          version="$(printf '%s' "$RELEASE_TAG" | sed -E 's/^heddle-//; s/-[a-z0-9]+-[a-z0-9]+$//')"
+          if ! printf '%s' "$version" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::could not derive vX.Y.Z from tag '$RELEASE_TAG' (got '$version')." >&2
+            exit 1
+          fi
+          echo "tag $RELEASE_TAG -> app version $version"
+          ./script/bundle -c oss --packages appimage --release-tag "$version"
+
+      # A release artefact that phones home is worse than no release at all.
+      #
+      # The paths come from script/linux/bundle's own GITHUB_OUTPUT, not from a
+      # hardcoded target/ path: the bundler picks its cargo profile directory
+      # (release-lto) itself, and a stale hardcoded path here would scan a
+      # binary from a previous run or fail outright.
+      - name: Privacy gate (self-test, then scan)
+        env:
+          EXECUTABLE_PATH: ${{ steps.bundle.outputs.executable_path }}
+        run: |
+          set -euo pipefail
+          test -f "$EXECUTABLE_PATH"
+          cp "$EXECUTABLE_PATH" /tmp/heddle-canary
           printf 'oz.warp.dev' >> /tmp/heddle-canary
           if ./script/heddle/verify-no-warp-endpoints /tmp/heddle-canary; then
             echo "::error::Scanner passed a binary with a planted endpoint; it is broken."
             exit 1
           fi
           rm -f /tmp/heddle-canary
-          ./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
+          ./script/heddle/verify-no-warp-endpoints "$EXECUTABLE_PATH"
           ./script/heddle/verify-bundled-assets
 
       - name: Package
         env:
           TARGET_NAME: ${{ matrix.target }}
+          APPIMAGE_PATH: ${{ steps.bundle.outputs.appimage_path }}
+          # Populated by the bundle step above, so this call copies rather than
+          # spending a second release-LTO build on the same JSON.
+          SETTINGS_SCHEMA_CACHE: ${{ runner.temp }}/settings_schema.json
         run: |
           set -euo pipefail
           name="heddle-${TARGET_NAME}"
           mkdir -p "dist/${name}"
-          cp target/release/heddle-tui "dist/${name}/"
+          test -f "$APPIMAGE_PATH"
+          cp "$APPIMAGE_PATH" "dist/${name}/"
+          chmod +x "dist/${name}/$(basename "$APPIMAGE_PATH")"
           cp README.md LICENSE-AGPL LICENSE-MIT "dist/${name}/"
           # AGPL distribution requires the licence texts to travel with the
           # binary, and dependency attribution must not be dropped. Use the
@@ -157,9 +228,11 @@ jobs:
           # both cargo-about output AND the curated non-Cargo notices for
           # bundled fonts, Alacritty, bash-preexec and others. A plain
           # `cargo about` run would silently omit those.
-          cargo install cargo-about --locked --features cli
-          NO_SKILLS=1 SKIP_SETTINGS_SCHEMA=1 \
-            ./script/prepare_bundled_resources "dist/${name}" oss \
+          #
+          # The AppImage already carries its own copy of this file, staged by the
+          # same script during bundling. This second copy is for the person who
+          # only ever unpacks the tarball.
+          ./script/prepare_bundled_resources "dist/${name}" oss \
             || cargo about generate --workspace -c about.toml -o "dist/${name}/THIRD_PARTY_LICENSES.txt" about.hbs
           test -s "dist/${name}/THIRD_PARTY_LICENSES.txt"
           # Fail loudly if the curated non-Cargo notices are missing, rather
@@ -175,6 +248,20 @@ jobs:
       # Scan the ACTUAL packaged binary, not just the pre-package executable.
       # Codex flagged that "every release artefact is scanned" was false because
       # the tarball was assembled after the earlier scan.
+      #
+      # Do NOT point the scanner at the .AppImage itself. Its payload is a
+      # compressed squashfs, so string literals are not present as literal bytes
+      # and a scan of the container proves nothing about the contents. Unpack it
+      # and scan the executable, reached through the usr/bin symlink so this does
+      # not have to know the /opt layout. `--appimage-extract` is handled by the
+      # AppImage runtime and needs no FUSE.
+      #
+      # KNOWN LIMIT: this proves the shipped bytes are endpoint-free. It does not
+      # prove the AppImage RUNS. Nothing here launches it, so a broken AppRun, an
+      # Exec= pointing at a name that is not on the image's PATH, or a missing
+      # bundled resource directory all pass this job and reach users. Catching
+      # those needs a headless launch (xvfb plus a --version or equivalent
+      # non-interactive entry point) that this job does not yet do.
       - name: Verify the packaged binary
         env:
           TARGET_NAME: ${{ matrix.target }}
@@ -183,7 +270,14 @@ jobs:
           name="heddle-${TARGET_NAME}"
           workdir="$(mktemp -d)"
           tar -xzf "dist/${name}.tar.gz" -C "$workdir"
-          ./script/heddle/verify-no-warp-endpoints "$workdir/${name}/heddle-tui"
+          appimage="$(find "$workdir/${name}" -maxdepth 1 -name '*.AppImage' -print -quit)"
+          if [ -z "$appimage" ]; then
+            echo "::error::no .AppImage inside dist/${name}.tar.gz"
+            exit 1
+          fi
+          chmod +x "$appimage"
+          ( cd "$workdir" && "$appimage" --appimage-extract >/dev/null )
+          ./script/heddle/verify-no-warp-endpoints "$workdir/squashfs-root/usr/bin/heddle"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -250,15 +344,17 @@ jobs:
       # The manifest is published ONLY onto a release that already carries the payload it
       # advertises.
       #
-      # This workflow builds `heddle-tui` and nothing else; the GUI `.app.zip` is signed and
-      # notarized on a developer's machine and uploaded by hand (docs/HANDOFF.md). Publishing
-      # the manifest unconditionally therefore produced a release that told every running
-      # Heddle a new version existed, and then 404'd when it went to fetch it -- and because
-      # the client reads `releases/latest/download/`, one such release poisons the check for
-      # everyone until the next one.
+      # This workflow builds the Linux AppImage and nothing else; the macOS `.app.zip` is
+      # signed and notarized on a developer's machine and uploaded by hand (docs/HANDOFF.md).
+      # Publishing the manifest unconditionally therefore produced a release that told every
+      # running Heddle a new version existed, and then 404'd when it went to fetch it -- and
+      # because the client reads `releases/latest/download/`, one such release poisons the
+      # check for everyone until the next one.
       #
-      # A TUI-only release is perfectly legitimate. It just must not advertise a GUI update,
-      # so this skips rather than fails.
+      # The check stays macOS-specific because the updater is: it downloads
+      # `Heddle-<arch>-apple-darwin.app.zip`, so a Linux artefact does not satisfy it no
+      # matter how current it is. A Linux-only release is perfectly legitimate. It just must
+      # not advertise a macOS update, so this skips rather than fails.
       - name: Publish the update manifest, if the app it points at is here
         env:
           GH_TOKEN: ${{ github.token }}

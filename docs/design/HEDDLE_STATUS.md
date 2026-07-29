@@ -244,7 +244,8 @@ Full Phase 6 design and effort breakdown:
 ## Verification you can run
 
 ```bash
-cargo build -p warp_tui --bin heddle-tui --features standalone
+cargo build -p warp --bin heddle \
+  --features release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2
 ./script/heddle/verify-no-warp-endpoints   # no warp.dev / key / telemetry in binary
 ./script/heddle/verify-bundled-assets       # no Warp trademarked images/fonts
 ```

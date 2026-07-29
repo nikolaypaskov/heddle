@@ -43,13 +43,31 @@ open Heddle.app
 
 </details>
 
+**Linux, x86_64.** The same app, as an AppImage, built by CI on every release tag.
+
+| File | What it is |
+|---|---|
+| `heddle-x86_64-unknown-linux-gnu.tar.gz` | Contains `Heddle-x86_64.AppImage`. |
+
+Unpack it, make the AppImage executable, and run it. It is not signed — verify the published
+SHA-256 before running it, or build from source (below).
+
+```bash
+shasum -a 256 -c heddle-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf heddle-x86_64-unknown-linux-gnu.tar.gz
+cd heddle-x86_64-unknown-linux-gnu
+chmod +x Heddle-x86_64.AppImage
+./Heddle-x86_64.AppImage
+```
+
 ### Two things to know before you download
 
 - **The built-in AI agent does not work.** It was designed to talk to Warp's server, and this
   version has no server to talk to. You can still use **Claude Code, Codex, Gemini CLI** and
   similar — they run as ordinary programs in the terminal and are unaffected.
-- **Apple Silicon Macs only.** No Intel Mac, no Windows. Linux is built automatically but not
-  published as a ready-to-run download yet.
+- **Apple Silicon Macs and x86_64 Linux only.** No Intel Mac, no Windows, no Linux on ARM.
+  The macOS build is signed and notarized; the Linux AppImage is not signed at all — Linux has
+  no equivalent of notarization here, and saying otherwise would overstate it.
 
 ---
 
@@ -82,7 +100,8 @@ project's Developer ID — a validly-signed build from anyone else is refused �
 read from the downloaded bundle itself, so a manifest cannot advertise one version and ship
 another. You are told what is available before the download starts, not after.
 
-macOS only for now.
+Update notifications are macOS only. The Linux AppImage does not check for updates at all — watch
+the releases page.
 
 ## What is not here
 
@@ -107,7 +126,7 @@ default and everything in it lives on your machine.
 | Drive — workflows, notebooks, environment variables | ✅ Works, stored on your machine |
 | Warp's built-in AI agent | ❌ Needs Warp's server |
 | Cloud sync and object sharing | ❌ Removed on purpose |
-| Windows, Intel Mac | ❌ Not built |
+| Windows, Intel Mac, Linux on ARM | ❌ Not built |
 
 Heddle is a terminal today, not an AI environment. A replacement agent that talks to a local
 program instead of a company server is [designed but not
@@ -138,9 +157,13 @@ been done yet, and that is stated plainly rather than glossed over.
 You do not have to trust the download. It is the same code:
 
 ```bash
-cargo build --release -p warp_tui --bin heddle-tui
-./script/heddle/verify-no-warp-endpoints target/release/heddle-tui
+cargo build --release -p warp --bin heddle \
+  --features release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2
+./script/heddle/verify-no-warp-endpoints target/release/heddle
 ```
+
+That is the binary that ships. On Linux, `./script/bundle -c oss --packages appimage
+--release-tag vX.Y.Z` wraps the same build into the published AppImage.
 
 On macOS you also need the Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`).
 Full instructions are in [CONTRIBUTING.md](CONTRIBUTING.md).

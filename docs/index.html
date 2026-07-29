@@ -307,30 +307,39 @@ footer .sig { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--r
 
   <section class="wrap">
     <h2><span class="n">03</span>Install</h2>
-    <p class="dek">Two artefacts ship for macOS: the app, and a terminal-only frontend.</p>
+    <p class="dek">One app, two platforms: a signed <code>.app</code> for macOS and an AppImage for
+    x86_64 Linux, built from the same source by the same release.</p>
     <div class="steps">
       <div class="step"><span class="num"></span><div>
         <h3>Download the app</h3>
-        <p><code>Heddle-aarch64-apple-darwin.app.zip</code> — start here. A terminal-only
-        <code>tar.gz</code> is published alongside it.</p>
+        <p><code>Heddle-aarch64-apple-darwin.app.zip</code> on macOS. On Linux,
+        <code>heddle-x86_64-unknown-linux-gnu.tar.gz</code>, which contains
+        <code>Heddle-x86_64.AppImage</code> — unpack it, make it executable, run it.</p>
       </div></div>
       <div class="step"><span class="num"></span><div>
-        <h3>Unzip with Archive Utility</h3>
+        <h3>macOS: unzip with Archive Utility</h3>
         <p>Double-click it. Avoid third-party unzip tools — some strip the Apple signature, after
         which macOS refuses to open the app.</p>
       </div></div>
       <div class="step"><span class="num"></span><div>
-        <h3>Drag Heddle.app to Applications</h3>
+        <h3>macOS: drag Heddle.app to Applications</h3>
         <p>Signed with an Apple Developer ID and notarized by Apple, with the ticket stapled — it
         opens with a double-click, no security warning to click past.</p>
       </div></div>
     </div>
 
     <div class="sh" style="margin-top:26px">
-      <div class="cm"># prefer the command line? verify, then unpack:</div>
+      <div class="cm"># prefer the command line? verify, then unpack (macOS):</div>
       <div><span class="p">$</span> <span class="c">shasum -a 256 -c Heddle-aarch64-apple-darwin.app.zip.sha256</span></div>
       <div><span class="p">$</span> <span class="c">ditto -x -k Heddle-aarch64-apple-darwin.app.zip .</span></div>
       <div><span class="p">$</span> <span class="c">open Heddle.app</span></div>
+    </div>
+
+    <div class="sh" style="margin-top:14px">
+      <div class="cm"># linux:</div>
+      <div><span class="p">$</span> <span class="c">shasum -a 256 -c heddle-x86_64-unknown-linux-gnu.tar.gz.sha256</span></div>
+      <div><span class="p">$</span> <span class="c">tar -xzf heddle-x86_64-unknown-linux-gnu.tar.gz</span></div>
+      <div><span class="p">$</span> <span class="c">./heddle-x86_64-unknown-linux-gnu/Heddle-x86_64.AppImage</span></div>
     </div>
 
     <div class="cards" style="margin-top:26px">

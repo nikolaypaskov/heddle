@@ -9,8 +9,10 @@ This file provides guidance when working with code in this repository.
 > do not reintroduce network calls to `warp.dev`, telemetry, account/sign-in
 > flows, or Warp Drive cloud sync. Many types still carry `Warp`/`Oz`/cloud names
 > from upstream; that code is being removed incrementally (see
-> [`docs/design/`](docs/design/)). The `warp_tui` binary is verified
-> endpoint-free by `script/heddle/verify-no-warp-endpoints` on every change.
+> [`docs/design/`](docs/design/)). The **GUI** binary — the `heddle` bin, which is
+> what ships as `Heddle.app` and as the Linux AppImage — is verified endpoint-free
+> by `script/heddle/verify-no-warp-endpoints` on every change. (This line used to
+> name `warp_tui`, which nobody downloads.)
 
 ## Development Commands
 

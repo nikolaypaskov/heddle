@@ -54,7 +54,8 @@ Then:
 # Build + run the GUI app locally
 ./script/run
 
-# Headless TUI front-end
+# Headless TUI front-end. A development tool only -- it is not released on any
+# platform; both macOS and Linux ship the GUI.
 ./script/run-tui
 
 # Tests. Note that `cargo test` alone covers only the workspace default members,
@@ -62,8 +63,10 @@ Then:
 cargo test -p warp --lib
 cargo test -p warp_core
 
-# Privacy scanners (must stay green — no warp.dev / keys / telemetry in the binary)
-cargo build -p warp_tui --bin heddle-tui --features standalone
+# Privacy scanners (must stay green — no warp.dev / keys / telemetry in the binary).
+# Build the GUI bin: that is what ships, and what the scanner defaults to.
+cargo build -p warp --bin heddle \
+  --features release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2
 ./script/heddle/verify-no-warp-endpoints
 ./script/heddle/verify-bundled-assets
 ./script/heddle/verify-warp-supply-chain

@@ -14,6 +14,20 @@ appimage_commit() {
 # A helper function to download an architecture-dependent AppImage and install
 # it in ~/.local/bin.
 #
+# WHAT THE PIN CHECK PROVES, AND WHAT IT DOES NOT
+#
+# It proves the binary now at $APPIMAGE_PATH reports the pinned upstream build.
+# That catches the failures that actually happen: a moved or retagged release
+# asset, a truncated download, a proxy serving an error page, a stale cached
+# copy from a different pin.
+#
+# It is NOT provenance. The commit id is read by RUNNING the downloaded binary,
+# so anyone who can replace the release asset can also choose what it reports.
+# Establishing provenance needs a checksum or signature obtained out of band and
+# pinned here, and this repo does not have one. Do not describe this as
+# "verified" without that qualifier -- the release workflow used to, and the
+# code did not even do this much.
+#
 # Usage:
 #   download_appimage $BINARY_NAME $VERSION $COMMIT $REPO_URL
 #
@@ -21,8 +35,9 @@ appimage_commit() {
 #   BINARY_NAME: The name of the AppImage-bundled binary we want to download,
 #                e.g.: "linuxdeploy".
 #   VERSION:     The upstream release tag.
-#   COMMIT:      The (short) commit SHA the release tag points at; used to
-#                verify the cached binary matches the pinned version.
+#   COMMIT:      The (short) commit SHA the release tag points at. Checked
+#                against a cached copy before reuse AND against a fresh download
+#                before it is installed.
 #   REPO_URL:    The URL of the GitHub repository hosting the release.
 download_appimage() {
   BINARY_NAME="$1"
@@ -38,8 +53,36 @@ download_appimage() {
   else
     APPIMAGE_RELEASE_URL="$REPO_URL/releases/download/$VERSION/$APPIMAGE_NAME"
     echo "⬇️ Downloading $APPIMAGE_RELEASE_URL..."
-    curl -fL "$APPIMAGE_RELEASE_URL" --output "$APPIMAGE_PATH"
-    chmod +x "$APPIMAGE_PATH"
+
+    # Download to a temporary path and only install it after the pin check.
+    # The version check above ran ONLY on an already-cached file, so a cache miss
+    # -- which is every fresh CI runner, including the release job that executes
+    # this to build the published AppImage -- downloaded and ran whatever the URL
+    # returned, unchecked.
+    TMP_PATH="$APPIMAGE_PATH.download.$$"
+    trap 'rm -f "$TMP_PATH"' EXIT
+    curl -fL "$APPIMAGE_RELEASE_URL" --output "$TMP_PATH"
+    chmod +x "$TMP_PATH"
+
+    ACTUAL_COMMIT="$(appimage_commit "$TMP_PATH" || true)"
+    if [ "$ACTUAL_COMMIT" != "$COMMIT" ]; then
+      rm -f "$TMP_PATH"
+      echo "❌ $APPIMAGE_NAME does not match the pinned build." >&2
+      echo "   expected git commit ID: $COMMIT" >&2
+      echo "   got:                    ${ACTUAL_COMMIT:-<none reported>}" >&2
+      echo "   from: $APPIMAGE_RELEASE_URL" >&2
+      if [ -z "$ACTUAL_COMMIT" ]; then
+        echo "   Reporting nothing usually means the AppImage could not run at all." >&2
+        echo "   AppImages need FUSE; on a host without it, set APPIMAGE_EXTRACT_AND_RUN=1." >&2
+      fi
+      exit 1
+    fi
+
+    # Install only now, atomically, so an interrupted or rejected download can
+    # never leave a half-written binary at the path the build later executes.
+    mv "$TMP_PATH" "$APPIMAGE_PATH"
+    trap - EXIT
+    echo "✅ Verified $APPIMAGE_NAME is the pinned build ($COMMIT)."
   fi
 
   # Create a symlink so we can invoke it like a normal binary.
