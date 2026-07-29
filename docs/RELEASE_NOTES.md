@@ -17,9 +17,14 @@ chmod +x Heddle-x86_64.AppImage
 shasum -a 256 -c heddle_0.5.0_amd64.deb.sha256
 sudo apt install ./heddle_0.5.0_amd64.deb
 
-# Fedora, RHEL, openSUSE
+# Fedora, RHEL
 shasum -a 256 -c heddle-0.5.0-1.x86_64.rpm.sha256
 sudo dnf install ./heddle-0.5.0-1.x86_64.rpm
+
+# openSUSE — zypper, not dnf. --no-gpg-checks because the package is
+# unsigned; the SHA-256 above is what stands in for a signature.
+shasum -a 256 -c heddle-0.5.0-1.x86_64.rpm.sha256
+sudo zypper --no-gpg-checks install ./heddle-0.5.0-1.x86_64.rpm
 ```
 
 ### One library is required and is not bundled
@@ -27,11 +32,23 @@ sudo dnf install ./heddle-0.5.0-1.x86_64.rpm
 Heddle links **ALSA (`libasound.so.2`)** for voice input. Audio libraries are meant to
 match the host, so a bundled copy would be the wrong answer.
 
-The `.deb` and `.rpm` **declare** it, so your package manager installs it for you. The
-AppImage format carries no dependency metadata at all, so on a minimal system install it
-yourself first: `libasound2t64` on Ubuntu 24.04 / Debian 13 and later, `libasound2` before
-that, `alsa-lib` on Fedora, RHEL and openSUSE. Without it the AppImage stops before it
-draws anything, with `libasound.so.2: cannot open shared object file`.
+The `.deb` and `.rpm` **declare** it, so your package manager installs it for you and you
+need do nothing. The AppImage format carries no dependency metadata at all, so on a
+minimal system install it yourself first:
+
+| Distribution | Package |
+|---|---|
+| Ubuntu 24.04+, Debian 13+ | `libasound2t64` |
+| Ubuntu 22.04, Debian 12 | `libasound2` |
+| Fedora, RHEL | `alsa-lib` |
+| openSUSE | `libasound2` |
+
+Four names for one library. openSUSE in particular calls it `libasound2`, **not**
+`alsa-lib` — which is why the `.rpm` declares the `libasound.so.2` SONAME rather than any
+package name, so every distribution resolves it to whatever it happens to call it.
+
+Without it the AppImage stops before it draws anything, with
+`libasound.so.2: cannot open shared object file`.
 
 ### Two things the packages do NOT do
 

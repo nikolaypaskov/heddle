@@ -65,7 +65,12 @@ so on a minimal system install it yourself first:
 |---|---|
 | Ubuntu 24.04+, Debian 13+ | `libasound2t64` |
 | Ubuntu 22.04, Debian 12 | `libasound2` |
-| Fedora, RHEL, openSUSE | `alsa-lib` |
+| Fedora, RHEL | `alsa-lib` |
+| openSUSE | `libasound2` |
+
+openSUSE is listed separately on purpose: it calls that package `libasound2`, not `alsa-lib`.
+Four names for one library is why the `.rpm` declares the `libasound.so.2` SONAME instead of any
+package name — that resolves everywhere, and your package manager picks the right one.
 
 Without it the AppImage stops before it draws anything, with
 `error while loading shared libraries: libasound.so.2: cannot open shared object file`.
@@ -86,7 +91,13 @@ sudo apt install ./heddle_0.5.0_amd64.deb
 # Fedora / RHEL
 shasum -a 256 -c heddle-0.5.0-1.x86_64.rpm.sha256
 sudo dnf install ./heddle-0.5.0-1.x86_64.rpm
+
+# openSUSE — zypper, not dnf
+shasum -a 256 -c heddle-0.5.0-1.x86_64.rpm.sha256
+sudo zypper --no-gpg-checks install ./heddle-0.5.0-1.x86_64.rpm
 ```
+
+`--no-gpg-checks` because the package is unsigned; that is what the SHA-256 above is for.
 
 ### Two things to know before you download
 

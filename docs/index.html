@@ -324,8 +324,11 @@ footer .sig { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--r
         and <code>.rpm</code> declare it, so your package manager installs it for you. The
         AppImage carries no dependency metadata, so on a minimal system install it first —
         <code>libasound2t64</code> on Ubuntu 24.04 and Debian 13 or later,
-        <code>libasound2</code> before that, <code>alsa-lib</code> on Fedora, RHEL and openSUSE.
-        Without it the AppImage exits with
+        <code>libasound2</code> before that, <code>alsa-lib</code> on Fedora and RHEL, and
+        <code>libasound2</code> again on openSUSE, which does <em>not</em> call it
+        <code>alsa-lib</code>. Four names for one library, which is why the <code>.rpm</code>
+        declares the <code>libasound.so.2</code> SONAME rather than any package name. Without it
+        the AppImage exits with
         <code>libasound.so.2: cannot open shared object file</code>.</p>
       </div></div>
       <div class="step"><span class="num"></span><div>
@@ -358,7 +361,9 @@ footer .sig { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--r
       <div class="cm"># linux, native packages — the package manager resolves libasound for you:</div>
       <div><span class="p">$</span> <span class="c">sudo apt install ./heddle_0.5.0_amd64.deb</span></div>
       <div><span class="p">$</span> <span class="c">sudo dnf install ./heddle-0.5.0-1.x86_64.rpm</span></div>
-      <div class="cm"># neither adds a package repository, and neither auto-updates.</div>
+      <div class="cm"># opensuse uses zypper, and the package is unsigned:</div>
+      <div><span class="p">$</span> <span class="c">sudo zypper --no-gpg-checks install ./heddle-0.5.0-1.x86_64.rpm</span></div>
+      <div class="cm"># none of them adds a package repository, and none auto-updates.</div>
     </div>
 
     <div class="cards" style="margin-top:26px">
