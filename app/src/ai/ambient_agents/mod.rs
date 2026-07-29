@@ -28,6 +28,19 @@ pub struct ParseAmbientAgentTaskIdError(#[from] uuid::Error);
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AmbientAgentTaskId(NonNilUuid);
 
+impl AmbientAgentTaskId {
+    /// Mints a task id locally, without asking a server for one.
+    ///
+    /// Used by run modes that are entirely local — a local child harness is an
+    /// ordinary subprocess whose id only has to correlate the child with its
+    /// parent on this machine (`OZ_RUN_ID`/`OZ_PARENT_RUN_ID`, the hidden pane's
+    /// conversation record). A random v4 UUID satisfies that without a
+    /// round-trip that this build has no endpoint for.
+    pub fn new_local() -> Self {
+        Self(NonNilUuid::try_from(Uuid::new_v4()).expect("a v4 UUID is never nil"))
+    }
+}
+
 impl Display for AmbientAgentTaskId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
