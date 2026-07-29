@@ -153,15 +153,22 @@ jobs:
         # which the update client reads as "do not update". Same derivation as the
         # publish job below; see script/heddle/generate-release-manifest.
         #
-        # NO_SKILLS drops the bundled Oz platform skills, which have no backend
-        # here. SKIP_SETTINGS_SCHEMA skips generating settings_schema.json: its
-        # only consumer is a template variable expanded for bundled agent skills,
-        # and NO_SKILLS has just removed those. Generating it would mean a second
-        # release-LTO link of the whole workspace under a different feature set.
+        # This step used to set NO_SKILLS=1 and SKIP_SETTINGS_SCHEMA=1. Both are
+        # gone, and the pair is why: NO_SKILLS deleted all eleven bundled skills
+        # -- every one of them a LOCAL capability, none of them backed by a Warp
+        # or Oz server -- so Linux shipped none while macOS shipped all eleven.
+        # SKIP_SETTINGS_SCHEMA was justified BY that deletion ("its only consumer
+        # is a bundled skill"), which stops being true the moment the skills come
+        # back: `modify-settings` and `tui-migrate-setup` both render
+        # {{settings_schema_path}} and would point at a file that is not there.
+        #
+        # SETTINGS_SCHEMA_CACHE makes the cost one generation instead of two --
+        # this step and the Package step below both call
+        # script/prepare_bundled_resources, and the second copies from the cache.
+        # See script/prepare_bundled_resources for the flag's contract.
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-          NO_SKILLS: "1"
-          SKIP_SETTINGS_SCHEMA: "1"
+          SETTINGS_SCHEMA_CACHE: ${{ runner.temp }}/settings_schema.json
         run: |
           set -euo pipefail
           version="$(printf '%s' "$RELEASE_TAG" | sed -E 's/^heddle-//; s/-[a-z0-9]+-[a-z0-9]+$//')"
@@ -198,6 +205,9 @@ jobs:
         env:
           TARGET_NAME: ${{ matrix.target }}
           APPIMAGE_PATH: ${{ steps.bundle.outputs.appimage_path }}
+          # Populated by the bundle step above, so this call copies rather than
+          # spending a second release-LTO build on the same JSON.
+          SETTINGS_SCHEMA_CACHE: ${{ runner.temp }}/settings_schema.json
         run: |
           set -euo pipefail
           name="heddle-${TARGET_NAME}"
@@ -216,8 +226,7 @@ jobs:
           # The AppImage already carries its own copy of this file, staged by the
           # same script during bundling. This second copy is for the person who
           # only ever unpacks the tarball.
-          NO_SKILLS=1 SKIP_SETTINGS_SCHEMA=1 \
-            ./script/prepare_bundled_resources "dist/${name}" oss \
+          ./script/prepare_bundled_resources "dist/${name}" oss \
             || cargo about generate --workspace -c about.toml -o "dist/${name}/THIRD_PARTY_LICENSES.txt" about.hbs
           test -s "dist/${name}/THIRD_PARTY_LICENSES.txt"
           # Fail loudly if the curated non-Cargo notices are missing, rather
