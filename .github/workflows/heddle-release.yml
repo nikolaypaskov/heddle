@@ -366,6 +366,73 @@ jobs:
               || { echo "::error::THIRD_PARTY_LICENSES.txt in the $format artefact is missing curated non-Cargo notices"; exit 1; }
           done
 
+          # /usr/bin/<name> must be SHIPPED BY THE PACKAGE, resolve, and be owned.
+          #
+          # Nothing above tests this. The binary locator uses `-type f`, which by
+          # construction cannot see a symlink -- so deleting the link from the
+          # payload, pointing it at a path that is not in the package, or moving
+          # link management back into a maintainer script would all pass every
+          # other check here and produce a package that installs and cannot be
+          # launched. app/channels/oss/dev.heddle.Heddle.desktop has
+          # `Exec=heddle`, resolved through PATH, and the link is the only thing
+          # that puts it there.
+          #
+          # A maintainer script that `rm -f`s the path and `ln -s`es it is the
+          # specific regression to prevent: dpkg then neither owns the path nor
+          # conflict-checks it, and the matching `rm -f` in postrm deletes
+          # whatever is there on removal, including another package's file.
+          echo "--- the /usr/bin/heddle symlink ---"
+          for format in appimage deb rpm; do
+            link="$(find "$root/$format" -type l -name heddle -path '*/usr/bin/heddle' -print -quit)"
+            if [ -z "$link" ]; then
+              echo "::error::the $format artefact ships no usr/bin/heddle symlink; the desktop entry's Exec=heddle would not resolve"
+              find "$root/$format" -path '*usr/bin*' -maxdepth 6 || true
+              exit 1
+            fi
+            target="$(readlink "$link")"
+            # Re-root an absolute target inside the extracted tree; a relative one
+            # (the AppImage's) resolves from the link's own directory.
+            case "$target" in
+              /*) resolved="${link%/usr/bin/heddle}$target" ;;
+              *)  resolved="$(dirname "$link")/$target" ;;
+            esac
+            if [ ! -f "$resolved" ]; then
+              echo "::error::the $format artefact's usr/bin/heddle points at '$target', which is not in the package"
+              exit 1
+            fi
+            echo "  $format: usr/bin/heddle -> $target (resolves inside the package)"
+          done
+
+          # ...and that the package MANAGER owns it, which is what buys the
+          # conflict check. Being in the extracted tree already implies this for
+          # the .deb, but assert it against the package's own file list so the
+          # failure names the right thing.
+          dpkg-deb -c "$deb" > /tmp/deb-contents.txt
+          deb_owns="$(grep -c ' \./usr/bin/heddle -> ' /tmp/deb-contents.txt || true)"
+          if [ "$deb_owns" -ne 1 ]; then
+            echo "::error::the .deb does not ship ./usr/bin/heddle in its data archive (found $deb_owns)"
+            exit 1
+          fi
+          rpm_owns=0
+          while IFS= read -r f; do
+            [ "$f" = "/usr/bin/heddle" ] && rpm_owns=1
+          done <<< "$(rpm -qpl "$rpm")"
+          if [ "$rpm_owns" -ne 1 ]; then
+            echo "::error::the .rpm does not list /usr/bin/heddle in %files"
+            exit 1
+          fi
+
+          # No maintainer script may touch that path. Captured rather than piped
+          # into `grep -q`: see the pipefail note below.
+          dpkg-deb --info "$deb" postinst postrm > /tmp/deb-scripts.txt 2>/dev/null || true
+          script_offenders="$(grep -nE '^[[:space:]]*(rm|ln)[[:space:]]' /tmp/deb-scripts.txt | grep '/usr/bin/heddle' || true)"
+          if [ -n "$script_offenders" ]; then
+            echo "::error::a .deb maintainer script manipulates /usr/bin/heddle; it must be shipped in the payload instead"
+            printf '%s\n' "$script_offenders"
+            exit 1
+          fi
+          echo "  owned by dpkg and rpm; no maintainer script touches it"
+
           # The native packages must DECLARE libasound, and the declaration must
           # be one that RESOLVES. The AppImage cannot declare anything -- it has
           # no dependency metadata at all, which is why its requirement is
@@ -374,10 +441,17 @@ jobs:
           # dies with "libasound.so.2: cannot open shared object file"; that is
           # the same silent shape as an upload glob matching nothing.
           #
-          # These checks used to substring-match "libasound"/"alsa", which
-          # `libasound-does-not-exist` would have sailed through -- a dependency
-          # that fails on the user's machine and nowhere before it. Both are now
-          # resolved or exact-matched instead.
+          # WHOLE-TOKEN comparison, not `case "$x" in *"$want"*`. That earlier
+          # form was a substring test wearing an exact-match name, and Codex
+          # broke it in one line: `libasound2t64 | libasound2-does-not-exist`
+          # CONTAINS `libasound2t64 | libasound2`, so it was accepted. The
+          # mutation test that "proved" the check only tried names that delete
+          # the valid token, so it could not see that class at all.
+          #
+          # The apt simulation below does not close it either: where
+          # libasound2t64 resolves, apt never evaluates the second alternative,
+          # so a corrupted fallback ships and only breaks on bookworm and jammy,
+          # which is exactly where the fallback is the one that matters.
           #
           # Everything is captured into a variable rather than piped into
           # `grep -q`. Under `set -o pipefail`, grep -q closes the pipe on its
@@ -385,10 +459,24 @@ jobs:
           # -- which would report "does not declare an ALSA dependency" precisely
           # when it does.
 
+          # Split a Debian Depends field on ',' into groups, then each group on
+          # '|' into alternatives, trim, and rejoin. An alternative group matches
+          # only if its whole normalised form is equal to what is wanted.
+          deb_has_exact_group() { # $1 = Depends field, $2 = e.g. "libasound2t64|libasound2"
+            local group normalised
+            while IFS= read -r group; do
+              normalised="$(printf '%s' "$group" | tr '|' '\n' \
+                | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | paste -sd'|' -)"
+              [ "$normalised" = "$2" ] && return 0
+            done <<< "$(printf '%s' "$1" | tr ',' '\n')"
+            return 1
+          }
+
           # .deb: resolve the whole Depends field against the runner's apt index.
           # Simulation only: downloads nothing, installs nothing, needs no root.
           # This fails if ANY entry -- ALSA or not -- names something apt cannot
           # install, so it also guards the nine dlopen'd libraries beside it.
+          # It is necessary and NOT sufficient; see the note above.
           echo "--- .deb: resolving every declared dependency ---"
           deb_depends="$(dpkg-deb -f "$deb" Depends)"
           printf '.deb Depends: %s\n' "$deb_depends"
@@ -397,42 +485,75 @@ jobs:
             tail -40 /tmp/apt-sim.log
             exit 1
           fi
-          echo "every Depends entry resolves"
-          # ...and that the ALSA entry is the exact alternative pair. The order
-          # matters: on Ubuntu 24.04 `libasound2` alone has no installable
-          # candidate, so the t64 name has to come first.
-          case "$deb_depends" in
-            *"libasound2t64 | libasound2"*) ;;
-            *) echo "::error::the .deb does not declare 'libasound2t64 | libasound2'"; exit 1 ;;
-          esac
+          echo "every Depends entry resolves on this runner"
+          # ...and the ALSA group is exactly these two names in this order. The
+          # order is load-bearing: on Ubuntu 24.04 `libasound2` alone has no
+          # installable candidate, and before it the t64 name does not exist.
+          if ! deb_has_exact_group "$deb_depends" "libasound2t64|libasound2"; then
+            echo "::error::the .deb's ALSA alternative group is not exactly 'libasound2t64 | libasound2'"
+            exit 1
+          fi
+          echo "ALSA alternative group is exactly 'libasound2t64 | libasound2'"
 
           # .rpm: compare the declaration against the SONAMEs the shipped binary
-          # actually links, read out of the ELF inside the package. A name that
-          # is merely alsa-ish cannot satisfy this.
+          # actually links, read out of the ELF inside the package.
+          #
+          # `rpm -qp --requires` emits one requirement per line, so the token
+          # boundary is the line. An ELF requirement is `<soname>(...)(64bit)`,
+          # so a NEEDED entry is covered only by a line that begins with the
+          # soname followed immediately by '(' -- `libasound.so.2-does-not-exist`
+          # does not.
           #
           # NOT a resolution check: resolving rpm dependencies needs a Fedora or
           # openSUSE container and their metadata mirrors, which would let a
           # third party's outage fail a release that is otherwise perfect. That
           # resolution WAS run by hand (fedora:41 -> alsa-lib, opensuse/leap:15.6
-          # -> libasound2); docs/HANDOFF.md carries the command to re-run when
+          # -> libasound2); docs/HANDOFF.md carries the commands to re-run when
           # this Requires line changes.
+          #
+          # KNOWN LIMIT, measured rather than assumed. This half cannot see a
+          # CORRUPTED EXPLICIT token in the spec -- e.g.
+          # `libasound.so.2()(64bit)-does-not-exist`. rpmbuild's automatic
+          # generator adds the correct requirement from DT_NEEDED whatever the
+          # explicit line says, so the packaged metadata still requires ALSA and
+          # both checks below still pass, while the bogus token ships and makes
+          # the package uninstallable. That mutation is caught at BUILD time
+          # instead, by the whole-token check in script/linux/bundle_rpm, which
+          # reads the rendered spec. Mutation-tested there.
+          #
+          # The .deb has no such gap: dpkg-deb generates nothing, so its Depends
+          # field is exactly what was written and the check above sees all of it.
+          #
+          # So: exact about coverage, approximate about installability.
           echo "--- .rpm: declared Requires vs the binary's DT_NEEDED ---"
           rpm_binary="$(find "$root/rpm" -type f -name heddle)"
           rpm_requires="$(rpm -qp --requires "$rpm")"
           printf '%s\n' "$rpm_requires"
           missing=0
-          while read -r soname; do
+          while IFS= read -r soname; do
             [ -n "$soname" ] || continue
-            case "$rpm_requires" in
-              *"$soname"*) echo "  covered: $soname" ;;
-              *) echo "::error::the .rpm does not require $soname, which the shipped binary links"; missing=1 ;;
-            esac
-          done < <(readelf -d "$rpm_binary" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p')
+            covered=0
+            while IFS= read -r req; do
+              case "$req" in "$soname"'('*) covered=1 ;; esac
+            done <<< "$rpm_requires"
+            if [ "$covered" -eq 1 ]; then
+              echo "  covered: $soname"
+            else
+              echo "::error::the .rpm does not require $soname, which the shipped binary links"
+              missing=1
+            fi
+          done <<< "$(readelf -d "$rpm_binary" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p')"
           [ "$missing" -eq 0 ] || exit 1
-          case "$rpm_requires" in
-            *"libasound.so.2()(64bit)"*) ;;
-            *) echo "::error::the .rpm does not declare libasound.so.2()(64bit)"; exit 1 ;;
-          esac
+          # And the explicit declaration, matched as a whole line.
+          rpm_alsa=0
+          while IFS= read -r req; do
+            [ "$req" = "libasound.so.2()(64bit)" ] && rpm_alsa=1
+          done <<< "$rpm_requires"
+          if [ "$rpm_alsa" -ne 1 ]; then
+            echo "::error::the .rpm has no requirement equal to 'libasound.so.2()(64bit)'"
+            exit 1
+          fi
+          echo "ALSA requirement is exactly 'libasound.so.2()(64bit)'"
 
       # `if-no-files-found: error` catches the case where NOTHING matched. It
       # does NOT catch one of three patterns matching nothing, which is why the
