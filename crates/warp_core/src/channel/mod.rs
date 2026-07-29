@@ -89,3 +89,7 @@ impl fmt::Display for Channel {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "url_scheme_tests.rs"]
+mod url_scheme_tests;
