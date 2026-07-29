@@ -9,6 +9,8 @@ pub(crate) const LOCAL_HARNESS_INSTALLATION_REQUIRED_TOOLTIP: &str =
     "Install Claude Code to use this local harness.";
 pub(crate) const LOCAL_CODEX_HARNESS_INSTALLATION_REQUIRED_TOOLTIP: &str =
     "Install Codex to use this local harness.";
+pub(crate) const LOCAL_OPENCODE_HARNESS_INSTALLATION_REQUIRED_TOOLTIP: &str =
+    "Install OpenCode to use this local harness.";
 pub(crate) const LOCAL_CODEX_HARNESS_DISABLED_MESSAGE: &str =
     "Local Codex child agents are temporarily disabled.";
 
@@ -72,6 +74,14 @@ fn local_harness_setup_state_with_cli_resolver(
         Harness::Codex if !cli_is_installed("codex") => LocalHarnessSetupState::MissingHarness {
             tooltip: LOCAL_CODEX_HARNESS_INSTALLATION_REQUIRED_TOOLTIP,
         },
+        // `prepare_local_harness_child_launch` already refuses to start a
+        // local OpenCode child without the CLI; surface that in the picker
+        // instead of letting the user pick a harness that cannot launch.
+        Harness::OpenCode if !cli_is_installed("opencode") => {
+            LocalHarnessSetupState::MissingHarness {
+                tooltip: LOCAL_OPENCODE_HARNESS_INSTALLATION_REQUIRED_TOOLTIP,
+            }
+        }
         Harness::Oz
         | Harness::Claude
         | Harness::OpenCode

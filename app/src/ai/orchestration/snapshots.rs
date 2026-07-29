@@ -18,7 +18,9 @@ use crate::LLMPreferences;
 use crate::ai::auth_secret_types::auth_secret_types_for_harness;
 use crate::ai::cloud_environments::CloudAmbientAgentEnvironment;
 use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
-use crate::ai::harness_availability::{AuthSecretFetchState, HarnessAvailabilityModel};
+use crate::ai::harness_availability::{
+    AuthSecretFetchState, HarnessAvailability, HarnessAvailabilityModel,
+};
 use crate::ai::harness_display;
 use crate::ai::local_harness_setup::{
     LocalHarnessSetupState, local_harness_is_product_enabled, local_harness_setup_state,
@@ -133,12 +135,26 @@ pub fn location_snapshot(state: &OrchestrationConfigState, _ctx: &AppContext) ->
 
 // ── Harness ─────────────────────────────────────────────────────────
 
-/// Server-provided harness entry decoupled from `HarnessAvailability` so
-/// the pure row builder can be tested directly.
+/// A harness catalog entry decoupled from `HarnessAvailability` so the pure
+/// row builder can be tested directly.
 struct HarnessEntryInput {
     harness: Harness,
     display_name: String,
     enabled: bool,
+}
+
+/// Projects the harness catalog onto the pure builder's input type. Split out
+/// of [`harness_snapshot`] so tests can feed the *real* catalog through the
+/// *real* builder without an `AppContext`.
+fn harness_entry_inputs(harnesses: &[HarnessAvailability]) -> Vec<HarnessEntryInput> {
+    harnesses
+        .iter()
+        .map(|entry| HarnessEntryInput {
+            harness: entry.harness,
+            display_name: entry.display_name.clone(),
+            enabled: entry.enabled,
+        })
+        .collect()
 }
 
 /// Builds the harness options, mirroring the GUI's
@@ -147,15 +163,7 @@ struct HarnessEntryInput {
 pub fn harness_snapshot(state: &OrchestrationConfigState, ctx: &AppContext) -> OptionSnapshot {
     let is_local = !state.execution_mode.is_remote();
     let availability = HarnessAvailabilityModel::as_ref(ctx);
-    let entries: Vec<HarnessEntryInput> = availability
-        .available_harnesses()
-        .iter()
-        .map(|entry| HarnessEntryInput {
-            harness: entry.harness,
-            display_name: entry.display_name.clone(),
-            enabled: entry.enabled,
-        })
-        .collect();
+    let entries = harness_entry_inputs(availability.available_harnesses());
     let target_display = Harness::parse_orchestration_harness(&state.harness_type)
         .map(|harness| availability.display_name_for(harness).to_string());
     build_harness_snapshot(

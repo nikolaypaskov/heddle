@@ -5,7 +5,6 @@ use instant::Instant;
 use serde::{Deserialize, Serialize};
 use warp_cli::agent::Harness;
 use warp_core::features::FeatureFlag;
-use warp_core::user_preferences::GetUserPreferences;
 use warp_errors::report_error;
 use warp_managed_secrets::client::SecretOwner;
 use warp_managed_secrets::{ManagedSecretManager, ManagedSecretValue};
@@ -14,14 +13,11 @@ use warpui::{Entity, ModelContext, RequestState, SingletonEntity};
 use crate::ai::harness_display;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::{AuthManager, AuthManagerEvent};
-use crate::network::{NetworkStatus, NetworkStatusEvent, NetworkStatusKind};
 use crate::server::retry_strategies::{
     OUT_OF_BAND_REQUEST_RETRY_STRATEGY, is_transient_graphql_or_http_error,
 };
 use crate::server::server_api::ServerApiProvider;
-use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 
-const CACHE_KEY: &str = "AvailableHarnesses";
 const AUTH_SECRET_FETCH_FAILURE_COOLDOWN: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -41,16 +37,35 @@ pub struct HarnessAvailability {
     pub available_models: Vec<HarnessModelInfo>,
 }
 
-/// Default fallback used before the server responds.
-/// Oz is enabled by default so the UI is usable pre-fetch; the server
-/// list (which respects admin overrides) replaces this once available.
-fn default_harnesses() -> Vec<HarnessAvailability> {
-    vec![HarnessAvailability {
-        harness: Harness::Oz,
-        display_name: "Warp".to_string(),
-        enabled: true,
-        available_models: vec![],
-    }]
+/// Harnesses that can be driven as a local child process.
+///
+/// Mirrors [`Harness::parse_local_child_harness`]. Gemini is deliberately
+/// absent: `prepare_local_harness_child_launch` treats it as unreachable and
+/// it hangs the orchestration flow (see `orchestration/snapshots.rs`).
+const LOCAL_CHILD_HARNESSES: [Harness; 3] = [Harness::Claude, Harness::OpenCode, Harness::Codex];
+
+/// The harness catalog, derived entirely from local facts.
+///
+/// There is no account and no harness endpoint to query here, so the catalog
+/// is a fixed client-side list: the built-in agent plus every harness that can
+/// run as a local child process. Membership is deliberately install-agnostic —
+/// whether a harness's CLI is actually present, and whether it is disabled by
+/// product policy, is resolved live at render time by
+/// `local_harness_setup_state`, so a CLI installed while the app is running is
+/// picked up on the next picker open instead of requiring a restart.
+pub(crate) fn local_harness_catalog() -> Vec<HarnessAvailability> {
+    std::iter::once(Harness::Oz)
+        .chain(LOCAL_CHILD_HARNESSES)
+        .map(|harness| HarnessAvailability {
+            harness,
+            display_name: harness_display::display_name(harness).to_string(),
+            // `enabled` carried the server's org-policy verdict. With no
+            // server there is no policy to deny anything; local readiness is
+            // the picker's job.
+            enabled: true,
+            available_models: Vec::new(),
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -67,8 +82,10 @@ pub struct AuthSecretEntry {
     pub owner: SecretOwner,
 }
 
+/// The catalog itself is static, so the only thing left to announce is
+/// auth-secret state — hence the uniform `AuthSecret*` prefix.
+#[allow(clippy::enum_variant_names)]
 pub enum HarnessAvailabilityEvent {
-    Changed,
     AuthSecretsLoaded,
     /// Emitted when a lazy auth-secrets fetch fails. Subscribers should
     /// re-render so any "Loading…" placeholders can transition to an
@@ -103,40 +120,20 @@ pub struct HarnessAvailabilityModel {
 
 impl HarnessAvailabilityModel {
     pub fn new(ctx: &mut ModelContext<Self>) -> Self {
-        let harnesses = get_cached(ctx).unwrap_or_else(default_harnesses);
-
-        ctx.subscribe_to_model(&NetworkStatus::handle(ctx), |me, _, event, ctx| {
-            if let NetworkStatusEvent::NetworkStatusChanged {
-                new_status: NetworkStatusKind::Online,
-            } = event
-            {
-                me.refresh(ctx);
-            }
-        });
-
-        ctx.subscribe_to_model(&AuthManager::handle(ctx), |me, _, event, ctx| {
+        ctx.subscribe_to_model(&AuthManager::handle(ctx), |me, _, event, _ctx| {
             if let AuthManagerEvent::AuthComplete = event {
                 let cached_harnesses: Vec<Harness> = me.auth_secrets.keys().copied().collect();
                 for harness in cached_harnesses {
                     me.invalidate_auth_secrets(harness);
                 }
-                me.refresh(ctx);
             }
         });
 
-        ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), |me, _, event, ctx| {
-            if let UserWorkspacesEvent::TeamsChanged = event {
-                me.refresh(ctx);
-            }
-        });
-
-        let me = Self {
-            harnesses,
+        Self {
+            harnesses: local_harness_catalog(),
             auth_secrets: HashMap::new(),
             auth_secret_retry_after: HashMap::new(),
-        };
-        me.refresh(ctx);
-        me
+        }
     }
 
     pub fn available_harnesses(&self) -> &[HarnessAvailability] {
@@ -337,53 +334,6 @@ impl HarnessAvailabilityModel {
             }
         });
     }
-
-    pub fn refresh(&self, ctx: &mut ModelContext<Self>) {
-        // The endpoint queries `user`, which requires auth.
-        if !AuthStateProvider::as_ref(ctx).get().is_logged_in() {
-            return;
-        }
-
-        let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
-        ctx.spawn(
-            async move { ai_client.get_available_harnesses().await },
-            |me, result, ctx| match result {
-                Ok(new_harnesses) => {
-                    if new_harnesses != me.harnesses {
-                        me.harnesses = new_harnesses;
-                        me.cache(ctx);
-                        // Invalidate cached auth secrets so the next menu open refetches.
-                        let stale: Vec<Harness> = me.auth_secrets.keys().copied().collect();
-                        for harness in stale {
-                            me.invalidate_auth_secrets(harness);
-                        }
-                        ctx.emit(HarnessAvailabilityEvent::Changed);
-                    }
-                }
-                Err(e) => {
-                    report_error!(e.context("Failed to fetch available harnesses"));
-                }
-            },
-        );
-    }
-
-    fn cache(&self, ctx: &ModelContext<Self>) {
-        if let Ok(serialized) = serde_json::to_string(&self.harnesses)
-            && let Err(e) = ctx
-                .private_user_preferences()
-                .write_value(CACHE_KEY, serialized)
-        {
-            report_error!(anyhow::anyhow!(e).context("Failed to cache available harnesses"));
-        }
-    }
-}
-
-fn get_cached(ctx: &ModelContext<HarnessAvailabilityModel>) -> Option<Vec<HarnessAvailability>> {
-    let raw = ctx
-        .private_user_preferences()
-        .read_value(CACHE_KEY)
-        .ok()??;
-    serde_json::from_str::<Vec<HarnessAvailability>>(&raw).ok()
 }
 
 fn secret_owner_from_space(space: &warp_graphql::object::Space) -> SecretOwner {
@@ -417,3 +367,7 @@ impl Entity for HarnessAvailabilityModel {
 }
 
 impl SingletonEntity for HarnessAvailabilityModel {}
+
+#[cfg(test)]
+#[path = "harness_availability_tests.rs"]
+mod tests;

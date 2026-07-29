@@ -307,3 +307,204 @@ fn runner_snapshot_loading_reports_loading_status() {
     // Empty selection maps to the "use environment default" row.
     assert_eq!(snapshot.selected_id.as_deref(), Some(""));
 }
+
+// ── Harness picker on the real logged-out path ──────────────────────
+//
+// Everything above feeds `build_harness_snapshot` synthetic entries, which is
+// exactly why a permanently-empty catalog shipped unnoticed. The tests below
+// drive the *real* catalog through the *real* builder with the *real* PATH
+// probe, with only the PATH itself controlled — no auth state exists in this
+// build, so this is the state every user is permanently in.
+
+use std::ffi::OsString;
+use std::fs;
+use std::path::Path;
+
+use tempfile::TempDir;
+use warp_core::features::FeatureFlag;
+
+use super::{OptionRow, OptionSnapshot, harness_entry_inputs, local_harness_setup_state};
+use crate::ai::harness_availability::local_harness_catalog;
+use crate::ai::local_harness_setup::{
+    LOCAL_CODEX_HARNESS_DISABLED_MESSAGE, LOCAL_CODEX_HARNESS_INSTALLATION_REQUIRED_TOOLTIP,
+    LOCAL_HARNESS_INSTALLATION_REQUIRED_TOOLTIP,
+    LOCAL_OPENCODE_HARNESS_INSTALLATION_REQUIRED_TOOLTIP,
+};
+
+struct PathVarGuard(Option<OsString>);
+
+impl PathVarGuard {
+    fn set(dir: &Path) -> Self {
+        let original = std::env::var_os("PATH");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("PATH", dir.as_os_str()) };
+        Self(original)
+    }
+}
+
+impl Drop for PathVarGuard {
+    fn drop(&mut self) {
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        match self.0.take() {
+            Some(original) => unsafe { std::env::set_var("PATH", original) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+    }
+}
+
+fn write_fake_cli(bin_dir: &Path, name: &str) {
+    let executable_name = if cfg!(windows) {
+        format!("{name}.cmd")
+    } else {
+        name.to_string()
+    };
+    let executable_path = bin_dir.join(executable_name);
+    let script = if cfg!(windows) {
+        "@echo off\r\n"
+    } else {
+        "#!/bin/sh\n"
+    };
+    fs::write(&executable_path, script).unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(&executable_path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&executable_path, permissions).unwrap();
+    }
+}
+
+/// Builds the local-mode harness picker exactly as `harness_snapshot` does,
+/// minus the `AppContext` lookup of the catalog singleton.
+fn local_harness_picker(initial_harness: &str) -> OptionSnapshot {
+    build_harness_snapshot(
+        harness_entry_inputs(&local_harness_catalog()),
+        initial_harness,
+        None,
+        true,
+        &local_harness_setup_state,
+    )
+}
+
+fn row<'a>(snapshot: &'a OptionSnapshot, id: &str) -> Option<&'a OptionRow> {
+    snapshot.rows.iter().find(|row| row.id == id)
+}
+
+#[test]
+#[serial_test::serial]
+fn harness_picker_offers_installed_local_harnesses_with_no_account() {
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_cli(bin_dir.path(), "claude");
+    write_fake_cli(bin_dir.path(), "opencode");
+    let _path = PathVarGuard::set(bin_dir.path());
+
+    let snapshot = local_harness_picker("oz");
+
+    assert_eq!(snapshot.status, OptionSourceStatus::Ready);
+    for id in ["claude", "opencode"] {
+        let row = row(&snapshot, id).unwrap_or_else(|| panic!("{id} missing from the picker"));
+        assert_eq!(
+            row.disabled_reason, None,
+            "{id} is installed but was offered disabled"
+        );
+    }
+    assert!(
+        row(&snapshot, "oz").is_some(),
+        "the built-in agent vanished"
+    );
+    assert_eq!(snapshot.selected_id.as_deref(), Some("oz"));
+}
+
+#[test]
+#[serial_test::serial]
+fn harness_picker_selects_a_local_harness_by_id() {
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_cli(bin_dir.path(), "claude");
+    let _path = PathVarGuard::set(bin_dir.path());
+
+    let snapshot = local_harness_picker("claude");
+
+    assert_eq!(snapshot.selected_id.as_deref(), Some("claude"));
+}
+
+#[test]
+#[serial_test::serial]
+fn harness_picker_flags_local_harnesses_whose_cli_is_absent() {
+    let empty_dir = TempDir::new().unwrap();
+    let _path = PathVarGuard::set(empty_dir.path());
+
+    let snapshot = local_harness_picker("oz");
+
+    assert_eq!(
+        row(&snapshot, "claude").unwrap().disabled_reason.as_deref(),
+        Some(LOCAL_HARNESS_INSTALLATION_REQUIRED_TOOLTIP)
+    );
+    assert_eq!(
+        row(&snapshot, "opencode")
+            .unwrap()
+            .disabled_reason
+            .as_deref(),
+        Some(LOCAL_OPENCODE_HARNESS_INSTALLATION_REQUIRED_TOOLTIP)
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn harness_picker_never_offers_gemini() {
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_cli(bin_dir.path(), "gemini");
+    let _path = PathVarGuard::set(bin_dir.path());
+
+    assert!(
+        row(&local_harness_picker("oz"), "gemini").is_none(),
+        "Gemini hangs orchestration and is unreachable in the launch path"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn harness_picker_hides_codex_while_it_is_product_disabled() {
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_cli(bin_dir.path(), "codex");
+    let _path = PathVarGuard::set(bin_dir.path());
+
+    assert!(
+        row(&local_harness_picker("oz"), "codex").is_none(),
+        "product-disabled harnesses are filtered from the local picker, \
+         not shown with `{LOCAL_CODEX_HARNESS_DISABLED_MESSAGE}`"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn harness_picker_offers_codex_once_its_flag_is_on() {
+    let _local_codex = FeatureFlag::LocalClaudeCodexChildHarnesses.override_enabled(true);
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_cli(bin_dir.path(), "codex");
+    let _path = PathVarGuard::set(bin_dir.path());
+
+    assert_eq!(
+        row(&local_harness_picker("oz"), "codex")
+            .expect("codex missing once its flag is on")
+            .disabled_reason,
+        None
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn harness_picker_flags_codex_with_its_flag_on_but_no_cli() {
+    let _local_codex = FeatureFlag::LocalClaudeCodexChildHarnesses.override_enabled(true);
+    let empty_dir = TempDir::new().unwrap();
+    let _path = PathVarGuard::set(empty_dir.path());
+
+    assert_eq!(
+        row(&local_harness_picker("oz"), "codex")
+            .unwrap()
+            .disabled_reason
+            .as_deref(),
+        Some(LOCAL_CODEX_HARNESS_INSTALLATION_REQUIRED_TOOLTIP)
+    );
+}

@@ -12,7 +12,6 @@ pub use repo_metadata::repositories::RepoDetectionSource;
 pub use warp_cli::agent::Harness;
 use warp_completer::completer::{CompletionContext as _, TopLevelCommandCaseSensitivity};
 use warp_completer::signatures::CommandRegistry;
-use warpui::SingletonEntity as _;
 
 pub use crate::ai::agent::api::ServerConversationToken;
 pub use crate::ai::agent::conversation::{

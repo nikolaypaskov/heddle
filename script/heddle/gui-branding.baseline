@@ -259,7 +259,6 @@
 ./app/src/ai/facts/view/rule.rs	warp
 ./app/src/ai/geap_credentials_tests.rs	warp
 ./app/src/ai/geap_credentials_tests.rs	warp
-./app/src/ai/harness_availability.rs	warp
 ./app/src/ai/harness_display.rs	warp
 ./app/src/ai/mcp/file_based_manager_tests.rs	warp
 ./app/src/ai/mcp/file_based_manager_tests.rs	warp

@@ -259,8 +259,7 @@ impl OrchestrationConfigBlockView {
                     }
                     ctx.notify();
                 }
-                HarnessAvailabilityEvent::Changed
-                | HarnessAvailabilityEvent::AuthSecretsLoaded
+                HarnessAvailabilityEvent::AuthSecretsLoaded
                 | HarnessAvailabilityEvent::AuthSecretsFetchFailed
                 | HarnessAvailabilityEvent::AuthSecretDeleted { .. } => {
                     // Repopulate even on fetch failure to replace "Loading…".
