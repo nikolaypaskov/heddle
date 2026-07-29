@@ -28,11 +28,17 @@ License:     AGPL-3.0-only AND MIT
 # the AppImage excludelist on purpose, because audio libraries are meant to match
 # the host, so bundling it is not an option either.
 #
-# Written as a SONAME rather than as the package name "alsa-lib". Verified in a
-# fedora:41 container: dnf resolves libasound.so.2()(64bit) to alsa-lib and pulls
-# it in when this package is installed. The SONAME also survives distributions
-# that name the package something else, which "alsa-lib" would not, and it is
-# consistent with the nine entries beside it, which have always been SONAMEs.
+# Written as a SONAME rather than as a package name, because there is no one
+# package name that works. Checked in containers:
+#
+#   fedora:41          dnf resolves libasound.so.2()(64bit) -> alsa-lib, and
+#                      pulls it in when this package is installed
+#   opensuse/leap:15.6 zypper resolves the same SONAME -> a package called
+#                      libasound2
+#
+# So "alsa-lib" would be unresolvable on openSUSE and "libasound2" unresolvable
+# on Fedora, while the SONAME satisfies both. It is also consistent with the nine
+# entries beside it, which have always been SONAMEs.
 # rpmbuild's automatic dependency generator adds this entry by itself from the
 # binary's DT_NEEDED list (confirmed with rpm -qp --requires on a test build);
 # it is written out anyway so the declaration is reviewable in the source rather
