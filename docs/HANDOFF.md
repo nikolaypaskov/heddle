@@ -122,10 +122,17 @@ Things about that shape that are load-bearing:
 - **ALSA is declared, not bundled.** `libasound.so.2` is the only non-universal library the binary
   links; it comes from `crates/voice_input` → `cpal`, which `gui = ["voice_input"]` makes a hard
   component of the GUI. The `.deb` declares `libasound2t64 | libasound2` and the `.rpm` declares
-  the `libasound.so.2()(64bit)` SONAME (which resolves to `alsa-lib` on Fedora). Both bundlers
-  fail the build if that declaration is missing, because a package that declares nothing installs
-  cleanly and then dies at startup. The AppImage cannot declare anything, so its requirement is
-  documented in README.md, docs/index.html and docs/RELEASE_NOTES.md instead.
+  the `libasound.so.2()(64bit)` SONAME. Both bundlers fail the build if that declaration is
+  missing, because a package that declares nothing installs cleanly and then dies at startup. The
+  AppImage cannot declare anything, so its requirement is documented in README.md,
+  docs/index.html and docs/RELEASE_NOTES.md instead.
+- **`/usr/bin/heddle` is SHIPPED IN BOTH PACKAGES, not created by a maintainer script.** A
+  postinst that `rm -f`s a path and then `ln -s`es it produces a file the package manager does not
+  own: no conflict check on install, nothing under `dpkg -L`, and a matching `rm -f` in postrm
+  that deletes whatever is at that path on removal — including another package's file. Both
+  formats now put the link in the payload (`script/linux/bundle_deb`, and `%files` in
+  `resources/linux/rpm/heddle/heddle.spec.template`). If you ever move link creation back into a
+  maintainer script, you reintroduce that.
 
 To reproduce the Linux artefacts locally, on Linux:
 
@@ -135,6 +142,29 @@ sudo apt-get install -y fakeroot rpm                                     # for t
 ./script/bundle -c oss --packages appimage,deb,rpm --release-tag vX.Y.Z
 # -> target/release-lto/bundle/linux/{Heddle-<arch>.AppImage,heddle_*.deb,heddle-*.rpm}
 ```
+
+### Checking the rpm's dependencies actually resolve
+
+The release job resolves the **`.deb`**'s dependencies for real, with `apt-get install -s` against
+the runner's own apt index, so a name that does not exist fails the release. It does **not** do
+the equivalent for the `.rpm`: that needs a Fedora or openSUSE container and their metadata
+mirrors, and letting a third party's outage fail a two-hour release build is a worse trade than
+checking this by hand when the `Requires:` line changes. What the job does instead is compare the
+declaration against the SONAMEs the shipped binary actually links (`readelf -d`), which is
+network-free and cannot be satisfied by a plausible-looking wrong name.
+
+So: **when you change `Requires:` in `resources/linux/rpm/heddle/heddle.spec.template`, run this
+once by hand** against the built package.
+
+```bash
+docker run --rm -v "$PWD:/w" fedora:41 \
+  dnf -q -y install --assumeno /w/heddle-X.Y.Z-1.x86_64.rpm     # expect: alsa-lib in the plan
+docker run --rm -v "$PWD:/w" opensuse/leap:15.6 \
+  zypper -n se --provides --match-exact 'libasound.so.2()(64bit)'   # expect: libasound2
+```
+
+Those two lines are why the spec uses the SONAME rather than a package name: Fedora calls that
+package `alsa-lib` and openSUSE calls it `libasound2`, so no single literal name resolves on both.
 
 The `--release-tag` is **not optional**. Without it `option_env!("GIT_RELEASE_TAG")` is `None`, the
 app cannot report its own version, and `script/update_plist` leaves `CFBundleShortVersionString` at

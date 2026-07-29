@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 
-# Create a symlink from /usr/bin to our binary under /opt.
+# There is no symlink management here, deliberately.
 #
-# The name is the BINARY name, which for this channel is also the package name
-# and also the desktop entry's Exec= (app/channels/oss/dev.heddle.Heddle.desktop).
-# If those three ever drift apart, the launcher entry stops working silently.
-rm -f /usr/bin/@@BINARY_NAME@@
-ln -s @@OPTDIR@@/@@BINARY_NAME@@ /usr/bin/@@BINARY_NAME@@
+# /usr/bin/@@BINARY_NAME@@ is shipped in the package's DATA ARCHIVE, so dpkg owns
+# it: it conflict-checks the path at unpack time, records it under `dpkg -L`, and
+# removes it on uninstall -- and only while the record still points at us.
+#
+# This script used to `rm -f` that path and re-create it. dpkg therefore knew
+# nothing about the link: no conflict check, no ownership record, and a matching
+# unconditional `rm -f` in postrm that deleted whatever was at the path on
+# removal, including another package's file. See the block that creates it in
+# script/linux/bundle_deb.
+#
+# The link name is the BINARY name, which for this channel is also the package
+# name and also the desktop entry's Exec=
+# (app/channels/oss/dev.heddle.Heddle.desktop). If those three ever drift apart,
+# the launcher entry stops working silently.
 
 # Make sure the system incorporates the newly-installed desktop file.
 if hash update-desktop-database 2>/dev/null; then

@@ -112,6 +112,38 @@ mkdir -p "$PKGDIR"
 OPT_DIR="/opt/$OPT_PROVIDER/$PACKAGE_NAME"
 source "$WORKSPACE_ROOT_DIR/script/linux/bundle_install" "$PKGDIR"
 
+# Ship the /usr/bin symlink IN THE DATA ARCHIVE, not from the postinst.
+#
+# The postinst used to `rm -f /usr/bin/heddle` and then `ln -s` it. That creates
+# a path dpkg does not own, and three things follow from that:
+#
+#   1. dpkg runs no conflict check, because as far as it knows the package
+#      installs nothing at /usr/bin/heddle. Another package's file there is
+#      deleted silently by the `rm -f`.
+#   2. `dpkg -L heddle` never lists it and `dpkg -S /usr/bin/heddle` reports
+#      nothing owns it, so a later package can take the path with no conflict
+#      recorded anywhere.
+#   3. `postrm`'s matching unconditional `rm -f` then deletes whatever is at
+#      that path on removal -- including the file that other package installed.
+#
+# Packaging the link fixes all three: dpkg refuses to overwrite a path another
+# package owns, records ownership, and on removal deletes only what it installed
+# and only while the record still points at us.
+#
+# resources/linux/rpm/heddle/heddle.spec.template already did this correctly --
+# it creates the link in %install and lists it in %files. This is the .deb
+# catching up with the .rpm.
+#
+# Absolute, not relative: Debian policy asks for relative symlinks within one
+# top-level directory and absolute ones across, and /usr/bin -> /opt crosses.
+#
+# oss only. The other channels' postinst templates still manage the link
+# themselves; changing that would change packages this fork does not ship.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  mkdir -p "$PKGDIR/usr/bin"
+  ln -s "$OPT_DIR/$BINARY_NAME" "$PKGDIR/usr/bin/$BINARY_NAME"
+fi
+
 # Move the Debian-specific package metadata into the package directory.
 DEBIAN_DIR="$PKGDIR/DEBIAN"
 VERSION="$(echo "$GIT_RELEASE_TAG" | sed -E "s/^v//; s/([a-z]+)_/\1./")"
@@ -167,13 +199,30 @@ chmod 755 \
 # Checked here rather than trusted from the template, because a sed that failed
 # to substitute, or a template edited to drop the line, both produce a control
 # file that dpkg-deb accepts without complaint.
-if ! grep -qE '^Depends:[[:space:]]*[^[:space:]]' "$DEBIAN_DIR/control"; then
+#
+# Matched EXACTLY, not by substring. A test for "libasound" anywhere in the line
+# would accept `libasound-does-not-exist`, which dpkg-deb builds happily and apt
+# then refuses on the user's machine. The release workflow additionally resolves
+# the whole field with `apt-get install -s` against a real apt index; this check
+# is the build-time half, and it runs even for a local `./script/bundle` where
+# there is no workflow to do the resolving.
+DEPENDS_LINE="$(sed -n 's/^Depends:[[:space:]]*//p' "$DEBIAN_DIR/control")"
+if [ -z "$DEPENDS_LINE" ]; then
   echo "::error ::$DEBIAN_DIR/control declares no Depends line; the package would install and then fail to start"
   exit 1
 fi
-if ! grep -qE '^Depends:.*libasound' "$DEBIAN_DIR/control"; then
-  echo "::error ::$DEBIAN_DIR/control does not declare an ALSA dependency (libasound2t64 | libasound2)"
-  exit 1
+# The ALSA assertion is oss-only. Warp's control.template does not list it and is
+# not this fork's to change; asserting it unconditionally would fail a build of a
+# channel we do not ship, for a rule we do not get to impose.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  DEB_ALSA_DEPENDS="libasound2t64 | libasound2"
+  case "$DEPENDS_LINE" in
+    *"$DEB_ALSA_DEPENDS"*) ;;
+    *)
+      echo "::error ::$DEBIAN_DIR/control does not declare '$DEB_ALSA_DEPENDS'; got: $DEPENDS_LINE"
+      exit 1
+      ;;
+  esac
 fi
 
 # Build the actual package.
