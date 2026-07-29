@@ -135,13 +135,26 @@ sed \
 # ubuntu:24.04 could not run the v0.5.0 binary without it. Checked against the
 # rendered spec, because an unsubstituted placeholder or an edited template both
 # produce a spec rpmbuild accepts in silence.
-if ! grep -qE '^Requires:[[:space:]]*[^[:space:]]' "$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec"; then
+#
+# Matched EXACTLY, not by substring: a test for "alsa" anywhere in the line would
+# accept `alsa-does-not-exist`, which rpmbuild packages happily and dnf then
+# refuses on the user's machine.
+REQUIRES_LINE="$(sed -n 's/^Requires:[[:space:]]*//p' "$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec")"
+if [ -z "$REQUIRES_LINE" ]; then
   echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec declares no Requires line"
   exit 1
 fi
-if ! grep -qE '^Requires:.*(libasound|alsa)' "$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec"; then
-  echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec does not declare an ALSA dependency"
-  exit 1
+# oss-only, for the same reason as the matching check in script/linux/bundle_deb:
+# Warp's warp.spec.template does not list ALSA and is not this fork's to change.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  RPM_ALSA_REQUIRES="libasound.so.2()(64bit)"
+  case "$REQUIRES_LINE" in
+    *"$RPM_ALSA_REQUIRES"*) ;;
+    *)
+      echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec does not declare '$RPM_ALSA_REQUIRES'; got: $REQUIRES_LINE"
+      exit 1
+      ;;
+  esac
 fi
 
 # Build the actual package.

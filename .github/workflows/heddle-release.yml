@@ -366,30 +366,72 @@ jobs:
               || { echo "::error::THIRD_PARTY_LICENSES.txt in the $format artefact is missing curated non-Cargo notices"; exit 1; }
           done
 
-          # The native packages must DECLARE libasound. The AppImage cannot --
-          # it has no dependency metadata at all, which is why its requirement is
+          # The native packages must DECLARE libasound, and the declaration must
+          # be one that RESOLVES. The AppImage cannot declare anything -- it has
+          # no dependency metadata at all, which is why its requirement is
           # documented in README.md, docs/index.html and docs/RELEASE_NOTES.md
           # instead. A package that declares nothing installs cleanly and then
           # dies with "libasound.so.2: cannot open shared object file"; that is
-          # the same silent shape as an upload glob matching nothing, so it is
-          # asserted here as well as in the bundlers.
+          # the same silent shape as an upload glob matching nothing.
           #
-          # Captured into variables rather than piped into `grep -q`. Under
-          # `set -o pipefail`, grep -q closes the pipe on its first match and the
-          # writer can die of SIGPIPE, failing the pipeline -- which would report
-          # "does not declare an ALSA dependency" precisely when it does.
-          echo "--- declared dependencies ---"
+          # These checks used to substring-match "libasound"/"alsa", which
+          # `libasound-does-not-exist` would have sailed through -- a dependency
+          # that fails on the user's machine and nowhere before it. Both are now
+          # resolved or exact-matched instead.
+          #
+          # Everything is captured into a variable rather than piped into
+          # `grep -q`. Under `set -o pipefail`, grep -q closes the pipe on its
+          # first match and the writer can die of SIGPIPE, failing the pipeline
+          # -- which would report "does not declare an ALSA dependency" precisely
+          # when it does.
+
+          # .deb: resolve the whole Depends field against the runner's apt index.
+          # Simulation only: downloads nothing, installs nothing, needs no root.
+          # This fails if ANY entry -- ALSA or not -- names something apt cannot
+          # install, so it also guards the nine dlopen'd libraries beside it.
+          echo "--- .deb: resolving every declared dependency ---"
           deb_depends="$(dpkg-deb -f "$deb" Depends)"
           printf '.deb Depends: %s\n' "$deb_depends"
+          if ! apt-get install -s -y --no-install-recommends "$deb" > /tmp/apt-sim.log 2>&1; then
+            echo "::error::the .deb declares a dependency that apt cannot resolve on this runner"
+            tail -40 /tmp/apt-sim.log
+            exit 1
+          fi
+          echo "every Depends entry resolves"
+          # ...and that the ALSA entry is the exact alternative pair. The order
+          # matters: on Ubuntu 24.04 `libasound2` alone has no installable
+          # candidate, so the t64 name has to come first.
           case "$deb_depends" in
-            *libasound*) ;;
-            *) echo "::error::the .deb does not declare an ALSA dependency"; exit 1 ;;
+            *"libasound2t64 | libasound2"*) ;;
+            *) echo "::error::the .deb does not declare 'libasound2t64 | libasound2'"; exit 1 ;;
           esac
+
+          # .rpm: compare the declaration against the SONAMEs the shipped binary
+          # actually links, read out of the ELF inside the package. A name that
+          # is merely alsa-ish cannot satisfy this.
+          #
+          # NOT a resolution check: resolving rpm dependencies needs a Fedora or
+          # openSUSE container and their metadata mirrors, which would let a
+          # third party's outage fail a release that is otherwise perfect. That
+          # resolution WAS run by hand (fedora:41 -> alsa-lib, opensuse/leap:15.6
+          # -> libasound2); docs/HANDOFF.md carries the command to re-run when
+          # this Requires line changes.
+          echo "--- .rpm: declared Requires vs the binary's DT_NEEDED ---"
+          rpm_binary="$(find "$root/rpm" -type f -name heddle)"
           rpm_requires="$(rpm -qp --requires "$rpm")"
-          printf '.rpm Requires:\n%s\n' "$rpm_requires"
+          printf '%s\n' "$rpm_requires"
+          missing=0
+          while read -r soname; do
+            [ -n "$soname" ] || continue
+            case "$rpm_requires" in
+              *"$soname"*) echo "  covered: $soname" ;;
+              *) echo "::error::the .rpm does not require $soname, which the shipped binary links"; missing=1 ;;
+            esac
+          done < <(readelf -d "$rpm_binary" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p')
+          [ "$missing" -eq 0 ] || exit 1
           case "$rpm_requires" in
-            *libasound*|*alsa*) ;;
-            *) echo "::error::the .rpm does not declare an ALSA dependency"; exit 1 ;;
+            *"libasound.so.2()(64bit)"*) ;;
+            *) echo "::error::the .rpm does not declare libasound.so.2()(64bit)"; exit 1 ;;
           esac
 
       # `if-no-files-found: error` catches the case where NOTHING matched. It
