@@ -285,6 +285,12 @@ jobs:
           path: dist/*.tar.gz*
 
   publish:
+    # Tag pushes only. workflow_dispatch exists so the Linux AppImage build can be
+    # exercised BEFORE committing to a release -- and with no condition here, it
+    # could not be: every manual run reached `gh release create` and published.
+    # A dry run that publishes is not a dry run, and the one path for catching a
+    # broken bundle before users see it was the path that shipped it.
+    if: startsWith(github.ref, 'refs/tags/')
     # This job creates the GitHub release, so it needs write. Scoped here rather
     # than at the top level, where it would apply to the build jobs too.
     permissions:
