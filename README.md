@@ -43,21 +43,49 @@ open Heddle.app
 
 </details>
 
-**Linux, x86_64.** The same app, as an AppImage, built by CI on every release tag.
+**Linux, x86_64.** The same app, built by CI on every release tag. Pick one — they are the same
+program, packaged three ways.
 
 | File | What it is |
 |---|---|
-| `heddle-x86_64-unknown-linux-gnu.tar.gz` | Contains `Heddle-x86_64.AppImage`. |
+| `Heddle-x86_64.AppImage` | Self-contained. Download, `chmod +x`, run. No install step. |
+| `heddle_X.Y.Z_amd64.deb` | Debian, Ubuntu, Mint. Installs under `/opt/heddle` with a launcher entry. |
+| `heddle-X.Y.Z-1.x86_64.rpm` | Fedora, RHEL, openSUSE. Same layout. |
 
-Unpack it, make the AppImage executable, and run it. It is not signed — verify the published
-SHA-256 before running it, or build from source (below).
+None of them add a package repository to your system, and none of them auto-update: to move to a
+newer version, download it from the releases page.
+
+**One system library is needed and is deliberately not bundled: ALSA, `libasound.so.2`.** Heddle
+links it for voice input. Audio libraries are meant to match the host, so shipping a copy inside
+the app is the wrong answer. The `.deb` and `.rpm` **declare** it, so your package manager pulls
+it in for you and you need do nothing. The AppImage format carries no dependency metadata at all,
+so on a minimal system install it yourself first:
+
+| Distribution | Package |
+|---|---|
+| Ubuntu 24.04+, Debian 13+ | `libasound2t64` |
+| Ubuntu 22.04, Debian 12 | `libasound2` |
+| Fedora, RHEL, openSUSE | `alsa-lib` |
+
+Without it the AppImage stops before it draws anything, with
+`error while loading shared libraries: libasound.so.2: cannot open shared object file`.
+
+None of the Linux artefacts are signed — verify the published SHA-256 before running them, or
+build from source (below).
 
 ```bash
-shasum -a 256 -c heddle-x86_64-unknown-linux-gnu.tar.gz.sha256
-tar -xzf heddle-x86_64-unknown-linux-gnu.tar.gz
-cd heddle-x86_64-unknown-linux-gnu
+# AppImage — nothing to install
+shasum -a 256 -c Heddle-x86_64.AppImage.sha256
 chmod +x Heddle-x86_64.AppImage
 ./Heddle-x86_64.AppImage
+
+# Debian / Ubuntu — apt resolves libasound for you
+shasum -a 256 -c heddle_0.5.0_amd64.deb.sha256
+sudo apt install ./heddle_0.5.0_amd64.deb
+
+# Fedora / RHEL
+shasum -a 256 -c heddle-0.5.0-1.x86_64.rpm.sha256
+sudo dnf install ./heddle-0.5.0-1.x86_64.rpm
 ```
 
 ### Two things to know before you download
@@ -66,7 +94,7 @@ chmod +x Heddle-x86_64.AppImage
   version has no server to talk to. You can still use **Claude Code, Codex, Gemini CLI** and
   similar — they run as ordinary programs in the terminal and are unaffected.
 - **Apple Silicon Macs and x86_64 Linux only.** No Intel Mac, no Windows, no Linux on ARM.
-  The macOS build is signed and notarized; the Linux AppImage is not signed at all — Linux has
+  The macOS build is signed and notarized; the Linux artefacts are not signed at all — Linux has
   no equivalent of notarization here, and saying otherwise would overstate it.
 
 ---
@@ -100,8 +128,9 @@ project's Developer ID — a validly-signed build from anyone else is refused �
 read from the downloaded bundle itself, so a manifest cannot advertise one version and ship
 another. You are told what is available before the download starts, not after.
 
-Update notifications are macOS only. The Linux AppImage does not check for updates at all — watch
-the releases page.
+Update notifications are macOS only. The Linux builds do not check for updates at all, and the
+`.deb` and `.rpm` do not configure a package repository, so `apt upgrade` and `dnf upgrade` will
+not find one either — watch the releases page.
 
 ## What is not here
 
@@ -162,8 +191,8 @@ cargo build --release -p warp --bin heddle \
 ./script/heddle/verify-no-warp-endpoints target/release/heddle
 ```
 
-That is the binary that ships. On Linux, `./script/bundle -c oss --packages appimage
---release-tag vX.Y.Z` wraps the same build into the published AppImage.
+That is the binary that ships. On Linux, `./script/bundle -c oss --packages appimage,deb,rpm
+--release-tag vX.Y.Z` wraps the same build into all three published artefacts.
 
 On macOS you also need the Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`).
 Full instructions are in [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -307,14 +307,26 @@ footer .sig { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--r
 
   <section class="wrap">
     <h2><span class="n">03</span>Install</h2>
-    <p class="dek">One app, two platforms: a signed <code>.app</code> for macOS and an AppImage for
-    x86_64 Linux, built from the same source by the same release.</p>
+    <p class="dek">One app, two platforms: a signed <code>.app</code> for macOS and, for x86_64
+    Linux, an AppImage plus native <code>.deb</code> and <code>.rpm</code> packages — all built
+    from the same source by the same release.</p>
     <div class="steps">
       <div class="step"><span class="num"></span><div>
         <h3>Download the app</h3>
-        <p><code>Heddle-aarch64-apple-darwin.app.zip</code> on macOS. On Linux,
-        <code>heddle-x86_64-unknown-linux-gnu.tar.gz</code>, which contains
-        <code>Heddle-x86_64.AppImage</code> — unpack it, make it executable, run it.</p>
+        <p><code>Heddle-aarch64-apple-darwin.app.zip</code> on macOS. On Linux, pick one:
+        <code>Heddle-x86_64.AppImage</code> to run with no install step,
+        <code>heddle_X.Y.Z_amd64.deb</code> on Debian or Ubuntu, or
+        <code>heddle-X.Y.Z-1.x86_64.rpm</code> on Fedora, RHEL or openSUSE.</p>
+      </div></div>
+      <div class="step"><span class="num"></span><div>
+        <h3>Linux: one library, not bundled</h3>
+        <p>Heddle needs ALSA (<code>libasound.so.2</code>) for voice input. The <code>.deb</code>
+        and <code>.rpm</code> declare it, so your package manager installs it for you. The
+        AppImage carries no dependency metadata, so on a minimal system install it first —
+        <code>libasound2t64</code> on Ubuntu 24.04 and Debian 13 or later,
+        <code>libasound2</code> before that, <code>alsa-lib</code> on Fedora, RHEL and openSUSE.
+        Without it the AppImage exits with
+        <code>libasound.so.2: cannot open shared object file</code>.</p>
       </div></div>
       <div class="step"><span class="num"></span><div>
         <h3>macOS: unzip with Archive Utility</h3>
@@ -336,10 +348,17 @@ footer .sig { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--r
     </div>
 
     <div class="sh" style="margin-top:14px">
-      <div class="cm"># linux:</div>
-      <div><span class="p">$</span> <span class="c">shasum -a 256 -c heddle-x86_64-unknown-linux-gnu.tar.gz.sha256</span></div>
-      <div><span class="p">$</span> <span class="c">tar -xzf heddle-x86_64-unknown-linux-gnu.tar.gz</span></div>
-      <div><span class="p">$</span> <span class="c">./heddle-x86_64-unknown-linux-gnu/Heddle-x86_64.AppImage</span></div>
+      <div class="cm"># linux, appimage — nothing to install:</div>
+      <div><span class="p">$</span> <span class="c">shasum -a 256 -c Heddle-x86_64.AppImage.sha256</span></div>
+      <div><span class="p">$</span> <span class="c">chmod +x Heddle-x86_64.AppImage</span></div>
+      <div><span class="p">$</span> <span class="c">./Heddle-x86_64.AppImage</span></div>
+    </div>
+
+    <div class="sh" style="margin-top:14px">
+      <div class="cm"># linux, native packages — the package manager resolves libasound for you:</div>
+      <div><span class="p">$</span> <span class="c">sudo apt install ./heddle_0.5.0_amd64.deb</span></div>
+      <div><span class="p">$</span> <span class="c">sudo dnf install ./heddle-0.5.0-1.x86_64.rpm</span></div>
+      <div class="cm"># neither adds a package repository, and neither auto-updates.</div>
     </div>
 
     <div class="cards" style="margin-top:26px">

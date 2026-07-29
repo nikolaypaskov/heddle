@@ -93,16 +93,47 @@ Deliberately **not** done, in rough priority order:
 ```
 
 The **TUI is not released on any platform.** `crates/warp_tui` still builds and is still tested,
-but no release artefact contains it: Linux ships the same GUI as macOS, as an AppImage, built by
+but no release artefact contains it: Linux ships the same GUI as macOS, built by
 `.github/workflows/heddle-release.yml` on a `heddle-v*` tag. Nothing has to be run by hand there —
-the workflow does `./script/bundle -c oss --packages appimage --release-tag vX.Y.Z` itself and
-publishes `heddle-x86_64-unknown-linux-gnu.tar.gz`, which contains `Heddle-x86_64.AppImage`.
+the workflow does `./script/bundle -c oss --packages appimage,deb,rpm --release-tag vX.Y.Z` itself
+and publishes **three separate assets**, each with its own `.sha256`:
 
-To reproduce the Linux artefact locally, on Linux:
+| Asset | Notes |
+|---|---|
+| `Heddle-x86_64.AppImage` | Raw, not wrapped in a tarball. `chmod +x` and run. |
+| `heddle_X.Y.Z_amd64.deb` | `Package: heddle`, installs under `/opt/heddle/heddle`. |
+| `heddle-X.Y.Z-1.x86_64.rpm` | `Name: heddle`, same layout. |
+
+Things about that shape that are load-bearing:
+
+- **No tarball wrapper.** It used to be the only Linux asset and carried the AppImage plus ~2 MB
+  of duplicated `bundled/` skills and a `settings_schema.json` that the app never read — the
+  AppImage already carries its own copies at `opt/heddle/heddle/resources/`.
+- **The licence texts come from `script/prepare_bundled_resources`,** which stages `LICENSE-AGPL`
+  and `LICENSE-MIT` into every bundle's resources directory. Before that, the tarball was the only
+  thing carrying them, and the AppImage inside it had neither. If you ever change how resources
+  are staged, the release job's verify step will catch it: it refuses to publish an artefact that
+  does not contain both, in all three formats.
+- **No apt/yum/zypper repository, and no signing key.** The other channels' packaging templates
+  configure Warp's repository in their post-install; the oss channel uses
+  `resources/linux/debian/heddle/` and `resources/linux/rpm/heddle/` instead, which do neither.
+  This project hosts no package repository, and a source list pointing at one that does not exist
+  fails on every `apt update`.
+- **ALSA is declared, not bundled.** `libasound.so.2` is the only non-universal library the binary
+  links; it comes from `crates/voice_input` → `cpal`, which `gui = ["voice_input"]` makes a hard
+  component of the GUI. The `.deb` declares `libasound2t64 | libasound2` and the `.rpm` declares
+  the `libasound.so.2()(64bit)` SONAME (which resolves to `alsa-lib` on Fedora). Both bundlers
+  fail the build if that declaration is missing, because a package that declares nothing installs
+  cleanly and then dies at startup. The AppImage cannot declare anything, so its requirement is
+  documented in README.md, docs/index.html and docs/RELEASE_NOTES.md instead.
+
+To reproduce the Linux artefacts locally, on Linux:
 
 ```bash
-./script/linux/install_linuxdeploy                               # pinned; adds ~/.local/bin
-./script/bundle -c oss --packages appimage --release-tag vX.Y.Z  # Linux -> Heddle-<arch>.AppImage
+./script/linux/install_linuxdeploy                                       # pinned; adds ~/.local/bin
+sudo apt-get install -y fakeroot rpm                                     # for the native packages
+./script/bundle -c oss --packages appimage,deb,rpm --release-tag vX.Y.Z
+# -> target/release-lto/bundle/linux/{Heddle-<arch>.AppImage,heddle_*.deb,heddle-*.rpm}
 ```
 
 The `--release-tag` is **not optional**. Without it `option_env!("GIT_RELEASE_TAG")` is `None`, the
@@ -146,7 +177,7 @@ The order is not cosmetic. Clients read `releases/latest/download/`, so a releas
 manifest but not the app tells every running Heddle that a new version exists and then 404s
 when it goes to fetch it — and it keeps doing that until the next release. The release
 workflow enforces the same rule for its own runs: it skips the manifest when no
-`Heddle-*.app.zip` is present, because it builds only the Linux AppImage. That check stays
+`Heddle-*.app.zip` is present, because it builds only the Linux artefacts. That check stays
 macOS-specific because the updater is — it fetches `Heddle-<arch>-apple-darwin.app.zip`, so a
 Linux artefact cannot satisfy it however current it is.
 
