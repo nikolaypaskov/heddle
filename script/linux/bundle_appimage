@@ -13,16 +13,36 @@
 #   - BINARY_NAME: The name that the compiled executable should have on the target machine.
 #   - APPIMAGE_NAME: The name of the AppImage file to produce.
 
+# Fail on the first error. Without this, a failing `linuxdeploy` left the script
+# running to its final `echo "Successfully built AppImage..."`, which exits 0 --
+# so a build that produced nothing reported success to the release workflow.
+set -e
+
 STAGE_DIR="$DIST_DIR/appimagepkg"
 APP_DIR="$DIST_DIR/AppDir"
 
-# Extract channel suffix from BINARY_NAME
-if [ "$ARTIFACT" = "cli" ]; then
-  CHANNEL_SUFFIX="${BINARY_NAME#oz}"
+# The package name and the /opt provider directory are USER-VISIBLE install
+# paths: extracting the AppImage reproduces them verbatim, and they are what the
+# deb/rpm layout puts on disk. AGPL grants the code, not the trademark, so the
+# fork's build must not install itself as Warp under a warpdotdev provider
+# directory. Every other channel keeps upstream's names so upstream merges stay
+# clean.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  # There is also no suffix arithmetic to do here: BINARY_NAME is "heddle", so
+  # `${BINARY_NAME#warp}` strips nothing and the generic branch would build
+  # "warp-terminalheddle".
+  PACKAGE_NAME="heddle"
+  OPT_PROVIDER="heddle"
 else
-  CHANNEL_SUFFIX="${BINARY_NAME#warp}"
+  # Extract channel suffix from BINARY_NAME
+  if [ "$ARTIFACT" = "cli" ]; then
+    CHANNEL_SUFFIX="${BINARY_NAME#oz}"
+  else
+    CHANNEL_SUFFIX="${BINARY_NAME#warp}"
+  fi
+  PACKAGE_NAME="warp-terminal$CHANNEL_SUFFIX"
+  OPT_PROVIDER="warpdotdev"
 fi
-PACKAGE_NAME="warp-terminal$CHANNEL_SUFFIX"
 
 
 # Adding NO_STRIP to stop linuxdeploy from attempting to strip symbols
@@ -52,12 +72,23 @@ mkdir -p "$STAGE_DIR"
 
 # Populate the directory with the package contents, in the appropriate
 # locations.
-OPT_DIR="/opt/warpdotdev/$PACKAGE_NAME"
+OPT_DIR="/opt/$OPT_PROVIDER/$PACKAGE_NAME"
 source "$WORKSPACE_ROOT_DIR/script/linux/bundle_install" "$STAGE_DIR"
 
 # Modify the "Exec=" line in the .desktop file to use the name of the installed
 # binary and not our /usr/bin symlink (which doesn't exist in an AppImage).
-sed -i -E 's/Exec=warp-terminal/Exec=warp/' "$STAGE_DIR/usr/share/applications/$BUNDLE_ID.desktop"
+#
+# The checked-in .desktop files carry the PACKAGE name in Exec=, because that is
+# what the deb/rpm post-install symlinks into /usr/bin. Inside an AppImage the
+# only thing on the PATH is usr/bin/$BINARY_NAME, created by our linuxdeploy
+# input plugin, so Exec= has to become the binary name.
+#
+# Replacing the whole token says exactly that. The old
+# `s/Exec=warp-terminal/Exec=warp/` computed it only for names built from those
+# two prefixes; against any other name it matched nothing and left Exec= alone
+# -- a silent no-op that is indistinguishable from a successful rewrite.
+# Verified to reproduce the old result for stable, dev and preview.
+sed -i -E "s|^Exec=[^[:space:]]+|Exec=$BINARY_NAME|" "$STAGE_DIR/usr/share/applications/$BUNDLE_ID.desktop"
 
 # Find all icon files from inside the package staging directory.
 ICON_FILES=( $(find "$STAGE_DIR/usr/share/icons" -name "*.png") )
@@ -71,10 +102,18 @@ rm -rf "$APP_DIR"
 # We use a custom input plugin (bundled-resources) to copy Warp's bundled
 # resources into the AppDir alongside the executable, since linuxdeploy only
 # deploys the binary, desktop file, and icons by default.
+#
+# `--plugin warp` and `--output appimage` are linuxdeploy identifiers, not
+# branding: linuxdeploy resolves `--plugin NAME` by finding an executable called
+# `linuxdeploy-plugin-NAME` on the PATH extended below, and `appimage` names
+# linuxdeploy's own bundled output plugin. The WARP_* variables are the private
+# calling convention between this script and that plugin. None of them reach a
+# user or appear in the artifact, so they stay as they are; what does reach the
+# user -- PACKAGE_NAME, the /opt provider, Exec= -- is renamed above.
 cd "$OUT_DIR"
 echo "Running linuxdeploy to create the AppImage"
 export WARP_BINARY_NAME="$BINARY_NAME"
-export WARP_PACKAGE_NAME="$PACKAGE_NAME"
+export WARP_OPT_DIR="$OPT_DIR"
 export WARP_BUNDLED_RESOURCES_DIR="${STAGE_DIR}${OPT_DIR}/resources"
 export PATH="$WORKSPACE_ROOT_DIR/script/linux:$PATH"
 linuxdeploy \
@@ -87,9 +126,20 @@ linuxdeploy \
 
 APPIMAGE_PATH="$OUT_DIR/$APPIMAGE_NAME"
 
+# Check the artifact exists before announcing it. linuxdeploy names the output
+# from the desktop file's Name= key, so a rename that misses one place produces
+# an AppImage under a name nothing downstream looks for -- and the release
+# workflow would then upload an empty directory without complaining.
+if [ ! -f "$APPIMAGE_PATH" ]; then
+  echo "ERROR: linuxdeploy did not produce $APPIMAGE_PATH." >&2
+  echo "       Found in $OUT_DIR:" >&2
+  ls -1 "$OUT_DIR" >&2
+  exit 1
+fi
+
 # If this is being run within a GitHub action, set an output variable with the
 # location of the AppImage so it can be referenced by subsequent actions.
-if [ "${GITHUB_ACTIONS}" == "true" ]; then
+if [ "${GITHUB_ACTIONS:-}" == "true" ]; then
   echo "::echo::on"
   echo "appimage_path=$APPIMAGE_PATH" >> "$GITHUB_OUTPUT"
   echo "::echo::off"

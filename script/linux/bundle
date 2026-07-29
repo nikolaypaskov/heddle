@@ -201,9 +201,18 @@ elif [[ $RELEASE_CHANNEL = "stable" ]]; then
   BINARY_NAME="warp"
   APP_NAME="Warp"
 elif [[ $RELEASE_CHANNEL = "oss" ]]; then
-  WARP_BIN="warp-oss"
-  BINARY_NAME="warp-oss"
-  APP_NAME="WarpOss"
+  # These three must track the rename. WARP_BIN has to name a [[bin]] that
+  # exists in app/Cargo.toml, and APP_NAME has to match the application name
+  # Rust uses -- `AppId::new("dev", "heddle", "Heddle")` in app/src/bin/oss.rs --
+  # or the bundle resolves a different data directory than the app inside it.
+  #
+  # They were left on the pre-fork Warp values, so `cargo build --bin warp-oss`
+  # failed on a bin target that has not existed since the rename. That is the
+  # identical defect script/macos/bundle carried until CI first compiled the
+  # GUI; see the oss branch there and script/heddle/gui-surface-gate.
+  WARP_BIN="heddle"
+  BINARY_NAME="heddle"
+  APP_NAME="Heddle"
   # The OSS channel does not ship Sentry, so drop the crash_reporting feature
   # (which would otherwise pull in the Sentry SDK as a dependency).
   FEATURES="release_bundle"
@@ -212,8 +221,9 @@ fi
 # Artifact-specific binary naming
 if [[ "$ARTIFACT" == "cli" ]]; then
   # For CLI artifacts, use oz instead of warp as the binary name.  The OSS
-  # channel is an exception: its CLI command name is `warp-oss`, matching
-  # `Channel::cli_command_name` in the Rust source.
+  # channel is an exception: its CLI command name is `heddle`, matching
+  # `Channel::cli_command_name` in the Rust source, and BINARY_NAME already
+  # carries it -- there is no `warp` substring left to rewrite.
   if [[ $RELEASE_CHANNEL != "oss" ]]; then
     BINARY_NAME="${BINARY_NAME/warp/oz}"
   fi
@@ -236,7 +246,22 @@ if [[ -n "$EXTRA_FEATURES" ]]; then
   FEATURES="$FEATURES,$EXTRA_FEATURES"
 fi
 
-BUNDLE_ID="dev.warp.$APP_NAME"
+# The bundle id is three things at once: the desktop entry's file name, the
+# installed icon's file name, and the id the AppImage's desktop integration
+# keys off. All three are derived from this one variable
+# (script/linux/bundle_install, script/linux/bundle_appimage), so it MUST name a
+# file that exists at app/channels/$RELEASE_CHANNEL/$BUNDLE_ID.desktop -- a
+# mismatch does not fail the build, it produces an AppImage with no working
+# desktop integration.
+#
+# OSS is not `dev.warp.$APP_NAME`: it matches the identifier under
+# [package.metadata.bundle.bin.heddle] in app/Cargo.toml, the AppId in
+# app/src/bin/oss.rs, and the BUNDLE_ID in script/macos/bundle's oss branch.
+if [[ $RELEASE_CHANNEL = "oss" ]]; then
+  BUNDLE_ID="dev.heddle.Heddle"
+else
+  BUNDLE_ID="dev.warp.$APP_NAME"
+fi
 EXECUTABLE_PATH="$CARGO_TARGET_OUTPUT_DIR/$WARP_BIN"
 DEBUG_EXECUTABLE_PATH="$EXECUTABLE_PATH.debug"
 
