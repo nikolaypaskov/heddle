@@ -73,13 +73,58 @@ fn catalog_entries_use_the_shared_display_names() {
 }
 
 #[test]
-fn catalog_carries_no_server_model_lists() {
-    // Harness model catalogs came from the server. Locally there are none, so
-    // the model picker must fall back to the harness's own default.
-    for entry in local_harness_catalog() {
+fn claude_offers_local_model_choices() {
+    // A model chosen here becomes `ANTHROPIC_MODEL` for the Claude subprocess
+    // (`harness_model_env_vars`), so an empty list is not a cosmetic gap: it
+    // removes the only local model control the user has over a local child.
+    let claude = local_harness_catalog()
+        .into_iter()
+        .find(|entry| entry.harness == Harness::Claude)
+        .expect("Claude missing from the catalog");
+
+    assert!(
+        !claude.available_models.is_empty(),
+        "an empty list collapses the model picker to a single inert row"
+    );
+    let ids: Vec<&str> = claude
+        .available_models
+        .iter()
+        .map(|model| model.id.as_str())
+        .collect();
+    assert!(ids.contains(&"opus"), "{ids:?}");
+    assert!(ids.contains(&"sonnet"), "{ids:?}");
+}
+
+#[test]
+fn claude_model_ids_are_aliases_not_dated_versions() {
+    // Dated ids rot: the CLI resolves the alias itself, so this list stays
+    // correct as new versions ship. A pinned id would eventually name a model
+    // the user's own CLI refuses.
+    for model in local_harness_catalog()
+        .into_iter()
+        .filter(|entry| entry.harness == Harness::Claude)
+        .flat_map(|entry| entry.available_models)
+    {
+        assert!(
+            !model.id.contains(char::is_numeric),
+            "{} looks like a pinned version, not an alias",
+            model.id
+        );
+        assert!(!model.display_name.is_empty());
+    }
+}
+
+#[test]
+fn harnesses_that_cannot_apply_a_model_offer_none() {
+    // `harness_model_env_vars` matches on Claude alone. Offering a choice for
+    // any other harness would present a control that is silently discarded.
+    for entry in local_harness_catalog()
+        .into_iter()
+        .filter(|entry| entry.harness != Harness::Claude)
+    {
         assert!(
             entry.available_models.is_empty(),
-            "{:?} claims server-provided models",
+            "{:?} offers models it cannot pass to the child process",
             entry.harness
         );
     }

@@ -63,10 +63,56 @@ pub(crate) fn local_harness_catalog() -> Vec<HarnessAvailability> {
             // server there is no policy to deny anything; local readiness is
             // the picker's job.
             enabled: true,
-            available_models: Vec::new(),
+            available_models: local_models_for(harness),
         })
         .collect()
 }
+
+/// Models offered for `harness`, derived client-side.
+///
+/// A harness only gets a list when selecting a model has an effect this build
+/// can actually produce. The single mechanism for that is
+/// `harness_model_env_vars` (`ai/agent_sdk/driver/harness/mod.rs`), which
+/// translates the selection into an environment variable for the child
+/// process — and it matches on exactly one harness. Per harness:
+///
+/// - **Claude**: gets `ANTHROPIC_MODEL`, so the choice reaches the subprocess.
+///   Listed below.
+/// - **OpenCode**: `harness_model_env_vars` emits nothing, and
+///   `build_local_opencode_child_command` passes only `--prompt`. A selection
+///   would be silently dropped, so offering one would be a lie.
+/// - **Codex**: same — no env var — and the launch path documents that "Codex
+///   local children never receive a model override". `model_snapshot` already
+///   hard-codes local Codex to a lone "Default model" row.
+/// - **Oz**: the built-in agent draws its models from `LLMPreferences` (the
+///   BYOK catalog), not from here; `model_snapshot` routes it to a different
+///   branch entirely.
+fn local_models_for(harness: Harness) -> Vec<HarnessModelInfo> {
+    match harness {
+        Harness::Claude => CLAUDE_LOCAL_MODELS
+            .iter()
+            .map(|(id, display_name)| HarnessModelInfo {
+                id: (*id).to_string(),
+                display_name: (*display_name).to_string(),
+                reasoning_level: None,
+            })
+            .collect(),
+        Harness::Oz | Harness::OpenCode | Harness::Codex | Harness::Gemini | Harness::Unknown => {
+            Vec::new()
+        }
+    }
+}
+
+/// Model choices for a local Claude Code child, as `ANTHROPIC_MODEL` values.
+///
+/// These are Claude Code's own aliases rather than dated model ids. The alias
+/// is resolved by the CLI at run time, so this list does not go stale — and a
+/// stale hard-coded id would be worse than no list, because it would name a
+/// model the user's CLI may refuse. Users who want a specific pinned version
+/// still have "Default model", which sends no override and lets Claude Code
+/// use whatever the user configured for themselves.
+const CLAUDE_LOCAL_MODELS: [(&str, &str); 3] =
+    [("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku")];
 
 #[derive(Debug, Clone)]
 pub enum AuthSecretFetchState {
