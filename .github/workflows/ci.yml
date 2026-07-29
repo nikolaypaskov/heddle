@@ -216,12 +216,21 @@ jobs:
         # rust-toolchain.toml pins the version; `rustup show` installs exactly that.
         run: rustup show
 
+      # flock, because voltron hosts three runner instances that share one apt
+      # database. Two jobs installing at once is the normal case, not the rare one,
+      # and the loser died on `Could not get lock /var/lib/apt/lists/lock` after 11
+      # seconds -- a red X that looks like a code failure and is not. The lock file
+      # is our own path, not apt's: apt takes /var/lib/apt/lists/lock itself, so
+      # waiting on that one would deadlock against the process we are waiting for.
+      # Harmless on hosted runners, where the job is alone on the VM.
       - name: install build dependencies
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libssl-dev pkg-config cmake libclang-dev unzip
+          sudo flock /tmp/heddle-ci-apt.lock bash -euo pipefail -c '
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              libssl-dev pkg-config cmake libclang-dev unzip
+          '
 
       # NOT apt's protobuf-compiler. That package ships the binary without putting the
       # well-known types where protoc looks for them, so the build fails with

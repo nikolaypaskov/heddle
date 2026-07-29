@@ -136,14 +136,19 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show   # installs the version pinned by rust-toolchain.toml
 
+      # flock: see the note in ci.yml. Three runner instances share one apt
+      # database on voltron, and concurrent jobs collided on the lists lock.
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake pkg-config unzip \
-            libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
-            libfontconfig1-dev libasound2-dev libclang-dev \
-            clang
+          set -euo pipefail
+          sudo flock /tmp/heddle-ci-apt.lock bash -euo pipefail -c '
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              build-essential cmake pkg-config unzip \
+              libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
+              libfontconfig1-dev libasound2-dev libclang-dev \
+              clang
+          '
 
       # protoc must come from the official release, NOT apt. Debian/Ubuntu's
       # protobuf-compiler ships the binary without the well-known type
@@ -326,14 +331,19 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show   # installs the version pinned by rust-toolchain.toml
 
+      # flock: see the note in ci.yml. Three runner instances share one apt
+      # database on voltron, and concurrent jobs collided on the lists lock.
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake pkg-config unzip \
-            libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
-            libfontconfig1-dev libasound2-dev libclang-dev \
-            clang
+          set -euo pipefail
+          sudo flock /tmp/heddle-ci-apt.lock bash -euo pipefail -c '
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              build-essential cmake pkg-config unzip \
+              libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
+              libfontconfig1-dev libasound2-dev libclang-dev \
+              clang
+          '
 
       - name: Install protoc with well-known types
         env:
