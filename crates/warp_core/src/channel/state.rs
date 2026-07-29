@@ -496,7 +496,16 @@ impl ChannelState {
             // Dummy value--integration tests shouldn't support URL schemes.
             Channel::Integration => "warpintegration",
             Channel::Local => "warplocal",
-            Channel::Oss => "warposs",
+            // The scheme the OS routes to this app, and the one the app accepts.
+            // It was still "warposs" while the two places that actually REGISTER
+            // a scheme had already been renamed: script/macos/bundle writes
+            // `heddle` into the Info.plist via script/update_plist, and the
+            // Linux desktop entry declares `x-scheme-handler/heddle`. Because
+            // `is_warp_url` compares an incoming URL's scheme against this
+            // function, every `heddle://` link macOS delivered to the shipped
+            // app was dropped. Nothing can hold a `warposs://` link: no bundle
+            // has ever registered that scheme.
+            Channel::Oss => "heddle",
         }
     }
 }

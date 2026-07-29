@@ -2553,7 +2553,6 @@
 ./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state.rs	warp
-./crates/warp_core/src/channel/state.rs	warp
 ./crates/warp_core/src/channel/state_tests.rs	warp
 ./crates/warp_core/src/channel/state_tests.rs	warp
 ./crates/warp_core/src/channel/state_tests.rs	warp
@@ -2833,8 +2832,6 @@
 ./crates/warpui/src/browser.rs	warp
 ./crates/warpui/src/browser.rs	warp
 ./crates/warpui/src/browser.rs	warp
-./crates/warpui/src/browser.rs	warp
-./crates/warpui/src/browser_tests.rs	warp
 ./crates/warpui/src/browser_tests.rs	warp
 ./crates/warpui/src/browser_tests.rs	warp
 ./crates/warpui/src/browser_tests.rs	warp
