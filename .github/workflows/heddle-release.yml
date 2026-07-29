@@ -80,7 +80,13 @@ jobs:
       # is a Corresponding Source mismatch, not just untidiness.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          # `github.ref`, NOT `inputs.tag`. On a tag push these are the same thing.
+          # On a manual run they are not: `inputs.tag` supplies the VERSION STRING,
+          # and a dry run's whole purpose is to build a tag that does not exist yet.
+          # Checking it out failed the run in actions/checkout before a line of Rust
+          # compiled. Dispatch from the ref you want built (`--ref master`); to
+          # rebuild an old release, dispatch from that tag.
+          ref: ${{ github.ref }}
           # Do not leave the job token in .git/config.
           persist-credentials: false
 
