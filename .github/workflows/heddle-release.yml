@@ -130,9 +130,15 @@ jobs:
       - name: Install cargo-about
         run: cargo install cargo-about --locked --features cli
 
-      # linuxdeploy builds the AppDir and invokes appimagetool. The version is
-      # pinned and commit-verified by this script; it is the same one a
-      # developer gets from script/linux/bootstrap.
+      # linuxdeploy builds the AppDir and invokes appimagetool. Same pinned
+      # version a developer gets from script/linux/bootstrap.
+      #
+      # The pin is checked against the download before it is installed -- it
+      # previously checked only an ALREADY-CACHED copy, which on a fresh runner
+      # is never the case, so this job downloaded and executed an unchecked
+      # binary to build the artefact users install. That check establishes the
+      # upstream build, not its provenance: the commit id is read by running the
+      # binary. See the header of script/linux/install_linuxdeploy.
       - name: Install linuxdeploy
         run: |
           set -euxo pipefail
@@ -249,6 +255,13 @@ jobs:
       # and scan the executable, reached through the usr/bin symlink so this does
       # not have to know the /opt layout. `--appimage-extract` is handled by the
       # AppImage runtime and needs no FUSE.
+      #
+      # KNOWN LIMIT: this proves the shipped bytes are endpoint-free. It does not
+      # prove the AppImage RUNS. Nothing here launches it, so a broken AppRun, an
+      # Exec= pointing at a name that is not on the image's PATH, or a missing
+      # bundled resource directory all pass this job and reach users. Catching
+      # those needs a headless launch (xvfb plus a --version or equivalent
+      # non-interactive entry point) that this job does not yet do.
       - name: Verify the packaged binary
         env:
           TARGET_NAME: ${{ matrix.target }}
