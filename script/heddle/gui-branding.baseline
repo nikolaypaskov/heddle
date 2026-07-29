@@ -1317,7 +1317,6 @@
 ./app/src/terminal/model/ansi/mod_tests.rs	warp
 ./app/src/terminal/model/ansi/mod_tests.rs	warp
 ./app/src/terminal/model/block_tests.rs	warp
-./app/src/terminal/model/block_tests.rs	warp
 ./app/src/terminal/model/blocks/selection_tests.rs	warp
 ./app/src/terminal/model/blocks/selection_tests.rs	warp
 ./app/src/terminal/model/blocks/selection_tests.rs	warp
