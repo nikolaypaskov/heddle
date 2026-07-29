@@ -136,9 +136,20 @@ sed \
 # rendered spec, because an unsubstituted placeholder or an edited template both
 # produce a spec rpmbuild accepts in silence.
 #
-# Matched EXACTLY, not by substring: a test for "alsa" anywhere in the line would
-# accept `alsa-does-not-exist`, which rpmbuild packages happily and dnf then
-# refuses on the user's machine.
+# Compared as WHOLE TOKENS, not as a substring. The previous version did
+# `case "$REQUIRES_LINE" in *"libasound.so.2()(64bit)"*)`, which accepts
+# `libasound.so.2()(64bit)-does-not-exist` -- rpmbuild packages that happily and
+# dnf refuses it on the user's machine. See the fuller note in
+# script/linux/bundle_deb; the same mistake was made in both files.
+rpm_has_exact_token() { # $1 = Requires field, $2 = the token that must appear whole
+  local token
+  while IFS= read -r token; do
+    token="$(printf '%s' "$token" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    [ "$token" = "$2" ] && return 0
+  done <<< "$(printf '%s' "$1" | tr ',' '\n')"
+  return 1
+}
+
 REQUIRES_LINE="$(sed -n 's/^Requires:[[:space:]]*//p' "$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec")"
 if [ -z "$REQUIRES_LINE" ]; then
   echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec declares no Requires line"
@@ -147,14 +158,10 @@ fi
 # oss-only, for the same reason as the matching check in script/linux/bundle_deb:
 # Warp's warp.spec.template does not list ALSA and is not this fork's to change.
 if [ "$RELEASE_CHANNEL" = "oss" ]; then
-  RPM_ALSA_REQUIRES="libasound.so.2()(64bit)"
-  case "$REQUIRES_LINE" in
-    *"$RPM_ALSA_REQUIRES"*) ;;
-    *)
-      echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec does not declare '$RPM_ALSA_REQUIRES'; got: $REQUIRES_LINE"
-      exit 1
-      ;;
-  esac
+  if ! rpm_has_exact_token "$REQUIRES_LINE" "libasound.so.2()(64bit)"; then
+    echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec has no requirement equal to 'libasound.so.2()(64bit)'; got: $REQUIRES_LINE"
+    exit 1
+  fi
 fi
 
 # Build the actual package.

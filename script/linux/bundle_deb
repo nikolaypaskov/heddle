@@ -200,12 +200,34 @@ chmod 755 \
 # to substitute, or a template edited to drop the line, both produce a control
 # file that dpkg-deb accepts without complaint.
 #
-# Matched EXACTLY, not by substring. A test for "libasound" anywhere in the line
-# would accept `libasound-does-not-exist`, which dpkg-deb builds happily and apt
-# then refuses on the user's machine. The release workflow additionally resolves
-# the whole field with `apt-get install -s` against a real apt index; this check
-# is the build-time half, and it runs even for a local `./script/bundle` where
-# there is no workflow to do the resolving.
+# Compared as WHOLE TOKENS, not as a substring.
+#
+# The version of this check that shipped in the previous commit did
+#
+#     case "$DEPENDS_LINE" in *"libasound2t64 | libasound2"*)
+#
+# and called itself exact. It is not: `libasound2t64 | libasound2-does-not-exist`
+# CONTAINS `libasound2t64 | libasound2`, so a corrupted fallback was accepted.
+# The mutation test that "proved" it only ever tried `libasound-does-not-exist`,
+# which deletes the valid token, so it could not see that class at all.
+#
+# The release workflow's `apt-get install -s` does not cover it either: where
+# libasound2t64 resolves, apt never evaluates the second alternative, and the
+# package then breaks on bookworm and jammy -- the releases where the fallback
+# is the one that matters.
+#
+# So: split the field on ',' into alternative groups, split each group on '|',
+# trim, rejoin, and require one group to equal the wanted form exactly.
+deb_has_exact_group() { # $1 = Depends field, $2 = e.g. "libasound2t64|libasound2"
+  local group normalised
+  while IFS= read -r group; do
+    normalised="$(printf '%s' "$group" | tr '|' '\n' \
+      | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | paste -sd'|' -)"
+    [ "$normalised" = "$2" ] && return 0
+  done <<< "$(printf '%s' "$1" | tr ',' '\n')"
+  return 1
+}
+
 DEPENDS_LINE="$(sed -n 's/^Depends:[[:space:]]*//p' "$DEBIAN_DIR/control")"
 if [ -z "$DEPENDS_LINE" ]; then
   echo "::error ::$DEBIAN_DIR/control declares no Depends line; the package would install and then fail to start"
@@ -215,14 +237,10 @@ fi
 # not this fork's to change; asserting it unconditionally would fail a build of a
 # channel we do not ship, for a rule we do not get to impose.
 if [ "$RELEASE_CHANNEL" = "oss" ]; then
-  DEB_ALSA_DEPENDS="libasound2t64 | libasound2"
-  case "$DEPENDS_LINE" in
-    *"$DEB_ALSA_DEPENDS"*) ;;
-    *)
-      echo "::error ::$DEBIAN_DIR/control does not declare '$DEB_ALSA_DEPENDS'; got: $DEPENDS_LINE"
-      exit 1
-      ;;
-  esac
+  if ! deb_has_exact_group "$DEPENDS_LINE" "libasound2t64|libasound2"; then
+    echo "::error ::$DEBIAN_DIR/control has no alternative group equal to 'libasound2t64 | libasound2'; got: $DEPENDS_LINE"
+    exit 1
+  fi
 fi
 
 # Build the actual package.
