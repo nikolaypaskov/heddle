@@ -1,0 +1,149 @@
+###############################################################################
+# Package Spec -- Heddle (the oss channel)
+#
+# A separate file from resources/linux/rpm/app/warp.spec.template rather than
+# more placeholders in it. That one is Warp's: it names Warp's vendor, carries
+# Warp's package-signing public key inline, and configures Warp's yum/zypper
+# repository in its post-install. None of that can be true of this fork, and
+# editing it in place would conflict on every upstream sync. Keeping the two
+# apart means an upstream change to Warp's spec never touches Heddle's.
+###############################################################################
+
+Summary:     Heddle, a de-commercialized terminal
+Name:        @@PACKAGE_NAME@@
+Version:     @@VERSION@@
+Release:     @@RELEASE@@
+Vendor:      Heddle contributors
+Url:         https://github.com/nikolaypaskov/heddle#readme
+Packager:    Heddle contributors
+License:     AGPL-3.0-only AND MIT
+
+# Dependencies are declared as SONAMEs, not as package names, and deliberately.
+#
+# libasound.so.2 is the one that matters and the one that was missing: on a clean
+# ubuntu:24.04 the shipped v0.5.0 binary died with "libasound.so.2: cannot open
+# shared object file" before reaching main. It arrives through crates/voice_input
+# -> cpal, a non-optional dependency of a crate that app/Cargo.toml pulls in via
+# `gui = ["voice_input"]`, so it is a hard component of the GUI. It is also on
+# the AppImage excludelist on purpose, because audio libraries are meant to match
+# the host, so bundling it is not an option either.
+#
+# Written as a SONAME rather than as the package name "alsa-lib". Verified in a
+# fedora:41 container: dnf resolves libasound.so.2()(64bit) to alsa-lib and pulls
+# it in when this package is installed. The SONAME also survives distributions
+# that name the package something else, which "alsa-lib" would not, and it is
+# consistent with the nine entries beside it, which have always been SONAMEs.
+# rpmbuild's automatic dependency generator adds this entry by itself from the
+# binary's DT_NEEDED list (confirmed with rpm -qp --requires on a test build);
+# it is written out anyway so the declaration is reviewable in the source rather
+# than emergent from whatever happens to be linked.
+#
+# The rest are dlopen'd rather than linked (winit/glutin resolve GL, X11 and
+# Wayland at runtime), so nothing generates them automatically and they have to
+# be listed by hand. Copied unchanged from Warp's spec, which is where the GUI's
+# runtime requirements were worked out.
+Requires:    xdg-utils, libasound.so.2()(64bit), (libvulkan.so.1()(64bit) or libEGL.so.1()(64bit)), (libwayland-egl.so.1()(64bit) if (libwayland-client.so.0()(64bit) and libEGL.so.1()(64bit))), libxcb.so.1()(64bit), libxkbcommon-x11.so.0()(64bit), libX11.so.6()(64bit), libX11-xcb.so.1()(64bit), libXcursor.so.1()(64bit), libXi.so.6()(64bit)
+Recommends:  libgallium_dri.so()(64bit), adwaita-icon-theme
+
+# The prefix specifies where the majority of the application files are,
+# allowing the package to be relocatable.
+prefix:      /opt
+
+# We're not including debug info, so don't register the build ID with the
+# machine's registry of build IDs.
+%define _build_id_links none
+
+###############################################################################
+# Description
+###############################################################################
+
+%description
+Heddle is a Rust-based GUI terminal with no account, no telemetry and no cloud
+services. It is an AGPL-3.0 fork of the Warp terminal with every first-party
+Warp endpoint removed: history, settings and sessions stay on the machine it
+runs on.
+
+The built-in AI agent is not functional -- it was designed to talk to a server
+this build has no address for. Command-line agents such as Claude Code, Codex
+and Gemini CLI run as ordinary programs and are unaffected.
+
+###############################################################################
+# Build rule - how does the package get built?
+###############################################################################
+%build
+
+# Nothing to do here - the application should have already been built before we
+# attempt to package it.
+
+###############################################################################
+# Install rule - where should the files live, post-install?
+###############################################################################
+%install
+
+# Populate the buildroot directory with the package contents, in the
+# appropriate locations.
+#
+# The provider directory is "heddle", not "warpdotdev". It is a user-visible
+# install path, it is reproduced verbatim when an AppImage is extracted, and
+# script/linux/bundle_appimage and script/linux/bundle_deb both derive the same
+# one, so all three formats put the program in the same place.
+mkdir -p %{buildroot}
+OPT_DIR="%{prefix}/heddle/%{name}" @@WORKSPACEROOT@@/script/linux/bundle_install %{buildroot}
+
+# Set up a symlink from the system's bin dir to our installed executable.
+mkdir -p %{buildroot}%{_bindir}
+ln -s %{prefix}/heddle/%{name}/@@BINARY_NAME@@ %{buildroot}%{_bindir}/%{name}
+
+###############################################################################
+# Files listing - what files will end up in the package?
+###############################################################################
+%files
+
+# Most things go into this directory.
+%{prefix}/heddle/%{name}
+
+# We also install a few things elsewhere in the system.
+%{_bindir}/%{name}
+%{_datadir}/applications/@@BUNDLEID@@.desktop
+%{_datadir}/icons/hicolor
+
+# The project's own licence texts, staged by script/linux/bundle_install.
+#
+# Listed as an ordinary owned directory rather than tagged with the licence
+# directive: the tag would additionally relocate the files under the
+# distribution's licence directory, and the point here is that the deb and the
+# rpm put them in the same place. rpmbuild aborts on installed-but-unpackaged
+# files, so this entry is not optional once bundle_install writes them.
+%{_datadir}/doc/%{name}
+
+###############################################################################
+# Post-install rule - what do we need to do on the user's machine to complete
+#                     installation?
+###############################################################################
+%post
+
+# Make sure the system incorporates the newly-installed desktop file.
+if hash update-desktop-database 2>/dev/null; then
+	update-desktop-database
+fi
+
+# NO package repository is configured here, and no signing key is installed.
+#
+# Warp's spec writes /etc/yum.repos.d and /etc/zypp/repos.d entries and drops a
+# public key into /etc/pki/rpm-gpg. This fork publishes to GitHub Releases and
+# hosts no rpm repository, so a repo file would fail on every refresh, and a key
+# whose private half we do not have would sign nothing. See the oss branch in
+# script/linux/bundle_rpm.
+
+exit 0
+
+###############################################################################
+# Post-uninstall rule
+###############################################################################
+%postun
+
+if hash update-desktop-database 2>/dev/null; then
+	update-desktop-database
+fi
+
+exit 0

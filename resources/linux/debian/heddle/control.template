@@ -1,0 +1,18 @@
+Package: @@PACKAGE_NAME@@
+Version: @@VERSION@@
+Section: devel
+Priority: optional
+Architecture: @@ARCH@@
+Depends: fontconfig, libasound2t64 | libasound2, libegl1, libwayland-client0, libwayland-egl1, libx11-6, libxcb1, libxcursor1, libxi6, libxkbcommon-x11-0, zlib1g
+Recommends: libgl1-mesa-dri, adwaita-icon-theme-full | yaru-icon-theme
+Maintainer: Heddle contributors
+Homepage: https://github.com/nikolaypaskov/heddle#readme
+Description: Heddle, a de-commercialized terminal
+ Heddle is a Rust-based GUI terminal with no account, no telemetry and no
+ cloud services. It is an AGPL-3.0 fork of the Warp terminal with every
+ first-party Warp endpoint removed: history, settings and sessions stay on
+ the machine it runs on.
+ .
+ The built-in AI agent is not functional -- it was designed to talk to a
+ server this build has no address for. Command-line agents such as Claude
+ Code, Codex and Gemini CLI run as ordinary programs and are unaffected.

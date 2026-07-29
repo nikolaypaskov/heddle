@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+# Create a symlink from /usr/bin to our binary under /opt.
+#
+# The name is the BINARY name, which for this channel is also the package name
+# and also the desktop entry's Exec= (app/channels/oss/dev.heddle.Heddle.desktop).
+# If those three ever drift apart, the launcher entry stops working silently.
+rm -f /usr/bin/@@BINARY_NAME@@
+ln -s @@OPTDIR@@/@@BINARY_NAME@@ /usr/bin/@@BINARY_NAME@@
+
+# Make sure the system incorporates the newly-installed desktop file.
+if hash update-desktop-database 2>/dev/null; then
+	update-desktop-database
+fi
+
+# NO apt repository is configured here, and none should be.
+#
+# The other channels append resources/linux/debian/common/postinst.repo.template
+# at this point, which installs a package-signing key and writes an apt source.
+# This fork publishes to GitHub Releases and hosts no apt repository, so writing
+# a source list would leave every user with a source that 404s on each
+# `apt update` -- a worse outcome than having no repository at all. See the
+# CONFIGURE_PACKAGE_REPO branch in script/linux/bundle_deb.
+
+exit 0
