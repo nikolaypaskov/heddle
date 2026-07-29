@@ -70,8 +70,20 @@ Deliberately **not** done, in rough priority order:
 ### Cutting a release
 
 ```bash
-./script/bundle -c oss --release-tag vX.Y.Z                      # GUI  -> Heddle.app
-./script/bundle -c oss --artifact tui --release-tag vX.Y.Z       # TUI  -> heddle-tui
+./script/bundle -c oss --release-tag vX.Y.Z                      # macOS -> Heddle.app
+```
+
+The **TUI is not released on any platform.** `crates/warp_tui` still builds and is still tested,
+but no release artefact contains it: Linux ships the same GUI as macOS, as an AppImage, built by
+`.github/workflows/heddle-release.yml` on a `heddle-v*` tag. Nothing has to be run by hand there —
+the workflow does `./script/bundle -c oss --packages appimage --release-tag vX.Y.Z` itself and
+publishes `heddle-x86_64-unknown-linux-gnu.tar.gz`, which contains `Heddle-x86_64.AppImage`.
+
+To reproduce the Linux artefact locally, on Linux:
+
+```bash
+./script/linux/install_linuxdeploy                               # pinned; adds ~/.local/bin
+./script/bundle -c oss --packages appimage --release-tag vX.Y.Z  # Linux -> Heddle-<arch>.AppImage
 ```
 
 The `--release-tag` is **not optional**. Without it `option_env!("GIT_RELEASE_TAG")` is `None`, the
@@ -115,7 +127,9 @@ The order is not cosmetic. Clients read `releases/latest/download/`, so a releas
 manifest but not the app tells every running Heddle that a new version exists and then 404s
 when it goes to fetch it — and it keeps doing that until the next release. The release
 workflow enforces the same rule for its own runs: it skips the manifest when no
-`Heddle-*.app.zip` is present, because it builds only the TUI.
+`Heddle-*.app.zip` is present, because it builds only the Linux AppImage. That check stays
+macOS-specific because the updater is — it fetches `Heddle-<arch>-apple-darwin.app.zip`, so a
+Linux artefact cannot satisfy it however current it is.
 
 The version passed here is the **app** version — the same `vX.Y.Z` given to `--release-tag`,
 which becomes `CFBundleShortVersionString`. It is NOT the git tag: releases have been tagged
