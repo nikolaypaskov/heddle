@@ -100,5 +100,11 @@
     "file": ".claudeconf/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Packaged release artifacts: copies of the built binary, so findings duplicate the source. 290 MB per scan with brotli decode errors on compressed Mach-O sections."
+  },
+  {
+    "fingerprint": "62017a05de2d6277",
+    "file": "app/src/ai/harness_availability.rs",
+    "rule": "clippy::enum_variant_names",
+    "rationale": "HarnessAvailabilityEvent lost its `Changed` variant when the harness catalog became a static local list, leaving only auth-secret events, which all share an `AuthSecret` prefix. The prefix is accurate, not lazy naming: every remaining variant really is about one subsystem. Renaming them to satisfy the lint would make them less descriptive across five subscriber files, and the alternative -- keeping a `Changed` variant nothing can ever emit -- is worse. Revisit when the cloud auth-secret subsystem is removed and this enum goes with it."
   }
 ]
