@@ -139,6 +139,36 @@ if [ -z "$NO_LICENSES" ]; then
   done
 fi
 
+# Heddle's OWN licence texts travel with every bundle.
+#
+# THIRD_PARTY_LICENSES.txt above is attribution for DEPENDENCIES; it is not a
+# licence for this program. Until this block existed, the only copy of
+# LICENSE-AGPL that ever reached a Linux user was the one the release workflow
+# dropped beside the AppImage inside a tarball wrapper. Verified by unpacking a
+# shipped v0.5.0 AppImage: it carried THIRD_PARTY_LICENSES.txt and neither
+# LICENSE-AGPL nor LICENSE-MIT. Publishing the raw AppImage without this would
+# have distributed an AGPL binary with no licence attached to it.
+#
+# Deliberately NOT behind NO_LICENSES. That flag exists to skip the minutes-long
+# cargo-about run in the dev launch scripts; two file copies cost nothing, and a
+# dev bundle that carries the licence is not a problem anyone has.
+#
+# A missing file is a hard error, not a warning. "The copy silently did not
+# happen" is precisely the failure this exists to prevent.
+for licence_name in LICENSE-AGPL LICENSE-MIT; do
+  licence_src="$REPO_ROOT/$licence_name"
+  if [ ! -s "$licence_src" ]; then
+    echo "Error: licence file not found or empty: $licence_src" >&2
+    exit 1
+  fi
+  install -m 644 "$licence_src" "$DEST_DIR/$licence_name"
+  if [ ! -s "$DEST_DIR/$licence_name" ]; then
+    echo "Error: failed to stage $licence_name into $DEST_DIR" >&2
+    exit 1
+  fi
+done
+echo "Staged LICENSE-AGPL and LICENSE-MIT in $DEST_DIR"
+
 # Generate settings JSON schema unless explicitly skipped.
 if [ "${SKIP_SETTINGS_SCHEMA:-}" != "1" ]; then
   SCHEMA_OUTPUT="$DEST_DIR/settings_schema.json"
