@@ -44,4 +44,31 @@ if [[ "$ARTIFACT" == "app" ]]; then
 fi
 
 # Prepare the bundled resources directory.
+#
+# This also stages LICENSE-AGPL and LICENSE-MIT alongside THIRD_PARTY_LICENSES.txt,
+# which is how the AppImage gets them: linuxdeploy-plugin-warp copies this whole
+# directory into the AppDir and nothing else from here.
 "$WORKSPACE_ROOT_DIR/script/prepare_bundled_resources" "${TARGET_DIR}/${OPT_DIR}/resources" "$RELEASE_CHANNEL" "$CARGO_PROFILE"
+
+# Native packages ALSO put the licence texts where a distro user looks for them.
+#
+# Debian policy and Fedora both expect /usr/share/doc/<package>/; someone who runs
+# `dpkg -L heddle | grep -i licence` should find it there rather than only under
+# /opt. The copy under resources/ stays -- it is what the AppImage carries, and it
+# is what the running program sits next to.
+#
+# oss only. The other channels' packages are built from resources/linux/rpm/app/
+# warp.spec.template, whose %files list has no doc directory, and rpmbuild aborts
+# the build on installed-but-unpackaged files. Adding a path here that only one
+# spec lists would break the others.
+#
+# BINARY_NAME rather than a package-name variable because bundle_install is not
+# told the package name, and for the oss channel the two are the same string
+# ("heddle") by construction -- see script/linux/bundle_appimage, bundle_deb and
+# resources/linux/rpm/heddle/heddle.spec.template, which all derive from it.
+if [[ "$ARTIFACT" == "app" && "$RELEASE_CHANNEL" == "oss" ]]; then
+  for licence_name in LICENSE-AGPL LICENSE-MIT; do
+    install -Dm644 "$WORKSPACE_ROOT_DIR/$licence_name" \
+      "${TARGET_DIR}/usr/share/doc/$BINARY_NAME/$licence_name"
+  done
+fi

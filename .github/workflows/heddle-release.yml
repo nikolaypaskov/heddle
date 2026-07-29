@@ -65,7 +65,8 @@ jobs:
           # download next to one that opens cleanly, and undercut the provenance
           # claim the signed artefact makes.
           #
-          # Linux ships the SAME GUI, as an AppImage. It previously shipped the
+          # Linux ships the SAME GUI, as an AppImage plus native .deb and .rpm
+          # packages. It previously shipped the
           # TUI because a comment here asserted "Linux has no GUI build" -- which
           # was already false: heddle-privacy-gate.yml has been compiling
           # `-p warp --bin heddle --features ...,gui` on Linux for some time. The
@@ -100,6 +101,12 @@ jobs:
       # The last three are linuxdeploy's runtime helpers: it shells out to
       # `file` for ELF detection, `desktop-file-validate` to check the entry it
       # is given, and `patchelf` to rewrite rpaths on the bundled libraries.
+      #
+      # `fakeroot`, `rpm` and `cpio` are for the native packages. Both bundlers
+      # run their packaging tool under fakeroot so the archived files are owned
+      # by root without the job being root; `rpm` supplies rpmbuild AND the
+      # rpm2cpio used to unpack the result for scanning, and cpio is what reads
+      # what rpm2cpio emits. dpkg-deb is part of the base image.
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -108,7 +115,8 @@ jobs:
             libssl-dev libfreetype-dev libexpat1-dev libgit2-dev \
             libfontconfig1-dev libasound2-dev libclang-dev \
             clang \
-            file desktop-file-utils patchelf
+            file desktop-file-utils patchelf \
+            fakeroot rpm cpio
 
       - name: Install protoc with well-known types
         env:
@@ -151,7 +159,7 @@ jobs:
           ./script/linux/install_linuxdeploy
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Build and bundle the GUI AppImage
+      - name: Build and bundle the GUI (AppImage, .deb, .rpm)
         id: bundle
         # GIT_RELEASE_TAG is read via option_env! in warp_core, so the binary can report its own
         # version. Without it app_version() is None and the build claims to be whatever Cargo.toml
@@ -174,9 +182,11 @@ jobs:
         # back: `modify-settings` and `tui-migrate-setup` both render
         # {{settings_schema_path}} and would point at a file that is not there.
         #
-        # SETTINGS_SCHEMA_CACHE makes the cost one generation instead of two --
-        # this step and the Package step below both call
-        # script/prepare_bundled_resources, and the second copies from the cache.
+        # SETTINGS_SCHEMA_CACHE matters more now than it did, not less. Each of
+        # the three package formats stages its own copy of the bundled resources
+        # (script/linux/bundle_install runs per format), and generating the
+        # settings schema means a release-LTO `cargo run` of another bin. With
+        # the cache set, the first format generates it and the other two copy.
         # See script/prepare_bundled_resources for the flag's contract.
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -189,7 +199,7 @@ jobs:
             exit 1
           fi
           echo "tag $RELEASE_TAG -> app version $version"
-          ./script/bundle -c oss --packages appimage --release-tag "$version"
+          ./script/bundle -c oss --packages appimage,deb,rpm --release-tag "$version"
 
       # A release artefact that phones home is worse than no release at all.
       #
@@ -213,82 +223,351 @@ jobs:
           ./script/heddle/verify-no-warp-endpoints "$EXECUTABLE_PATH"
           ./script/heddle/verify-bundled-assets
 
+      # Three assets, each downloaded and used on its own. No tarball wrapper.
+      #
+      # The tarball that used to be the only Linux asset carried the AppImage
+      # plus ~2 MB of `bundled/` skills and a settings_schema.json -- verified on
+      # the shipped v0.5.0 artefact to be inert duplicates of files the AppImage
+      # already contains at opt/heddle/heddle/resources/, which is where the app
+      # actually reads them from. It also forced an extract step on a format
+      # whose entire premise is chmod +x and run.
+      #
+      # What the tarball DID legitimately carry was LICENSE-AGPL and LICENSE-MIT,
+      # which the AppImage did not. That is fixed at the source rather than here:
+      # script/prepare_bundled_resources now stages both into every bundle's
+      # resources directory, so all three formats carry them, and the verify step
+      # below refuses to publish an artefact that does not.
+      #
+      # Paths come from the bundlers' own GITHUB_OUTPUT, not from globs over
+      # dist/. A glob that matches nothing looks exactly like success; an
+      # explicit path that does not exist is a failed test.
       - name: Package
         env:
-          TARGET_NAME: ${{ matrix.target }}
           APPIMAGE_PATH: ${{ steps.bundle.outputs.appimage_path }}
-          # Populated by the bundle step above, so this call copies rather than
-          # spending a second release-LTO build on the same JSON.
-          SETTINGS_SCHEMA_CACHE: ${{ runner.temp }}/settings_schema.json
+          DEB_PATH: ${{ steps.bundle.outputs.deb_path }}
+          RPM_PATH: ${{ steps.bundle.outputs.rpm_path }}
         run: |
           set -euo pipefail
-          name="heddle-${TARGET_NAME}"
-          mkdir -p "dist/${name}"
-          test -f "$APPIMAGE_PATH"
-          cp "$APPIMAGE_PATH" "dist/${name}/"
-          chmod +x "dist/${name}/$(basename "$APPIMAGE_PATH")"
-          cp README.md LICENSE-AGPL LICENSE-MIT "dist/${name}/"
-          # AGPL distribution requires the licence texts to travel with the
-          # binary, and dependency attribution must not be dropped. Use the
-          # CANONICAL generator (script/prepare_bundled_resources), which emits
-          # both cargo-about output AND the curated non-Cargo notices for
-          # bundled fonts, Alacritty, bash-preexec and others. A plain
-          # `cargo about` run would silently omit those.
-          #
-          # The AppImage already carries its own copy of this file, staged by the
-          # same script during bundling. This second copy is for the person who
-          # only ever unpacks the tarball.
-          ./script/prepare_bundled_resources "dist/${name}" oss \
-            || cargo about generate --workspace -c about.toml -o "dist/${name}/THIRD_PARTY_LICENSES.txt" about.hbs
-          test -s "dist/${name}/THIRD_PARTY_LICENSES.txt"
-          # Fail loudly if the curated non-Cargo notices are missing, rather
-          # than shipping a partial attribution file.
-          grep -q "Hack Font" "dist/${name}/THIRD_PARTY_LICENSES.txt" \
-            || { echo "::error::THIRD_PARTY_LICENSES.txt is missing curated non-Cargo notices"; exit 1; }
-          tar -czf "dist/${name}.tar.gz" -C dist "${name}"
-          # Record the checksum with a BARE filename so `shasum -c` works from
+          mkdir -p dist
+          for artefact in "$APPIMAGE_PATH" "$DEB_PATH" "$RPM_PATH"; do
+            if [ -z "$artefact" ]; then
+              echo "::error::a bundler reported no path; expected all three of appimage_path, deb_path, rpm_path"
+              exit 1
+            fi
+            if [ ! -f "$artefact" ]; then
+              echo "::error::bundler reported '$artefact' but no such file exists"
+              exit 1
+            fi
+            cp "$artefact" dist/
+          done
+          chmod +x "dist/$(basename "$APPIMAGE_PATH")"
+          # Record each checksum with a BARE filename so `shasum -c` works from
           # the directory the user downloaded into. Recording "dist/<name>"
           # makes the documented verification command fail.
-          ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
+          ( cd dist && for f in *.AppImage *.deb *.rpm; do shasum -a 256 "$f" > "$f.sha256"; done )
+          ls -l dist
 
-      # Scan the ACTUAL packaged binary, not just the pre-package executable.
-      # Codex flagged that "every release artefact is scanned" was false because
-      # the tarball was assembled after the earlier scan.
+      # Scan the ACTUAL packaged binary in EVERY format, not just the
+      # pre-package executable. Codex flagged that "every release artefact is
+      # scanned" was false when the tarball was assembled after the earlier scan;
+      # adding two more formats reintroduces exactly that gap unless each one is
+      # unpacked and scanned in its own right.
       #
-      # Do NOT point the scanner at the .AppImage itself. Its payload is a
-      # compressed squashfs, so string literals are not present as literal bytes
-      # and a scan of the container proves nothing about the contents. Unpack it
-      # and scan the executable, reached through the usr/bin symlink so this does
-      # not have to know the /opt layout. `--appimage-extract` is handled by the
-      # AppImage runtime and needs no FUSE.
+      # Do NOT point the scanner at a container. An .AppImage payload is a
+      # compressed squashfs, a .deb is an `ar` archive of compressed tarballs and
+      # a .rpm is a compressed cpio -- in all three, string literals are absent
+      # as literal bytes, so a scan of the container proves nothing whatsoever
+      # about the contents. Unpack, then scan. `--appimage-extract` is handled by
+      # the AppImage runtime and needs no FUSE.
       #
-      # KNOWN LIMIT: this proves the shipped bytes are endpoint-free. It does not
-      # prove the AppImage RUNS. Nothing here launches it, so a broken AppRun, an
-      # Exec= pointing at a name that is not on the image's PATH, or a missing
-      # bundled resource directory all pass this job and reach users. Catching
-      # those needs a headless launch (xvfb plus a --version or equivalent
-      # non-interactive entry point) that this job does not yet do.
-      - name: Verify the packaged binary
-        env:
-          TARGET_NAME: ${{ matrix.target }}
+      # Self-test first, then scan: the canary run plants a real forbidden
+      # endpoint in a copy of a shipped binary and requires the scanner to reject
+      # it. A clean result from an uninstrumented scanner would be meaningless,
+      # and this is the copy that is actually going to users.
+      #
+      # KNOWN LIMIT: this proves the shipped bytes are endpoint-free and that the
+      # licences are present. It does not prove any of the three RUNS. Nothing
+      # here launches them, so a broken AppRun, an Exec= pointing at a name that
+      # is not on the image's PATH, a missing bundled resource directory, or a
+      # postinst that fails on a real distro all pass this job and reach users.
+      # Catching those needs a headless launch (xvfb plus a --version or
+      # equivalent non-interactive entry point) that this job does not yet do.
+      - name: Verify every packaged artefact
         run: |
           set -euo pipefail
-          name="heddle-${TARGET_NAME}"
-          workdir="$(mktemp -d)"
-          tar -xzf "dist/${name}.tar.gz" -C "$workdir"
-          appimage="$(find "$workdir/${name}" -maxdepth 1 -name '*.AppImage' -print -quit)"
-          if [ -z "$appimage" ]; then
-            echo "::error::no .AppImage inside dist/${name}.tar.gz"
+
+          root="$(mktemp -d)"
+
+          # Resolve each artefact and require exactly one match. `ls` on a
+          # pattern that matched nothing would hand the literal pattern to the
+          # next command; an empty result here is a failure with a name on it.
+          for pattern in '*.AppImage' '*.deb' '*.rpm'; do
+            mapfile -t matches < <(find dist -maxdepth 1 -name "$pattern")
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "::error::expected exactly one dist/$pattern, found ${#matches[@]}"
+              ls -1 dist || true
+              exit 1
+            fi
+          done
+          # Absolute, because the extraction commands below run from a temp dir.
+          # Each glob is known to expand to exactly one path by the loop above.
+          appimage="$(realpath dist/*.AppImage)"
+          deb="$(realpath dist/*.deb)"
+          rpm="$(realpath dist/*.rpm)"
+
+          mkdir -p "$root/appimage" "$root/deb" "$root/rpm"
+          chmod +x "$appimage"
+          ( cd "$root/appimage" && "$appimage" --appimage-extract >/dev/null )
+          dpkg-deb -x "$deb" "$root/deb"
+          ( cd "$root/rpm" && rpm2cpio "$rpm" | cpio -idm --quiet )
+
+          # Every format installs the program at the same path, so one locator
+          # works for all three: the AppImage's usr/bin/heddle is a symlink to
+          # the /opt copy, which is the regular file this finds. Requiring
+          # exactly one match means a layout change is a failure rather than a
+          # silently scanned wrong file.
+          canary_done=0
+          for format in appimage deb rpm; do
+            mapfile -t hits < <(find "$root/$format" -type f -name heddle)
+            if [ "${#hits[@]}" -ne 1 ]; then
+              echo "::error::expected exactly one file named 'heddle' in the $format artefact, found ${#hits[@]}"
+              printf '%s\n' "${hits[@]:-<none>}"
+              exit 1
+            fi
+            binary="${hits[0]}"
+
+            if [ "$canary_done" -eq 0 ]; then
+              cp "$binary" /tmp/heddle-packaged-canary
+              printf 'oz.warp.dev' >> /tmp/heddle-packaged-canary
+              if ./script/heddle/verify-no-warp-endpoints /tmp/heddle-packaged-canary; then
+                echo "::error::Scanner passed a packaged binary with a planted endpoint; it is broken."
+                exit 1
+              fi
+              rm -f /tmp/heddle-packaged-canary
+              canary_done=1
+            fi
+
+            echo "--- scanning the $format artefact ---"
+            ./script/heddle/verify-no-warp-endpoints "$binary"
+
+            # AGPL section 4: a copy of the licence must accompany the program.
+            # The AppImage shipped without one until this release, so this is a
+            # regression test with a known failing predecessor, not a formality.
+            for licence in LICENSE-AGPL LICENSE-MIT THIRD_PARTY_LICENSES.txt; do
+              if [ -z "$(find "$root/$format" -type f -name "$licence" -print -quit)" ]; then
+                echo "::error::the $format artefact contains no $licence"
+                exit 1
+              fi
+            done
+            # And that the attribution file is the curated one, not a bare
+            # cargo-about run that drops the non-Cargo notices.
+            attribution="$(find "$root/$format" -type f -name THIRD_PARTY_LICENSES.txt -print -quit)"
+            grep -q "Hack Font" "$attribution" \
+              || { echo "::error::THIRD_PARTY_LICENSES.txt in the $format artefact is missing curated non-Cargo notices"; exit 1; }
+          done
+
+          # /usr/bin/<name> must be SHIPPED BY THE PACKAGE, resolve, and be owned.
+          #
+          # Nothing above tests this. The binary locator uses `-type f`, which by
+          # construction cannot see a symlink -- so deleting the link from the
+          # payload, pointing it at a path that is not in the package, or moving
+          # link management back into a maintainer script would all pass every
+          # other check here and produce a package that installs and cannot be
+          # launched. app/channels/oss/dev.heddle.Heddle.desktop has
+          # `Exec=heddle`, resolved through PATH, and the link is the only thing
+          # that puts it there.
+          #
+          # A maintainer script that `rm -f`s the path and `ln -s`es it is the
+          # specific regression to prevent: dpkg then neither owns the path nor
+          # conflict-checks it, and the matching `rm -f` in postrm deletes
+          # whatever is there on removal, including another package's file.
+          echo "--- the /usr/bin/heddle symlink ---"
+          for format in appimage deb rpm; do
+            link="$(find "$root/$format" -type l -name heddle -path '*/usr/bin/heddle' -print -quit)"
+            if [ -z "$link" ]; then
+              echo "::error::the $format artefact ships no usr/bin/heddle symlink; the desktop entry's Exec=heddle would not resolve"
+              find "$root/$format" -path '*usr/bin*' -maxdepth 6 || true
+              exit 1
+            fi
+            target="$(readlink "$link")"
+            # Re-root an absolute target inside the extracted tree; a relative one
+            # (the AppImage's) resolves from the link's own directory.
+            case "$target" in
+              /*) resolved="${link%/usr/bin/heddle}$target" ;;
+              *)  resolved="$(dirname "$link")/$target" ;;
+            esac
+            if [ ! -f "$resolved" ]; then
+              echo "::error::the $format artefact's usr/bin/heddle points at '$target', which is not in the package"
+              exit 1
+            fi
+            echo "  $format: usr/bin/heddle -> $target (resolves inside the package)"
+          done
+
+          # ...and that the package MANAGER owns it, which is what buys the
+          # conflict check. Being in the extracted tree already implies this for
+          # the .deb, but assert it against the package's own file list so the
+          # failure names the right thing.
+          dpkg-deb -c "$deb" > /tmp/deb-contents.txt
+          deb_owns="$(grep -c ' \./usr/bin/heddle -> ' /tmp/deb-contents.txt || true)"
+          if [ "$deb_owns" -ne 1 ]; then
+            echo "::error::the .deb does not ship ./usr/bin/heddle in its data archive (found $deb_owns)"
             exit 1
           fi
-          chmod +x "$appimage"
-          ( cd "$workdir" && "$appimage" --appimage-extract >/dev/null )
-          ./script/heddle/verify-no-warp-endpoints "$workdir/squashfs-root/usr/bin/heddle"
+          rpm_owns=0
+          while IFS= read -r f; do
+            [ "$f" = "/usr/bin/heddle" ] && rpm_owns=1
+          done <<< "$(rpm -qpl "$rpm")"
+          if [ "$rpm_owns" -ne 1 ]; then
+            echo "::error::the .rpm does not list /usr/bin/heddle in %files"
+            exit 1
+          fi
 
+          # No maintainer script may touch that path. Captured rather than piped
+          # into `grep -q`: see the pipefail note below.
+          dpkg-deb --info "$deb" postinst postrm > /tmp/deb-scripts.txt 2>/dev/null || true
+          script_offenders="$(grep -nE '^[[:space:]]*(rm|ln)[[:space:]]' /tmp/deb-scripts.txt | grep '/usr/bin/heddle' || true)"
+          if [ -n "$script_offenders" ]; then
+            echo "::error::a .deb maintainer script manipulates /usr/bin/heddle; it must be shipped in the payload instead"
+            printf '%s\n' "$script_offenders"
+            exit 1
+          fi
+          echo "  owned by dpkg and rpm; no maintainer script touches it"
+
+          # The native packages must DECLARE libasound, and the declaration must
+          # be one that RESOLVES. The AppImage cannot declare anything -- it has
+          # no dependency metadata at all, which is why its requirement is
+          # documented in README.md, docs/index.html and docs/RELEASE_NOTES.md
+          # instead. A package that declares nothing installs cleanly and then
+          # dies with "libasound.so.2: cannot open shared object file"; that is
+          # the same silent shape as an upload glob matching nothing.
+          #
+          # WHOLE-TOKEN comparison, not `case "$x" in *"$want"*`. That earlier
+          # form was a substring test wearing an exact-match name, and Codex
+          # broke it in one line: `libasound2t64 | libasound2-does-not-exist`
+          # CONTAINS `libasound2t64 | libasound2`, so it was accepted. The
+          # mutation test that "proved" the check only tried names that delete
+          # the valid token, so it could not see that class at all.
+          #
+          # The apt simulation below does not close it either: where
+          # libasound2t64 resolves, apt never evaluates the second alternative,
+          # so a corrupted fallback ships and only breaks on bookworm and jammy,
+          # which is exactly where the fallback is the one that matters.
+          #
+          # Everything is captured into a variable rather than piped into
+          # `grep -q`. Under `set -o pipefail`, grep -q closes the pipe on its
+          # first match and the writer can die of SIGPIPE, failing the pipeline
+          # -- which would report "does not declare an ALSA dependency" precisely
+          # when it does.
+
+          # Split a Debian Depends field on ',' into groups, then each group on
+          # '|' into alternatives, trim, and rejoin. An alternative group matches
+          # only if its whole normalised form is equal to what is wanted.
+          deb_has_exact_group() { # $1 = Depends field, $2 = e.g. "libasound2t64|libasound2"
+            local group normalised
+            while IFS= read -r group; do
+              normalised="$(printf '%s' "$group" | tr '|' '\n' \
+                | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | paste -sd'|' -)"
+              [ "$normalised" = "$2" ] && return 0
+            done <<< "$(printf '%s' "$1" | tr ',' '\n')"
+            return 1
+          }
+
+          # .deb: resolve the whole Depends field against the runner's apt index.
+          # Simulation only: downloads nothing, installs nothing, needs no root.
+          # This fails if ANY entry -- ALSA or not -- names something apt cannot
+          # install, so it also guards the nine dlopen'd libraries beside it.
+          # It is necessary and NOT sufficient; see the note above.
+          echo "--- .deb: resolving every declared dependency ---"
+          deb_depends="$(dpkg-deb -f "$deb" Depends)"
+          printf '.deb Depends: %s\n' "$deb_depends"
+          if ! apt-get install -s -y --no-install-recommends "$deb" > /tmp/apt-sim.log 2>&1; then
+            echo "::error::the .deb declares a dependency that apt cannot resolve on this runner"
+            tail -40 /tmp/apt-sim.log
+            exit 1
+          fi
+          echo "every Depends entry resolves on this runner"
+          # ...and the ALSA group is exactly these two names in this order. The
+          # order is load-bearing: on Ubuntu 24.04 `libasound2` alone has no
+          # installable candidate, and before it the t64 name does not exist.
+          if ! deb_has_exact_group "$deb_depends" "libasound2t64|libasound2"; then
+            echo "::error::the .deb's ALSA alternative group is not exactly 'libasound2t64 | libasound2'"
+            exit 1
+          fi
+          echo "ALSA alternative group is exactly 'libasound2t64 | libasound2'"
+
+          # .rpm: compare the declaration against the SONAMEs the shipped binary
+          # actually links, read out of the ELF inside the package.
+          #
+          # `rpm -qp --requires` emits one requirement per line, so the token
+          # boundary is the line. An ELF requirement is `<soname>(...)(64bit)`,
+          # so a NEEDED entry is covered only by a line that begins with the
+          # soname followed immediately by '(' -- `libasound.so.2-does-not-exist`
+          # does not.
+          #
+          # NOT a resolution check: resolving rpm dependencies needs a Fedora or
+          # openSUSE container and their metadata mirrors, which would let a
+          # third party's outage fail a release that is otherwise perfect. That
+          # resolution WAS run by hand (fedora:41 -> alsa-lib, opensuse/leap:15.6
+          # -> libasound2); docs/HANDOFF.md carries the commands to re-run when
+          # this Requires line changes.
+          #
+          # KNOWN LIMIT, measured rather than assumed. This half cannot see a
+          # CORRUPTED EXPLICIT token in the spec -- e.g.
+          # `libasound.so.2()(64bit)-does-not-exist`. rpmbuild's automatic
+          # generator adds the correct requirement from DT_NEEDED whatever the
+          # explicit line says, so the packaged metadata still requires ALSA and
+          # both checks below still pass, while the bogus token ships and makes
+          # the package uninstallable. That mutation is caught at BUILD time
+          # instead, by the whole-token check in script/linux/bundle_rpm, which
+          # reads the rendered spec. Mutation-tested there.
+          #
+          # The .deb has no such gap: dpkg-deb generates nothing, so its Depends
+          # field is exactly what was written and the check above sees all of it.
+          #
+          # So: exact about coverage, approximate about installability.
+          echo "--- .rpm: declared Requires vs the binary's DT_NEEDED ---"
+          rpm_binary="$(find "$root/rpm" -type f -name heddle)"
+          rpm_requires="$(rpm -qp --requires "$rpm")"
+          printf '%s\n' "$rpm_requires"
+          missing=0
+          while IFS= read -r soname; do
+            [ -n "$soname" ] || continue
+            covered=0
+            while IFS= read -r req; do
+              case "$req" in "$soname"'('*) covered=1 ;; esac
+            done <<< "$rpm_requires"
+            if [ "$covered" -eq 1 ]; then
+              echo "  covered: $soname"
+            else
+              echo "::error::the .rpm does not require $soname, which the shipped binary links"
+              missing=1
+            fi
+          done <<< "$(readelf -d "$rpm_binary" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p')"
+          [ "$missing" -eq 0 ] || exit 1
+          # And the explicit declaration, matched as a whole line.
+          rpm_alsa=0
+          while IFS= read -r req; do
+            [ "$req" = "libasound.so.2()(64bit)" ] && rpm_alsa=1
+          done <<< "$rpm_requires"
+          if [ "$rpm_alsa" -ne 1 ]; then
+            echo "::error::the .rpm has no requirement equal to 'libasound.so.2()(64bit)'"
+            exit 1
+          fi
+          echo "ALSA requirement is exactly 'libasound.so.2()(64bit)'"
+
+      # `if-no-files-found: error` catches the case where NOTHING matched. It
+      # does NOT catch one of three patterns matching nothing, which is why the
+      # Package step checks each artefact by its exact path instead of trusting
+      # these globs.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: heddle-${{ matrix.target }}
-          path: dist/*.tar.gz*
+          if-no-files-found: error
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.sha256
 
   publish:
     # Tag pushes only. workflow_dispatch exists so the Linux AppImage build can be
@@ -339,16 +618,43 @@ jobs:
           echo "tag $RELEASE_TAG -> app version $version"
           ./script/heddle/generate-release-manifest "$version" dist/channel_versions.json
 
+      # Six assets: the AppImage, the .deb, the .rpm, and a .sha256 beside each.
+      #
+      # The list is built and CHECKED rather than handed to gh as a glob. A glob
+      # that matches nothing is the specific failure this release path has to
+      # avoid: bash leaves the unmatched pattern in place, gh may or may not
+      # complain depending on what else matched, and either way a release can end
+      # up short an asset while every step reports green. Requiring exactly one
+      # match per format, plus its checksum, turns that into a named error.
+      #
+      # dist/channel_versions.json is written by the step above and is
+      # deliberately not in this list -- it is published later, and only onto a
+      # release that already carries the payload it advertises.
       - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
+          assets=()
+          for pattern in '*.AppImage' '*.deb' '*.rpm'; do
+            mapfile -t matches < <(find dist -maxdepth 1 -name "$pattern")
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "::error::expected exactly one dist/$pattern among the downloaded artefacts, found ${#matches[@]}"
+              ls -1 dist || true
+              exit 1
+            fi
+            if [ ! -s "${matches[0]}.sha256" ]; then
+              echo "::error::${matches[0]} has no recorded checksum"
+              exit 1
+            fi
+            assets+=( "${matches[0]}" "${matches[0]}.sha256" )
+          done
+          printf 'publishing: %s\n' "${assets[@]}"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 \
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
               --title "Heddle $RELEASE_TAG" \
               --notes-file docs/RELEASE_NOTES.md
           fi
@@ -356,7 +662,7 @@ jobs:
       # The manifest is published ONLY onto a release that already carries the payload it
       # advertises.
       #
-      # This workflow builds the Linux AppImage and nothing else; the macOS `.app.zip` is
+      # This workflow builds the Linux artefacts and nothing else; the macOS `.app.zip` is
       # signed and notarized on a developer's machine and uploaded by hand (docs/HANDOFF.md).
       # Publishing the manifest unconditionally therefore produced a release that told every
       # running Heddle a new version existed, and then 404'd when it went to fetch it -- and

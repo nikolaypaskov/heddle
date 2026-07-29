@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# The action ("remove", "purge", "upgrade", ...) is passed as the first argument
+# to the postrm script. Nothing here is conditional on it, because there is
+# nothing here to make conditional: this package writes no apt source and no
+# keyring, so a purge has nothing extra to clean up.
+#
+# In particular there is NO `rm -f /usr/bin/@@BINARY_NAME@@`. That link is
+# shipped in the data archive, so dpkg removes it itself -- and, unlike an
+# unconditional `rm -f`, dpkg will not remove it if another package has since
+# taken the path over. Deleting a path this package does not own was the bug
+# this comment replaces.
+
+# Make sure the system forgets the newly-uninstalled desktop file.
+if hash update-desktop-database 2>/dev/null; then
+	update-desktop-database
+fi
+
+exit 0

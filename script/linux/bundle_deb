@@ -29,19 +29,49 @@ if [ "$ARTIFACT" = "cli" -a "$RELEASE_CHANNEL" = "stable" ]; then
   CHANNEL_SUFFIX="-stable"
 fi
 
-case "$ARTIFACT" in
-  app)
-    PACKAGE_NAME="warp-terminal$CHANNEL_SUFFIX"
-    ;;
-  cli)
-    PACKAGE_NAME="oz$CHANNEL_SUFFIX"
-    ;;
-  *)
-    echo "::error ::Unknown ARTIFACT: $ARTIFACT (expected 'app' or 'cli')"
+# The OSS channel is Heddle, and three USER-VISIBLE things change with it: the
+# package name, the /opt provider directory, and the control/maintainer-script
+# templates.
+#
+# Without this branch the generic path below is not merely mis-branded, it is
+# broken: BINARY_NAME is "heddle", so `${BINARY_NAME#warp}` strips nothing, and
+# the package would be called "warp-terminalheddle" and install itself under
+# /opt/warpdotdev/. script/linux/bundle_appimage has carried the identical branch
+# and the identical explanation since the AppImage was first built here; this one
+# was simply never written, because no channel had ever asked this fork for a
+# .deb. AGPL grants the code, not the trademark.
+#
+# CONFIGURE_PACKAGE_REPO is the other half. Every other channel appends
+# resources/linux/debian/common/postinst.repo.template, which installs a
+# package-signing key and writes an apt source list. This fork publishes to
+# GitHub Releases and hosts no apt repository, so that source would 404 on every
+# `apt update` for every user who installed the package.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  if [ "$ARTIFACT" != "app" ]; then
+    echo "::error ::The oss channel only builds the 'app' artifact, got '$ARTIFACT'"
     exit 1
-    ;;
-esac
-TEMPLATE_DIR="$WORKSPACE_ROOT_DIR/resources/linux/debian/$ARTIFACT"
+  fi
+  PACKAGE_NAME="heddle"
+  OPT_PROVIDER="heddle"
+  TEMPLATE_DIR="$WORKSPACE_ROOT_DIR/resources/linux/debian/heddle"
+  CONFIGURE_PACKAGE_REPO="false"
+else
+  OPT_PROVIDER="warpdotdev"
+  CONFIGURE_PACKAGE_REPO="true"
+  case "$ARTIFACT" in
+    app)
+      PACKAGE_NAME="warp-terminal$CHANNEL_SUFFIX"
+      ;;
+    cli)
+      PACKAGE_NAME="oz$CHANNEL_SUFFIX"
+      ;;
+    *)
+      echo "::error ::Unknown ARTIFACT: $ARTIFACT (expected 'app' or 'cli')"
+      exit 1
+      ;;
+  esac
+  TEMPLATE_DIR="$WORKSPACE_ROOT_DIR/resources/linux/debian/$ARTIFACT"
+fi
 
 # Add a simple test to make sure we're generating the appropriate repository
 # name for the stable channel.
@@ -79,41 +109,163 @@ mkdir -p "$PKGDIR"
 
 # Populate the directory with the package contents, in the appropriate
 # locations.
-OPT_DIR="/opt/warpdotdev/$PACKAGE_NAME"
+OPT_DIR="/opt/$OPT_PROVIDER/$PACKAGE_NAME"
 source "$WORKSPACE_ROOT_DIR/script/linux/bundle_install" "$PKGDIR"
+
+# Ship the /usr/bin symlink IN THE DATA ARCHIVE, not from the postinst.
+#
+# The postinst used to `rm -f /usr/bin/heddle` and then `ln -s` it. That creates
+# a path dpkg does not own, and three things follow from that:
+#
+#   1. dpkg runs no conflict check, because as far as it knows the package
+#      installs nothing at /usr/bin/heddle. Another package's file there is
+#      deleted silently by the `rm -f`.
+#   2. `dpkg -L heddle` never lists it and `dpkg -S /usr/bin/heddle` reports
+#      nothing owns it, so a later package can take the path with no conflict
+#      recorded anywhere.
+#   3. `postrm`'s matching unconditional `rm -f` then deletes whatever is at
+#      that path on removal -- including the file that other package installed.
+#
+# Packaging the link fixes all three: dpkg refuses to overwrite a path another
+# package owns, records ownership, and on removal deletes only what it installed
+# and only while the record still points at us.
+#
+# resources/linux/rpm/heddle/heddle.spec.template already did this correctly --
+# it creates the link in %install and lists it in %files. This is the .deb
+# catching up with the .rpm.
+#
+# Absolute, not relative: Debian policy asks for relative symlinks within one
+# top-level directory and absolute ones across, and /usr/bin -> /opt crosses.
+#
+# oss only. The other channels' postinst templates still manage the link
+# themselves; changing that would change packages this fork does not ship.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  mkdir -p "$PKGDIR/usr/bin"
+  ln -s "$OPT_DIR/$BINARY_NAME" "$PKGDIR/usr/bin/$BINARY_NAME"
+fi
 
 # Move the Debian-specific package metadata into the package directory.
 DEBIAN_DIR="$PKGDIR/DEBIAN"
 VERSION="$(echo "$GIT_RELEASE_TAG" | sed -E "s/^v//; s/([a-z]+)_/\1./")"
 mkdir "$DEBIAN_DIR"
 sed \
-    "s#@@CHANNEL_SUFFIX@@#$CHANNEL_SUFFIX#g; s#@@VERSION@@#$VERSION#g; s#@@ARCH@@#$ARCH#g" \
+    "s#@@CHANNEL_SUFFIX@@#$CHANNEL_SUFFIX#g; s#@@PACKAGE_NAME@@#$PACKAGE_NAME#g; s#@@VERSION@@#$VERSION#g; s#@@ARCH@@#$ARCH#g" \
     < "$TEMPLATE_DIR/control.template" \
     > "$DEBIAN_DIR/control"
 sed \
     "s#@@CHANNEL_SUFFIX@@#$CHANNEL_SUFFIX#g; s#@@BINARY_NAME@@#$BINARY_NAME#g; s#@@OPTDIR@@#$OPT_DIR#g; s#@@REPO_NAME@@#$REPO_NAME#g; s#@@CHANNEL@@#$RELEASE_CHANNEL#g; s#@@ARCH@@#$ARCH#g" \
     < "$TEMPLATE_DIR/postinst.template" \
     > "$DEBIAN_DIR/postinst"
+if [ "$CONFIGURE_PACKAGE_REPO" = "true" ]; then
+  sed \
+      "s#@@REPO_NAME@@#$REPO_NAME#g; s#@@CHANNEL@@#$RELEASE_CHANNEL#g; s#@@ARCH@@#$ARCH#g" \
+      < "$WORKSPACE_ROOT_DIR/resources/linux/debian/common/postinst.repo.template" \
+      >> "$DEBIAN_DIR/postinst"
+fi
 sed \
-    "s#@@REPO_NAME@@#$REPO_NAME#g; s#@@CHANNEL@@#$RELEASE_CHANNEL#g; s#@@ARCH@@#$ARCH#g" \
-    < "$WORKSPACE_ROOT_DIR/resources/linux/debian/common/postinst.repo.template" \
-    >> "$DEBIAN_DIR/postinst"
-sed \
-    "s#@@CHANNEL_SUFFIX@@#$CHANNEL_SUFFIX#g; s#@@OPTDIR@@#$OPT_DIR#g; s#@@REPO_NAME@@#$REPO_NAME#g" \
+    "s#@@CHANNEL_SUFFIX@@#$CHANNEL_SUFFIX#g; s#@@BINARY_NAME@@#$BINARY_NAME#g; s#@@OPTDIR@@#$OPT_DIR#g; s#@@REPO_NAME@@#$REPO_NAME#g" \
     < "$TEMPLATE_DIR/postrm.template" \
     > "$DEBIAN_DIR/postrm"
-sed \
-    "s#@@REPO_NAME@@#$REPO_NAME#g" \
-    < "$WORKSPACE_ROOT_DIR/resources/linux/debian/common/postrm.repo.template" \
-    >> "$DEBIAN_DIR/postrm"
+if [ "$CONFIGURE_PACKAGE_REPO" = "true" ]; then
+  sed \
+      "s#@@REPO_NAME@@#$REPO_NAME#g" \
+      < "$WORKSPACE_ROOT_DIR/resources/linux/debian/common/postrm.repo.template" \
+      >> "$DEBIAN_DIR/postrm"
+fi
 
 # Make the package scripts executable.
 chmod 755 \
     "$DEBIAN_DIR/postinst" \
     "$DEBIAN_DIR/postrm"
 
+# A package that declares nothing fails exactly the way a bare binary does, only
+# later and more confusingly: apt reports a successful install and the program
+# then dies with "libasound.so.2: cannot open shared object file". Verified in a
+# clean ubuntu:24.04 container against the shipped v0.5.0 build.
+#
+# ALSA is the one library on the binary's DT_NEEDED list that a minimal system
+# does not already have. It arrives through crates/voice_input -> cpal, which is
+# a NON-OPTIONAL dependency, and app/Cargo.toml declares `gui = ["voice_input"]`,
+# so it is a hard component of the GUI rather than an optional extra. Dropping it
+# would mean dropping voice input from Linux; bundling libasound is also wrong
+# (it is on the AppImage excludelist deliberately, because audio libraries are
+# meant to match the host). Declaring it is the answer.
+#
+# `libasound2t64 | libasound2`, in that order: the 64-bit-time_t transition
+# renamed the package on Debian trixie / Ubuntu 24.04 and later. apt takes the
+# first installable alternative, so new releases resolve the t64 name and older
+# ones (bookworm, jammy) fall through to the historical one.
+#
+# Checked here rather than trusted from the template, because a sed that failed
+# to substitute, or a template edited to drop the line, both produce a control
+# file that dpkg-deb accepts without complaint.
+#
+# Compared as WHOLE TOKENS, not as a substring.
+#
+# The version of this check that shipped in the previous commit did
+#
+#     case "$DEPENDS_LINE" in *"libasound2t64 | libasound2"*)
+#
+# and called itself exact. It is not: `libasound2t64 | libasound2-does-not-exist`
+# CONTAINS `libasound2t64 | libasound2`, so a corrupted fallback was accepted.
+# The mutation test that "proved" it only ever tried `libasound-does-not-exist`,
+# which deletes the valid token, so it could not see that class at all.
+#
+# The release workflow's `apt-get install -s` does not cover it either: where
+# libasound2t64 resolves, apt never evaluates the second alternative, and the
+# package then breaks on bookworm and jammy -- the releases where the fallback
+# is the one that matters.
+#
+# So: split the field on ',' into alternative groups, split each group on '|',
+# trim, rejoin, and require one group to equal the wanted form exactly.
+deb_has_exact_group() { # $1 = Depends field, $2 = e.g. "libasound2t64|libasound2"
+  local group normalised
+  while IFS= read -r group; do
+    normalised="$(printf '%s' "$group" | tr '|' '\n' \
+      | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | paste -sd'|' -)"
+    [ "$normalised" = "$2" ] && return 0
+  done <<< "$(printf '%s' "$1" | tr ',' '\n')"
+  return 1
+}
+
+DEPENDS_LINE="$(sed -n 's/^Depends:[[:space:]]*//p' "$DEBIAN_DIR/control")"
+if [ -z "$DEPENDS_LINE" ]; then
+  echo "::error ::$DEBIAN_DIR/control declares no Depends line; the package would install and then fail to start"
+  exit 1
+fi
+# The ALSA assertion is oss-only. Warp's control.template does not list it and is
+# not this fork's to change; asserting it unconditionally would fail a build of a
+# channel we do not ship, for a rule we do not get to impose.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  if ! deb_has_exact_group "$DEPENDS_LINE" "libasound2t64|libasound2"; then
+    echo "::error ::$DEBIAN_DIR/control has no alternative group equal to 'libasound2t64 | libasound2'; got: $DEPENDS_LINE"
+    exit 1
+  fi
+fi
+
 # Build the actual package.
 cd "$DIST_DIR/debpkg"
 fakeroot dpkg-deb -b "$PACKAGE_NAME-$ARCH" "$OUT_DIR"
 
-echo "Successfully built .deb package at $OUT_DIR/${PACKAGE_NAME}_${VERSION}_${ARCH}.deb!"
+# dpkg-deb names the output from the control file, not from the directory it was
+# given, so the name below is a PREDICTION and has to be checked. The same class
+# of mistake in script/linux/bundle_appimage is why that script grew an existence
+# check: a name nothing downstream looks for uploads an empty set and reports
+# success.
+DEB_PATH="$OUT_DIR/${PACKAGE_NAME}_${VERSION}_${ARCH}.deb"
+if [ ! -f "$DEB_PATH" ]; then
+  echo "ERROR: dpkg-deb did not produce $DEB_PATH." >&2
+  echo "       Found in $OUT_DIR:" >&2
+  ls -1 "$OUT_DIR" >&2
+  exit 1
+fi
+
+# Hand the exact path to the release workflow rather than making it guess with a
+# glob. Same mechanism script/linux/bundle_appimage uses for appimage_path.
+if [ "${GITHUB_ACTIONS:-}" == "true" ]; then
+  echo "::echo::on"
+  echo "deb_path=$DEB_PATH" >> "$GITHUB_OUTPUT"
+  echo "::echo::off"
+fi
+
+echo "Successfully built .deb package at $DEB_PATH!"

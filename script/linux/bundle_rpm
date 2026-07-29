@@ -30,10 +30,34 @@ if [ "$ARTIFACT" = "cli" -a "$RELEASE_CHANNEL" = "stable" ]; then
 fi
 
 ARTIFACT="${ARTIFACT:-app}"
-if [ "$ARTIFACT" = "app" ]; then
+
+# The OSS channel is Heddle. Same reasoning as the matching branch in
+# script/linux/bundle_deb and script/linux/bundle_appimage: BINARY_NAME is
+# "heddle", so `${BINARY_NAME#warp}` strips nothing and the generic path would
+# name the package "warp-terminalheddle", install it under /opt/warpdotdev/,
+# stamp Warp's vendor on it, and configure Warp's rpm repository on the user's
+# machine. AGPL grants the code, not the trademark, and this fork hosts no
+# repository to point anyone at.
+#
+# SIGN_PACKAGE is the other half. Below, the non-oss path imports a public key
+# from a warp.dev URL and signs with a warp.dev key id. This fork has neither the
+# key nor any reason to reach that host during a release build.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  if [ "$ARTIFACT" != "app" ]; then
+    echo "::error ::The oss channel only builds the 'app' artifact, got '$ARTIFACT'"
+    exit 1
+  fi
+  PACKAGE_NAME="heddle"
+  SPEC_TEMPLATE="$WORKSPACE_ROOT_DIR/resources/linux/rpm/heddle/heddle.spec.template"
+  SIGN_PACKAGE="false"
+elif [ "$ARTIFACT" = "app" ]; then
   PACKAGE_NAME="warp-terminal$CHANNEL_SUFFIX"
+  SPEC_TEMPLATE="$WORKSPACE_ROOT_DIR/resources/linux/rpm/app/warp.spec.template"
+  SIGN_PACKAGE="true"
 elif [ "$ARTIFACT" = "cli" ]; then
   PACKAGE_NAME="oz$CHANNEL_SUFFIX"
+  SPEC_TEMPLATE="$WORKSPACE_ROOT_DIR/resources/linux/rpm/cli/warp.spec.template"
+  SIGN_PACKAGE="true"
 else
   echo "::error ::Unknown ARTIFACT: $ARTIFACT (expected 'app' or 'cli')"
   exit 1
@@ -62,14 +86,37 @@ cleanup() {
 trap cleanup EXIT
 
 # Construct a directory that contains the build tree.
+#
+# BUILD/BUILDROOT/SOURCES/SRPMS are created explicitly, which only SPEC and RPMS
+# were before. rpmbuild's %install prologue does `cd %{_builddir}` before it runs
+# anything from the spec, so a _topdir with no BUILD/ under it would fail before
+# the spec was ever reached. Tested both ways in a container: rpm 4.18.2 (Ubuntu
+# 24.04) and 4.20.1 (Fedora 41) create the directories themselves and build fine
+# without this line, so it is insurance against an rpm that does not, not a fix
+# for a failure seen here.
 rm -rf "$RPMBUILD_DIR"
-mkdir -p "$RPMBUILD_DIR"/{SPEC,RPMS}
+mkdir -p "$RPMBUILD_DIR"/{SPEC,RPMS,BUILD,BUILDROOT,SOURCES,SRPMS}
 
 # Move the RPM-specific package metadata into the package directory.
-VERSION="$GIT_RELEASE_TAG"
+#
+# The leading "v" is stripped for the oss channel, matching what
+# script/linux/bundle_deb does with the same variable. GIT_RELEASE_TAG is
+# "vX.Y.Z" (the APP version, derived from the git tag by the release workflow --
+# see .github/workflows/heddle-release.yml, and do not change that derivation).
+# RPM compares versions segment by segment, and a leading letter makes "v0.10.0"
+# sort before "v0.9.0"; a package that cannot be upgraded by its own version
+# numbering is a defect that only shows up two releases later. The same string
+# goes into the spec and into the predicted file name below, so the two cannot
+# disagree.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  VERSION="${GIT_RELEASE_TAG#v}"
+else
+  VERSION="$GIT_RELEASE_TAG"
+fi
 RELEASE="1"
 sed \
     "s#@@CHANNEL_SUFFIX@@#$CHANNEL_SUFFIX#g; \
+     s#@@PACKAGE_NAME@@#$PACKAGE_NAME#g; \
      s#@@BINARY_NAME@@#$BINARY_NAME#g; \
      s#@@VERSION@@#$VERSION#g; \
      s#@@RELEASE@@#$RELEASE#g; \
@@ -78,19 +125,65 @@ sed \
      s#@@BUNDLEID@@#$BUNDLE_ID#g; \
      s#@@REPO_NAME@@#$REPO_NAME#g; \
      s#@@RELEASE_CHANNEL@@#$RELEASE_CHANNEL#g" \
-    < "$WORKSPACE_ROOT_DIR/resources/linux/rpm/$ARTIFACT/warp.spec.template" \
-    > "$RPMBUILD_DIR/SPEC/warp.spec"
+    < "$SPEC_TEMPLATE" \
+    > "$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec"
+
+# A package that declares nothing installs cleanly and then fails to start.
+# See the matching check in script/linux/bundle_deb for the full reasoning; the
+# short version is that libasound.so.2 is a hard requirement of the GUI feature
+# (crates/voice_input -> cpal, non-optional, reached through `gui`), and a clean
+# ubuntu:24.04 could not run the v0.5.0 binary without it. Checked against the
+# rendered spec, because an unsubstituted placeholder or an edited template both
+# produce a spec rpmbuild accepts in silence.
+#
+# Compared as WHOLE TOKENS, not as a substring. The previous version did
+# `case "$REQUIRES_LINE" in *"libasound.so.2()(64bit)"*)`, which accepts
+# `libasound.so.2()(64bit)-does-not-exist` -- rpmbuild packages that happily and
+# dnf refuses it on the user's machine. See the fuller note in
+# script/linux/bundle_deb; the same mistake was made in both files.
+rpm_has_exact_token() { # $1 = Requires field, $2 = the token that must appear whole
+  local token
+  while IFS= read -r token; do
+    token="$(printf '%s' "$token" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    [ "$token" = "$2" ] && return 0
+  done <<< "$(printf '%s' "$1" | tr ',' '\n')"
+  return 1
+}
+
+REQUIRES_LINE="$(sed -n 's/^Requires:[[:space:]]*//p' "$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec")"
+if [ -z "$REQUIRES_LINE" ]; then
+  echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec declares no Requires line"
+  exit 1
+fi
+# oss-only, for the same reason as the matching check in script/linux/bundle_deb:
+# Warp's warp.spec.template does not list ALSA and is not this fork's to change.
+if [ "$RELEASE_CHANNEL" = "oss" ]; then
+  if ! rpm_has_exact_token "$REQUIRES_LINE" "libasound.so.2()(64bit)"; then
+    echo "::error ::$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec has no requirement equal to 'libasound.so.2()(64bit)'; got: $REQUIRES_LINE"
+    exit 1
+  fi
+fi
 
 # Build the actual package.
-fakeroot rpmbuild -v -bb "$RPMBUILD_DIR/SPEC/warp.spec" --target="$ARCH" --define "_topdir $RPMBUILD_DIR"
+fakeroot rpmbuild -v -bb "$RPMBUILD_DIR/SPEC/$PACKAGE_NAME.spec" --target="$ARCH" --define "_topdir $RPMBUILD_DIR"
 
 # Copy the package to the output directory.
+#
+# rpmbuild names the file from Name/Version/Release/arch in the spec, so this is
+# a PREDICTION. Check it rather than letting `cp` report a bare "no such file":
+# script/linux/bundle_appimage grew the same check for the same reason.
 RPM_NAME="$PACKAGE_NAME-$VERSION-$RELEASE.$ARCH.rpm"
+if [ ! -f "$RPMBUILD_DIR/RPMS/$ARCH/$RPM_NAME" ]; then
+  echo "ERROR: rpmbuild did not produce $RPM_NAME." >&2
+  echo "       Found in $RPMBUILD_DIR/RPMS/$ARCH:" >&2
+  ls -1 "$RPMBUILD_DIR/RPMS/$ARCH" >&2 || true
+  exit 1
+fi
 cp "$RPMBUILD_DIR/RPMS/$ARCH/$RPM_NAME" "$OUT_DIR"
 
 # If we're running on GitHub, sign the package using our signing key that
 # should have already been added to the gpg-agent with a preset passphrase.
-if [ "${GITHUB_ACTIONS}" == "true" ]; then
+if [ "$SIGN_PACKAGE" == "true" ] && [ "${GITHUB_ACTIONS}" == "true" ]; then
   # Import our signing key's public key into rpm so the signature can be
   # verified.
   sudo rpm --import https://releases.warp.dev/linux/keys/warp.asc
@@ -107,6 +200,14 @@ if [ "${GITHUB_ACTIONS}" == "true" ]; then
     --define "_gpg_sign_cmd_extra_args --batch --yes --pinentry-mode loopback" --define "_gpg_digest_algo sha256" \
     "$OUT_DIR/$RPM_NAME" \
     || true
+fi
+
+# Hand the exact path to the release workflow rather than making it guess with a
+# glob. Same mechanism script/linux/bundle_appimage uses for appimage_path.
+if [ "${GITHUB_ACTIONS:-}" == "true" ]; then
+  echo "::echo::on"
+  echo "rpm_path=$OUT_DIR/$RPM_NAME" >> "$GITHUB_OUTPUT"
+  echo "::echo::off"
 fi
 
 echo "Successfully built .rpm package at $OUT_DIR/$RPM_NAME!"
