@@ -232,9 +232,16 @@ payload itself is what authorises the install.
 ./script/heddle/verify-bundled-assets         # bundled binary assets match a reviewed manifest
 ./script/heddle/verify-warp-supply-chain      # no Warp-controlled code path; deps pinned by rev
 ./script/heddle/gui-surface-gate              # commercial UI + Warp strings may only shrink
+./script/heddle/wasm-diagnostic-gate          # wasm32 diagnostics may only shrink
 ```
 
-Each has a `-selftest` companion. **Run the self-test, not just the gate.** The reason is §4.
+Each has a `-selftest` companion **except `wasm-diagnostic-gate`**, whose canary is an
+inline step in `.github/workflows/heddle-privacy-gate.yml` and is GNU-sed-only, so it does
+not run on macOS. **Run the self-test, not just the gate.** The reason is §4.
+
+`wasm-diagnostic-gate` needs `rustup target add wasm32-unknown-unknown`, and on macOS a
+clang with the WebAssembly backend (Apple's has none — the script finds Homebrew's LLVM by
+itself). It exits 2 with instructions rather than passing if it cannot really check.
 
 To record a deliberate addition to a baseline: `--update --allow-additions`, and say why in the
 commit. The gate refuses additions otherwise, on purpose.
@@ -242,14 +249,44 @@ commit. The gate refuses additions otherwise, on purpose.
 ### Testing
 
 ```bash
+# What the gate and CI run. 9,167 tests, ~97s warm.
+cargo nextest run --locked --workspace \
+  --exclude command-signatures-v2 --exclude integration \
+  --exclude http_client --exclude remote_server
+
 cargo test -p warp --lib      # ~5,593 pass, 13 known isolation failures
-cargo test -p warp_core       # 49
+cargo test -p warp_core       # 52
 cargo test -p warp_tui        # 524
 cargo test -p onboarding      # 12
 ```
 
 **`cargo test` alone covers only workspace default members, and `warp_core` is not one of them.**
 Four failures hid behind that for a long time. Always name the crate.
+
+**The gate used to run only those four packages.** 52 crates under `crates/` contain tests and
+49 were outside that set — they compiled as dependencies, so only their *tests* were skipped.
+Widening to the whole workspace took the suite from 6,293 tests to 9,167 (+47s warm) and every
+newly-included test passed. Four crates are excluded **by name**, each for a stated reason in
+`lefthook.yml`; three of those are the same defect — test code that stopped compiling when this
+fork migrated endpoints to `Option`, invisibly, because those tests never ran:
+
+| crate | why | cost |
+| --- | --- | --- |
+| `command-signatures-v2` | `build.rs` needs `yarn`; `js/build/` is gitignored | no tests |
+| `integration` | its bin is `test = false`, and it enables `warp/integration_tests`, which does not compile (7 errors in `app/src/integration_testing/agent_mode/`) | no tests |
+| `http_client` | `origin_tests` does not compile — `src/lib.rs:831,834` pass `Option<Cow<str>>` to `Url::parse` | ~8 tests |
+| `remote_server` | `setup_tests.rs` does not compile — `install_script()` is `Option<String>` and is `None` on the OSS channel (`:288 :289 :343 :496`) | ~99 tests |
+
+Deleting an exclusion is the fix; each needs a decision about what the test *should* assert in
+a build with no Warp server, which is why none was patched to force the gate green.
+
+**A test module can be compiled away and nobody notices.** `crates/warp_core/src/channel/state.rs`
+gated its tests on `#[cfg(all(test, not(feature = "test-util")))]`. Building `warp_core` alongside
+`warp` — which the gate, CI and `cargo test -p warp` all do — turns `test-util` on, so those three
+tests ran **zero** times in every configuration anyone actually runs. Fixed by moving the feature
+guard to the function under test (`any(test, not(feature = "test-util"))`) and giving the module a
+plain `#[cfg(test)]`. It is the only such module in the tree; the other `not(feature = "test-util")`
+sites are production alternates, not tests.
 
 The 13 failures in `-p warp --lib` are pre-existing test-isolation issues, unrelated to this fork's
 work. Two secret-redaction tests alternate, so the count is sometimes 14. If you see a different

@@ -273,8 +273,13 @@ jobs:
       - name: typecheck
         run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding
 
-      # `cargo test` alone covers only the workspace DEFAULT MEMBERS, and warp_core is
-      # not one of them — four failures hid behind that for a long time. Name the crates.
+      # SCOPE: the whole workspace minus four NAMED exclusions. Kept byte-identical to the
+      # `unit` job in lefthook.yml — that file's header asserts Gate ≡ CI, and the reasons
+      # for each exclusion are written out there rather than duplicated here.
+      #
+      # This ran `-p warp -p warp_core -p warp_tui -p onboarding` and therefore skipped the
+      # tests of 49 of the 52 crates under crates/ that have any. Measured warm on an
+      # aarch64 dev machine: 6293 tests / 49.8s before, 9167 tests / 96.7s after.
       #
       # `--no-fail-fast` because this suite had never run on Linux until today, and it is
       # turning up host-dependent tests one at a time. Stopping at the first failure means one
@@ -282,7 +287,7 @@ jobs:
       # to completion costs a slower red build and buys the whole list at once; a green build
       # is unaffected, since nothing is failing to keep going past.
       - name: unit
-        run: cargo nextest run --locked --no-fail-fast -p warp -p warp_core -p warp_tui -p onboarding
+        run: cargo nextest run --locked --no-fail-fast --workspace --exclude command-signatures-v2 --exclude integration --exclude http_client --exclude remote_server
 
       # Drives the BUILT binary as a subprocess. Unattended: no TTY, no credentials,
       # no network.

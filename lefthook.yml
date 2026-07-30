@@ -36,9 +36,19 @@ pre-commit:
     # fails for a reason unrelated to the change being checked. The project's own release
     # CI has always scoped its build the same way (`-p warp_tui --bin heddle-tui`).
     #
-    # The crates named below are the ones this fork actually ships and tests. Widening
-    # this to the full workspace requires making that crate buildable first -- see
-    # docs/HANDOFF.md.
+    # The crates named below are the ones this fork ships. This is the FAST pre-commit
+    # layer and stays narrow on purpose; the gate's `unit` job is the one that carries
+    # workspace scope, and it names its own exclusions.
+    #
+    # Known cost of the mismatch, measured rather than assumed: this narrow set and the
+    # gate's wide one resolve `warp`'s features differently, so a narrow `cargo check`
+    # immediately after a wide `nextest run` rebuilds `warp` -- 0.6s becomes 93s. Across a
+    # whole gate run that churn is ~137s, more than the 47s of extra tests.
+    #
+    # Widening these two to the same expression is the fix and is left as SEPARATE work: it
+    # changes what they REPORT, not just how long they take. It is already de-risked --
+    # `cargo clippy --locked --workspace` with the same four exclusions exits 0 with no
+    # errors (162s measured). Do it as its own change, with its own before/after.
     - name: typecheck
       glob: "*.rs"
       run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding
@@ -54,10 +64,13 @@ pre-commit:
 pre-push:
   parallel: false
   jobs:
-    # `cargo test` alone covers only the workspace DEFAULT MEMBERS, and warp_core is
-    # not one of them. Four failures hid behind that for a long time. Name the crates.
+    # Same package expression as the gate and CI, deliberately -- see the note on the
+    # gate's `unit` job. Two different package sets for one milestone is not a saving:
+    # they resolve `warp`'s features differently, so alternating between them rebuilds
+    # `warp` (measured: 93s) every single time, which costs more than the 47s of extra
+    # tests the wider set runs.
     - name: unit
-      run: cargo nextest run --locked -p warp -p warp_core -p warp_tui -p onboarding
+      run: cargo nextest run --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude http_client --exclude remote_server
 
     - name: sast
       run: semgrep scan --error --quiet --metrics=off --severity=ERROR --config .claudeconf/rules/ app crates
@@ -84,6 +97,18 @@ pre-push:
 # An earlier version of this comment claimed the gate included it while no job did. That
 # is the kind of unsupported claim the review gate itself exists to catch, and it was
 # caught by exactly that.
+#
+# The same header made the same mistake twice. It also asserted "plus the project's own
+# privacy gates" while script/heddle/wasm-diagnostic-gate -- listed in
+# .claudeconf/manifest.json's projectGates, and run at two call sites in
+# heddle-privacy-gate.yml -- had no job here at all. PR #23 paid for that: green locally
+# twice, red in CI on precisely that gate. It is wired below now.
+#
+# What "Gate ≡ CI" still does NOT mean here, so nobody reads more into it than is true:
+# CI additionally SELF-TESTS the wasm gate (an inline step in heddle-privacy-gate.yml
+# that plants two regressions and requires rejection). That step is GNU-sed-only and so
+# cannot run on macOS as written; it has no companion script the way the supply-chain and
+# GUI gates do. The gate itself runs in both places; its canary runs only in CI.
 gate:
   parallel: false
   jobs:
@@ -99,8 +124,56 @@ gate:
     - name: typecheck
       run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding
 
+    # SCOPE: the whole workspace minus four NAMED exclusions.
+    #
+    # This job used to run `-p warp -p warp_core -p warp_tui -p onboarding`. 52 crates
+    # under crates/ contain tests and 49 of them were outside that set -- settings, vim,
+    # mcp, warp_terminal, persistence, warpui, websocket, lsp and the rest. They compiled,
+    # because they are dependencies; only their tests were skipped, silently, forever.
+    #
+    # MEASURED on this machine, both warm, both `cargo nextest run`:
+    #   old set   6293 tests   49.8s
+    #   this set  9167 tests   96.7s     (+2874 tests, +47s)
+    # Every one of those 2874 passed on the first run. The cost of the gap was not a pile
+    # of broken tests; it was 2874 assertions nobody was collecting.
+    #
+    # `--workspace --exclude` rather than a longer `-p` list, so a NEW crate is covered by
+    # default and every gap is a line someone had to write.
+    #
+    # The four exclusions, each with its reason:
+    #
+    #   command-signatures-v2  build.rs shells out to `yarn` to compile a TypeScript
+    #                          bundle and its `js/build/` output is gitignored, so on a
+    #                          machine without yarn/corepack the crate cannot build at
+    #                          all. Pre-existing; the release CI has always scoped around
+    #                          it the same way. It has no tests.
+    #
+    #   integration            Its bin sets `test = false` ("does not, itself, have any
+    #                          tests"), so it contributes nothing -- but it depends on
+    #                          `warp` with the `integration_tests` feature, which pulls in
+    #                          app/src/integration_testing/, which does NOT COMPILE: 7
+    #                          errors in agent_mode/{mod,step}.rs from this fork's endpoint
+    #                          Option migration. Including it breaks `warp` itself.
+    #
+    #   http_client            `origin_tests` does not compile: 2 errors at
+    #                          src/lib.rs:831,834. `ChannelState::{server_root_url,
+    #                          rtc_http_url}` return `Option<Cow<str>>` since the Option
+    #                          migration; the test still passes them to `Url::parse` as
+    #                          `&str`. What it SHOULD assert in a build with no server
+    #                          config is a product decision, not a mechanical fix.
+    #
+    #   remote_server          `setup_tests.rs` does not compile: 4 errors at :288, :289,
+    #                          :343, :496. `install_script()` returns `Option<String>` now
+    #                          and correctly yields None on the OSS channel, which has no
+    #                          download URL -- so these tests need rewriting around the
+    #                          "no install script exists" case, again a product decision.
+    #                          This is the expensive one: ~99 test attributes stay unrun.
+    #
+    # The last three are all the SAME defect -- test code that rotted when this fork
+    # migrated endpoints to Option, invisibly, because those tests never ran. Fixing them
+    # is tracked work, not a silent gap. Delete an exclusion the moment its crate compiles.
     - name: unit
-      run: cargo nextest run --locked -p warp -p warp_core -p warp_tui -p onboarding
+      run: cargo nextest run --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude http_client --exclude remote_server
 
     - name: e2e
       run: cargo nextest run --locked -p warp_tui --test '*'
@@ -157,5 +230,31 @@ gate:
 
     - name: privacy — commercial surfaces
       run: script/heddle/gui-surface-gate
+
+    # The gate that made "Gate ≡ CI" a false claim.
+    #
+    # .claudeconf/manifest.json has listed script/heddle/wasm-diagnostic-gate under
+    # projectGates all along, and heddle-privacy-gate.yml runs it at two call sites. This
+    # file was the only place it was missing, so the header above asserted an equivalence
+    # the job list did not implement.
+    #
+    # It cost a real round trip. PR #23 passed `lefthook run gate` twice and then failed CI
+    # on exactly this gate: a deleted `use` line had orphaned a
+    # `#[cfg(not(target_family = "wasm"))]` onto the following import, making a type
+    # wasm-conditional. On the host target `not(wasm)` is true, so the stray attribute was
+    # a no-op and every host check was genuinely correct. A green host gate says nothing
+    # about the other target -- which is the entire reason this gate exists.
+    #
+    # It needs `rustup target add wasm32-unknown-unknown`, and on macOS a clang with the
+    # WebAssembly LLVM backend (Apple's has none); the script finds Homebrew's LLVM by
+    # itself and exits 2 with instructions if neither is present. Measured here: 172s
+    # after a source change, 28s when the wasm target dir is already warm.
+    #
+    # Verified by observation, not by reading this file: deleting the
+    # `#[cfg(not(target_arch = "wasm32"))]` above the `PaneHeaderAction` import in
+    # app/src/terminal/view/pane_impl.rs makes it exit 1 naming that exact unused import,
+    # and restoring the line makes it PASS again.
+    - name: privacy — wasm diagnostics
+      run: script/heddle/wasm-diagnostic-gate
 
 # <<< claudeconf managed <<<
