@@ -3,6 +3,31 @@
 A de-commercialized fork of the [Warp](https://github.com/warpdotdev/Warp) terminal.
 **No account. No telemetry. No `warp.dev` anywhere in the binary.**
 
+## What changed in v0.5.0
+
+**Linux users: read this first. What you download has changed.** Every previous Linux
+release shipped `heddle-tui`, a terminal-UI binary in a tarball. This one ships the **GUI** —
+the same program macOS gets — as an AppImage plus native `.deb` and `.rpm`. The TUI is no
+longer released on any platform. This is not an update to what you had; it is a different
+program, and the first Linux release the release workflow has ever actually built.
+
+Also in this release:
+
+- **Local harness selection works.** The picker offers Warp, Claude Code, OpenCode and
+  Codex. Previously it offered exactly one entry, because the catalog was fetched behind a
+  sign-in check that can never pass in a fork with no accounts — so a capability that was
+  supposed to be local was silently off for everyone. Model selection was dead for the same
+  reason and is also restored. See the limitation below on what "selection" does and does
+  not include.
+- **Bundled agent skills ship on Linux.** They were being deleted from the Linux artefact by
+  a flag whose comment said it dropped one cloud skill; it dropped all eleven, every one of
+  them local.
+- **`heddle://` links work.** The macOS bundle registered that scheme while the app accepted
+  only `warposs://`, so every such link was silently dropped.
+- Nine upstream fixes cherry-picked, including vim `d%`/`c%`/`y%` and indent/dedent
+  operators in the code editor, zsh prompt width handling, and quoting fixes for worktree
+  and home paths.
+
 ## Installing (Linux x86_64)
 
 Three artefacts, one program. Pick whichever suits your system.
@@ -148,6 +173,14 @@ does not have. Heddle no longer appears in six System Settings privacy panes.
   local agent process — is designed but not implemented. Heddle will not be
   described as agentic until permission handling and cancellation work
   end-to-end.
+- **Harness and model selection work; launching a local child agent does not.**
+  v0.5.0 restores the *choice* — the picker lists the local harnesses you have
+  installed and their models, which it previously could not. Actually dispatching
+  one still fails: the code path requires a run identifier issued by Warp's
+  server, two layers above the launch itself, and there is no server here to
+  issue it. So treat the picker as configuration that is now correct and honest,
+  not as a working agent. Fixing the dispatch path is a separate piece of work
+  and is not started.
 - **Binaries: Linux x86_64 and macOS Apple Silicon.** No Windows, no Linux ARM,
   no Intel Mac. (An earlier version of this line said the macOS artefact was
   unsigned and not notarized, contradicting the install section above it. The
