@@ -1006,6 +1006,18 @@ pub const RELEASE_FLAGS: &[FeatureFlag] = &[
     FeatureFlag::Autoupdate,
     FeatureFlag::Changelog,
     FeatureFlag::CrashReporting,
+    // Upstream shipped this in LOCAL_FLAGS only, marked "temporarily disabled",
+    // so Codex was filtered out of the local harness picker in every real build
+    // while Claude Code and OpenCode were offered. That was an upstream product
+    // kill switch, not an account gate -- but the effect here was the same shape
+    // as one: a local capability permanently off with no way for a user to reach
+    // it. Heddle offers all three local child harnesses or none.
+    //
+    // NOTE this only makes Codex SELECTABLE. Launching any local child is still
+    // blocked upstream of the launch path by a server-issued run_id; see the
+    // handoff notes. Codex is now exactly as usable as Claude Code, which is the
+    // point -- the picker no longer lies about which harnesses exist.
+    FeatureFlag::LocalClaudeCodexChildHarnesses,
     // Marked text is currently only supported on MacOS.
     #[cfg(target_os = "macos")]
     FeatureFlag::ImeMarkedText,
