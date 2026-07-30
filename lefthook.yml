@@ -47,7 +47,7 @@ pre-commit:
     #
     # Widening these two to the same expression is the fix and is left as SEPARATE work: it
     # changes what they REPORT, not just how long they take. It is already de-risked --
-    # `cargo clippy --locked --workspace` with the same four exclusions exits 0 with no
+    # `cargo clippy --locked --workspace` with the same exclusions exits 0 with no
     # errors (162s measured). Do it as its own change, with its own before/after.
     - name: typecheck
       glob: "*.rs"
@@ -70,7 +70,7 @@ pre-push:
     # `warp` (measured: 93s) every single time, which costs more than the 47s of extra
     # tests the wider set runs.
     - name: unit
-      run: cargo nextest run --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude http_client --exclude remote_server
+      run: cargo nextest run --locked --no-fail-fast --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
 
     - name: sast
       run: semgrep scan --error --quiet --metrics=off --severity=ERROR --config .claudeconf/rules/ app crates
@@ -85,30 +85,47 @@ pre-push:
     - name: build
       run: cargo build --locked -p warp_tui --bin heddle-tui
 
-# The full battery. Gate ≡ CI (constitution §1): this is the same set ci.yml runs, plus
-# the project's own privacy gates.
+# The full battery. This tier runs the whole of ci.yml's milestone set, plus three of the
+# four project privacy gates.
 #
-# The Codex review gate is NOT in this list, deliberately. It costs several minutes and a
-# paid API call per run, so putting it in the tier that runs before every push would make
-# people stop running the tier. Invoke it directly before opening a PR:
+# NOT "Gate ≡ CI". That is what this header used to say, and it was false twice over.
 #
-#     script/heddle/codex-review
+# The constitution's §1 rule is a goal, and stating it as an accomplished fact is precisely
+# the defect this project keeps paying for: an assertion that outruns what is enforced. The
+# header claimed the Codex reviewer was included while no job ran it. It was corrected, and
+# then claimed "plus the project's own privacy gates" while the wasm gate had no job here --
+# which cost PR #23 two green local runs followed by a red CI on exactly that gate.
 #
-# An earlier version of this comment claimed the gate included it while no job did. That
-# is the kind of unsupported claim the review gate itself exists to catch, and it was
-# caught by exactly that.
+# So this header now ENUMERATES instead of asserting. Everything below runs locally. What
+# does NOT, and therefore can still fail in CI for the first time:
 #
-# The same header made the same mistake twice. It also asserted "plus the project's own
-# privacy gates" while script/heddle/wasm-diagnostic-gate -- listed in
-# .claudeconf/manifest.json's projectGates, and run at two call sites in
-# heddle-privacy-gate.yml -- had no job here at all. PR #23 paid for that: green locally
-# twice, red in CI on precisely that gate. It is wired below now.
+#   script/heddle/verify-no-warp-endpoints   The headline privacy claim -- no Warp endpoint,
+#     (heddle-privacy-gate.yml)              credential or telemetry destination in the
+#                                            SHIPPED binary. It scans a built artifact, so it
+#                                            needs `cargo build -p warp --bin heddle
+#                                            --features release_bundle,extern_plist,gui,...`
+#                                            first: a full codegen+link of the GUI, which CI
+#                                            gives a 90-minute timeout. The local
+#                                            `gui-surface-gate` below only `cargo check`s that
+#                                            target and ratchets source strings, so a
+#                                            forbidden string that appears only in the linked
+#                                            artifact -- or a bundled asset -- passes here and
+#                                            fails there. Run it by hand before a PR if you
+#                                            touched endpoints, config or assets.
 #
-# What "Gate ≡ CI" still does NOT mean here, so nobody reads more into it than is true:
-# CI additionally SELF-TESTS the wasm gate (an inline step in heddle-privacy-gate.yml
-# that plants two regressions and requires rejection). That step is GNU-sed-only and so
-# cannot run on macOS as written; it has no companion script the way the supply-chain and
-# GUI gates do. The gate itself runs in both places; its canary runs only in CI.
+#   the wasm gate's SELF-TEST               `wasm-diagnostic-gate` itself runs below, but its
+#     (heddle-privacy-gate.yml)              canary is inline YAML using GNU `sed -i`, so it
+#                                            does not run on macOS and there is no
+#                                            `-selftest` script to call. The gate runs in both
+#                                            places; its proof-it-can-fail runs only in CI.
+#
+#   script/heddle/codex-review              Deliberate. Several minutes and a paid API call
+#                                            per run; a tier people skip protects nothing, and
+#                                            CI has no credentials for it either. Invoke it
+#                                            directly before opening a PR.
+#
+# Closing the first two is tracked work. Until then this list is the honest scope, and the
+# rule is: shrink this list, never quietly widen the claim above it.
 gate:
   parallel: false
   jobs:
@@ -124,7 +141,7 @@ gate:
     - name: typecheck
       run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding
 
-    # SCOPE: the whole workspace minus four NAMED exclusions.
+    # SCOPE: the whole workspace minus three NAMED exclusions.
     #
     # This job used to run `-p warp -p warp_core -p warp_tui -p onboarding`. 52 crates
     # under crates/ contain tests and 49 of them were outside that set -- settings, vim,
@@ -140,7 +157,15 @@ gate:
     # `--workspace --exclude` rather than a longer `-p` list, so a NEW crate is covered by
     # default and every gap is a line someone had to write.
     #
-    # The four exclusions, each with its reason:
+    # An exclusion must be a CRATE that cannot build, never a crate whose tests are merely
+    # inconvenient. `http_client` was on this list for one round and should not have been:
+    # only its positive-origin test failed to compile, while the independent
+    # `third_party_origin_does_not_match` next to it guards `is_warp_server_origin` -- the
+    # predicate that scopes IAP bearer-token attachment. Excluding the crate would have let
+    # a broken security predicate pass the suite this file advertises. Its two compile
+    # errors were Option-migration fallout and are fixed; the crate runs.
+    #
+    # The three exclusions, each with its reason:
     #
     #   command-signatures-v2  build.rs shells out to `yarn` to compile a TypeScript
     #                          bundle and its `js/build/` output is gitignored, so on a
@@ -155,13 +180,6 @@ gate:
     #                          errors in agent_mode/{mod,step}.rs from this fork's endpoint
     #                          Option migration. Including it breaks `warp` itself.
     #
-    #   http_client            `origin_tests` does not compile: 2 errors at
-    #                          src/lib.rs:831,834. `ChannelState::{server_root_url,
-    #                          rtc_http_url}` return `Option<Cow<str>>` since the Option
-    #                          migration; the test still passes them to `Url::parse` as
-    #                          `&str`. What it SHOULD assert in a build with no server
-    #                          config is a product decision, not a mechanical fix.
-    #
     #   remote_server          `setup_tests.rs` does not compile: 4 errors at :288, :289,
     #                          :343, :496. `install_script()` returns `Option<String>` now
     #                          and correctly yields None on the OSS channel, which has no
@@ -169,11 +187,12 @@ gate:
     #                          "no install script exists" case, again a product decision.
     #                          This is the expensive one: ~99 test attributes stay unrun.
     #
-    # The last three are all the SAME defect -- test code that rotted when this fork
-    # migrated endpoints to Option, invisibly, because those tests never ran. Fixing them
-    # is tracked work, not a silent gap. Delete an exclusion the moment its crate compiles.
+    # The last two are the SAME defect as the http_client one already fixed -- test code
+    # that rotted when this fork migrated endpoints to Option, invisibly, because those
+    # tests never ran. Fixing them is tracked work, not a silent gap. Delete an exclusion
+    # the moment its crate compiles, and prefer fixing the crate to listing it here.
     - name: unit
-      run: cargo nextest run --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude http_client --exclude remote_server
+      run: cargo nextest run --locked --no-fail-fast --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
 
     - name: e2e
       run: cargo nextest run --locked -p warp_tui --test '*'

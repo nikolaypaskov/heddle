@@ -828,13 +828,43 @@ mod origin_tests {
     fn server_and_rtc_origins_match() {
         // Derive the expected origins from `ChannelState` so the assertion holds
         // regardless of which channel config the test build resolves to.
-        let server = reqwest::Url::parse(ChannelState::server_root_url().as_ref()).unwrap();
-        assert!(is_warp_server_origin(&server.join("/graphql/v2").unwrap()));
+        //
+        // Both accessors return `Option` since this fork's endpoint migration (5edec1b1),
+        // and this test still passed them to `Url::parse` as `&str` -- it had not compiled
+        // since, because nothing ever built this crate's tests. Hence the two shapes below.
+        //
+        // The `None` branch is the OSS build: no server config, so there is no Warp origin
+        // and `is_warp_server_origin` must reject EVERYTHING. It is asserted rather than
+        // skipped, because a test that quietly checks nothing in the configuration we
+        // actually ship is how this crate ended up unexamined in the first place.
+        let mut configured = 0;
 
-        let rtc = reqwest::Url::parse(ChannelState::rtc_http_url().as_ref()).unwrap();
-        assert!(is_warp_server_origin(
-            &rtc.join("/api/v1/agent/events/stream").unwrap()
-        ));
+        for root in [
+            ChannelState::server_root_url(),
+            ChannelState::rtc_http_url(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            configured += 1;
+            let root = reqwest::Url::parse(root.as_ref()).unwrap();
+            assert!(is_warp_server_origin(&root.join("/graphql/v2").unwrap()));
+            assert!(is_warp_server_origin(
+                &root.join("/api/v1/agent/events/stream").unwrap()
+            ));
+        }
+
+        if configured == 0 {
+            let url = reqwest::Url::parse("https://example.invalid/graphql/v2").unwrap();
+            // The message deliberately carries no brand token: gui-surface-gate ratchets
+            // brand mentions in STRING LITERALS (comments are skipped), and a test that
+            // enforces de-branding is a poor place to add two of them.
+            assert!(
+                !is_warp_server_origin(&url),
+                "a build with no server config has no first-party origin, so nothing may \
+                 match -- otherwise IAP tokens and auth headers would attach to a third party"
+            );
+        }
     }
 
     #[test]
