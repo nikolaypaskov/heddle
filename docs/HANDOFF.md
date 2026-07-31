@@ -238,20 +238,25 @@ payload itself is what authorises the install.
 **Run the self-test, not just the gate.** The reason is §4. But "each has a `-selftest`
 companion" — which this section used to claim — is false, and enumerating it is the point:
 
-| gate | canary | runs locally? | in `lefthook run gate`? |
-| --- | --- | --- | --- |
-| `verify-warp-supply-chain` | `-selftest` script | yes | yes, both |
-| `gui-surface-gate` | `-selftest` script | yes | yes, both |
-| `wasm-diagnostic-gate` | inline CI YAML, GNU-`sed` only | **no** | gate yes, canary no |
-| `verify-no-warp-endpoints` | inline CI YAML (plants `oz.warp.dev`) | **no** | **neither** |
-| `verify-bundled-assets` | **none at all** | — | gate yes, no canary exists |
+"Has a self-test" and "the gate runs it" are different questions, so they get different
+columns — conflating them is how this table was wrong on its first attempt:
 
-Two of the five have a runnable self-test. `verify-no-warp-endpoints` is the one that is not
-in the local gate at all: it scans a *built* artifact, so it needs a full GUI codegen+link
-first (CI allows it 90 minutes). Run it by hand before a PR that touches endpoints, config or
-bundled assets — a green `lefthook run gate` says nothing about it. Writing the two missing
-`-selftest` scripts, and a `check-project-gates` that asserts every `projectGates` entry in
-`.claudeconf/manifest.json` has a job, are the open items here.
+| gate | canary | canary runnable locally? | gate in `lefthook run gate`? | canary in `lefthook run gate`? |
+| --- | --- | --- | --- | --- |
+| `verify-warp-supply-chain` | `-selftest` script | yes | yes | **yes** |
+| `gui-surface-gate` | `-selftest` script | yes | yes | **no** — CI only |
+| `wasm-diagnostic-gate` | inline CI YAML, GNU-`sed` only | **no** | yes | no |
+| `verify-no-warp-endpoints` | inline CI YAML (plants `oz.warp.dev`) | **no** | **no** | no |
+| `verify-bundled-assets` | **none exists** | — | yes | **none exists** |
+
+So: two of the five have a runnable self-test, and **only one canary fires in the local
+gate**. `verify-bundled-assets` has never been shown able to fail anywhere.
+`verify-no-warp-endpoints` is the one gate not in the local run at all — it scans a *built*
+artifact, so it needs a full GUI codegen+link first (CI allows it 90 minutes). Run it by hand
+before a PR that touches endpoints, config or bundled assets; a green `lefthook run gate` says
+nothing about it. Open items: write the two missing `-selftest` scripts, call
+`gui-surface-gate-selftest` from the gate, and add a `check-project-gates` asserting every
+`projectGates` entry in `.claudeconf/manifest.json` has a job.
 
 `wasm-diagnostic-gate` needs `rustup target add wasm32-unknown-unknown`, and on macOS a
 clang with the WebAssembly backend (Apple's has none — the script finds Homebrew's LLVM by
@@ -285,11 +290,24 @@ newly-included test passed. Three crates are excluded **by name**, each for a st
 | crate | why | cost |
 | --- | --- | --- |
 | `command-signatures-v2` | `build.rs` needs `yarn`; `js/build/` is gitignored | no tests |
-| `integration` | its bin is `test = false`, and it enables `warp/integration_tests`, which does not compile (7 errors in `app/src/integration_testing/agent_mode/`) | no tests |
+| `integration` | enables `warp/integration_tests`, which does not compile (7 errors in `app/src/integration_testing/agent_mode/`) — including it breaks `warp` itself | **~310 tests, incl. hard-constraint UI** |
 | `remote_server` | `setup_tests.rs` does not compile — `install_script()` is `Option<String>` and is `None` on the OSS channel (`:288 :289 :343 :496`) | ~99 tests |
 
 Deleting an exclusion is the fix. `remote_server` needs a decision about what its tests should
 assert when there *is* no install script, which is why it was not patched to force the gate green.
+
+**`integration` is the expensive one, and it is easy to under-read.** Its bin sets
+`test = false`, and grepping the crate for `#[test]` returns **0** — so it looks empty. It is
+not: `tests/integration.rs` is a Cargo integration-test target pulling in `ui_tests.rs` (248)
+and `shell_integration_tests.rs` (62), whose `integration_tests!` macro
+(`tests/common/mod.rs:102`) *generates* the `#[test]` fns. Among the 310 are
+`test_inline_model_selector_restores_prompt_on_*` (`ui_tests.rs:143-145`) and
+`test_agent_mode_pane_minimum_size` (`:323`) — local model selection and Agent Mode UI, two of
+the four capabilities this fork must never break. **Nothing is testing them.** That is
+pre-existing (the old four-package command skipped this crate too), not a regression from
+widening — but do not let "whole workspace" imply otherwise. Note also that these drive the
+real GUI binary as a subprocess and are `#[ignore]`d off macOS unless `run_on_linux` is set,
+so making the crate compile is necessary but not sufficient to gate on them.
 
 **Exclude a crate only when it cannot BUILD, never because its tests are inconvenient.**
 `http_client` was excluded for one round on the strength of two compile errors in its

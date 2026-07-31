@@ -85,8 +85,9 @@ pre-push:
     - name: build
       run: cargo build --locked -p warp_tui --bin heddle-tui
 
-# The full battery. This tier runs the whole of ci.yml's milestone set, plus three of the
-# four project privacy gates.
+# The full battery. This tier runs the whole of ci.yml's milestone set, plus four of the
+# five project gates recorded in .claudeconf/manifest.json's `projectGates`. The fifth,
+# verify-no-warp-endpoints, is named below with the reason.
 #
 # NOT "Gate ≡ CI". That is what this header used to say, and it was false twice over.
 #
@@ -173,12 +174,33 @@ gate:
     #                          all. Pre-existing; the release CI has always scoped around
     #                          it the same way. It has no tests.
     #
-    #   integration            Its bin sets `test = false` ("does not, itself, have any
-    #                          tests"), so it contributes nothing -- but it depends on
-    #                          `warp` with the `integration_tests` feature, which pulls in
-    #                          app/src/integration_testing/, which does NOT COMPILE: 7
-    #                          errors in agent_mode/{mod,step}.rs from this fork's endpoint
-    #                          Option migration. Including it breaks `warp` itself.
+    #   integration            CANNOT COMPILE, and the coverage we are therefore not running
+    #                          includes hard-constraint behaviour. It enables
+    #                          `warp/integration_tests`, which pulls in
+    #                          app/src/integration_testing/, which has 7 errors in
+    #                          agent_mode/{mod,step}.rs from this fork's endpoint Option
+    #                          migration -- so including it breaks `warp` itself.
+    #
+    #                          Read the cost correctly. An earlier version of this comment
+    #                          said the crate "contributes nothing" because its bin sets
+    #                          `test = false`. That conflates the BIN's unit tests with the
+    #                          crate's Cargo INTEGRATION tests: tests/integration.rs pulls in
+    #                          ui_tests.rs and shell_integration_tests.rs, whose
+    #                          `integration_tests!` macro (tests/common/mod.rs:102) generates
+    #                          real `#[test]` fns -- 310 of them. Grepping for `#[test]`
+    #                          returns 0 here, which is exactly why they read as absent.
+    #
+    #                          Among them: test_inline_model_selector_restores_prompt_on_*
+    #                          (ui_tests.rs:143-145) and test_agent_mode_pane_minimum_size
+    #                          (:323) -- local model selection and Agent Mode UI, two of the
+    #                          four capabilities this fork must never break. Nothing has been
+    #                          testing them; the old four-package command skipped this crate
+    #                          too, so this is pre-existing, not a regression from widening.
+    #
+    #                          They also drive the real GUI binary as a subprocess and are
+    #                          `#[ignore]`d off macOS unless `run_on_linux` is set, so making
+    #                          the crate compile is necessary but not sufficient to put them
+    #                          in a gate. Both steps are open work.
     #
     #   remote_server          `setup_tests.rs` does not compile: 4 errors at :288, :289,
     #                          :343, :496. `install_script()` returns `Option<String>` now
@@ -239,8 +261,22 @@ gate:
     - name: upstream review classifier
       run: script/heddle/upstream-review-selftest
 
-    # Heddle's own privacy gates. Each has a self-test that plants a real violation and
-    # requires rejection -- run the self-test, not just the gate.
+    # Heddle's own privacy gates.
+    #
+    # This comment used to say "Each has a self-test that plants a real violation and
+    # requires rejection -- run the self-test, not just the gate." That is the RULE, and it
+    # is not what is implemented. Two of the five gates have a `-selftest` script, and only
+    # ONE of them is invoked below:
+    #
+    #   verify-warp-supply-chain   -selftest script, run by the job below      canary: local
+    #   gui-surface-gate           -selftest script, run only by CI            canary: CI
+    #   wasm-diagnostic-gate       canary is inline CI YAML, GNU-`sed` only    canary: CI
+    #   verify-no-warp-endpoints   canary is inline CI YAML; gate not run here canary: CI
+    #   verify-bundled-assets      NO canary exists anywhere                   canary: none
+    #
+    # So `verify-bundled-assets` has never been shown able to fail, and three canaries fire
+    # only in CI. Writing the two missing self-tests and calling gui-surface-gate-selftest
+    # here is open work; until then this list is the scope, not the aspiration.
     - name: privacy — supply chain
       run: script/heddle/verify-warp-supply-chain-selftest && script/heddle/verify-warp-supply-chain
 
