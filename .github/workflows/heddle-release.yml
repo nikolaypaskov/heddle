@@ -40,6 +40,16 @@ concurrency:
 
 jobs:
   build:
+    # Linux tags only. Releases are tagged per platform -- `heddle-vX.Y.Z-linux-x64`
+    # and `heddle-vX.Y.Z-macos-arm64` -- because macOS is signed and notarized on a
+    # developer machine while Linux is built here. This job's matrix is Linux-only, so
+    # without this guard a macOS tag would build Linux artefacts and publish AppImage,
+    # .deb and .rpm onto a release named for macOS.
+    #
+    # That could not happen while the trigger glob was `v*` and matched none of six
+    # releases. Fixing the glob is what exposed it -- a dead trigger hides every bug
+    # downstream of itself.
+    if: endsWith(github.ref_name, '-linux-x64') || github.event_name == 'workflow_dispatch'
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     # A release-LTO build of the GUI from a cold cache, plus cargo-about and the
