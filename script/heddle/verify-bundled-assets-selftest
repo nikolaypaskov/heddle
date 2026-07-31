@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+#
+# Proves `verify-bundled-assets` actually fails when the thing it forbids happens.
+#
+# WHY THIS EXISTS
+#
+# That gate runs in three places -- `lefthook run gate`, heddle-privacy-gate.yml and every
+# release build -- and until this script existed it had never been shown capable of failing.
+# It is the last line between the repo and shipping someone else's trademarked artwork, and
+# its evidence was "it printed PASS", which is what a gate that cannot fail also prints.
+#
+# This project has shipped four checks that could not fail: a semgrep rule matching nothing,
+# a version guard erroring on every real tag, a release trigger glob matching none of six
+# releases, and a supply-chain gate copied where its repo-root resolution broke. Three of
+# those were caught by a self-test. This is the fourth gate getting one.
+#
+# METHOD
+#
+# Each case plants one real divergence in the real checkout, runs the real gate at its real
+# path, and requires the exit status and message the gate documents. Every plant is reverted
+# whether or not its case passes -- including on interrupt.
+#
+# The three cases are the three ways the manifest and the tree can disagree, because the gate
+# compares a full sorted listing: an asset whose BYTES changed, an asset that was ADDED, and
+# an asset that was REMOVED. A gate that caught only the first would still let a new
+# unreviewed logo into the bundle.
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 2
+
+GATE="script/heddle/verify-bundled-assets"
+MANIFEST="script/heddle/bundled-asset-manifest.sha256"
+
+[[ -x "$GATE" ]] || { echo "error: $GATE is not executable" >&2; exit 2; }
+[[ -f "$MANIFEST" ]] || { echo "error: $MANIFEST is missing" >&2; exit 2; }
+
+# The plant is a file the gate's own `find` will match: under a scanned directory, with a
+# scanned extension. A name outside those bounds would prove nothing.
+PLANT="app/assets/bundled/.selftest-plant.png"
+BACKUP_DIR="$(mktemp -d)"
+
+if [[ -e "$PLANT" ]]; then
+  echo "error: $PLANT already exists; refusing to run" >&2
+  exit 2
+fi
+
+# Pick a real asset from the manifest to mutate and to remove. Taking it from the manifest
+# rather than hardcoding a path means this keeps working when assets are added or renamed.
+VICTIM="$(awk 'NR==1 {print $2}' "$MANIFEST")"
+if [[ -z "$VICTIM" || ! -f "$VICTIM" ]]; then
+  echo "error: could not resolve a victim asset from $MANIFEST (got '${VICTIM:-}')" >&2
+  exit 2
+fi
+cp -p "$VICTIM" "$BACKUP_DIR/victim.bak" || exit 2
+
+restore() {
+  [[ -f "$BACKUP_DIR/victim.bak" ]] && cp -p "$BACKUP_DIR/victim.bak" "$VICTIM"
+  rm -f "$PLANT"
+  rm -rf "$BACKUP_DIR"
+}
+trap restore EXIT INT TERM
+
+fails=0
+
+# $1 = case name, $2 = expected exit status, $3 = a string the output must contain
+assert_gate() {
+  local name="$1" want_status="$2" want_text="$3" out status
+  out="$("$GATE" 2>&1)"; status=$?
+  if [[ "$status" -ne "$want_status" ]]; then
+    echo "FAIL [$name]: expected exit $want_status, got $status"
+    printf '%s\n' "$out" | sed 's/^/    /'
+    fails=$((fails + 1))
+    return
+  fi
+  if ! printf '%s' "$out" | grep -q -- "$want_text"; then
+    echo "FAIL [$name]: exit $status was right, but the output never mentions '$want_text'"
+    printf '%s\n' "$out" | sed 's/^/    /'
+    fails=$((fails + 1))
+    return
+  fi
+  echo "ok [$name]"
+}
+
+# 0. The tree as committed must PASS. Without this the three failure cases below would also
+#    pass against a gate that fails unconditionally.
+assert_gate "clean tree passes" 0 "PASS"
+
+# 1. CHANGED BYTES. The case the gate is named for: an asset whose contents were swapped for
+#    something unreviewed, keeping its innocuous filename. This is exactly how Warp's icon
+#    shipped as blue.png.
+printf 'selftest: not the reviewed bytes' >> "$VICTIM"
+assert_gate "changed asset is rejected" 1 "$VICTIM"
+cp -p "$BACKUP_DIR/victim.bak" "$VICTIM"
+
+# 2. ADDED. A new asset nobody reviewed. The manifest is a full listing, so an addition is a
+#    divergence even though every pre-existing hash still matches.
+printf 'selftest: an unreviewed asset' > "$PLANT"
+assert_gate "added asset is rejected" 1 "$PLANT"
+rm -f "$PLANT"
+
+# 3. REMOVED. Reverse direction. Worth its own case because a gate written as "every manifest
+#    entry still hashes correctly" would pass here while the tree no longer matches review.
+mv "$VICTIM" "$BACKUP_DIR/victim.moved" || exit 2
+assert_gate "removed asset is rejected" 1 "$VICTIM"
+mv "$BACKUP_DIR/victim.moved" "$VICTIM" || exit 2
+
+# 4. The gate must be INCONCLUSIVE (exit 2), not PASS, when its manifest is absent. A missing
+#    manifest silently passing is how a gate becomes decorative.
+mv "$MANIFEST" "$BACKUP_DIR/manifest.moved" || exit 2
+assert_gate "missing manifest is inconclusive, not a pass" 2 "INCONCLUSIVE"
+mv "$BACKUP_DIR/manifest.moved" "$MANIFEST" || exit 2
+
+# 5. Back to clean. Proves the plants above were fully reverted -- a self-test that leaves the
+#    tree dirty would make the next gate run fail for reasons nobody could trace to here.
+assert_gate "tree is clean again afterwards" 0 "PASS"
+
+if [[ "$fails" -ne 0 ]]; then
+  echo
+  echo "self-test FAILED: $fails case(s). verify-bundled-assets is not doing what it claims."
+  exit 1
+fi
+
+echo "self-test passed"
