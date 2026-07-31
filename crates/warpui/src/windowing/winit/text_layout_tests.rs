@@ -378,10 +378,17 @@ fn test_layout_text_first_line_indent_small_bidirectional() -> Result<()> {
         None,
     );
 
-    // The text should contain multiple lines.
-    // The first line has about the same amount of content as the others,
-    // since there's no head indent.
-    assert_eq!(no_indent_frame.lines().len(), 4);
+    // Line COUNT is deliberately NOT pinned. This same string wraps to 4 lines under
+    // CoreText and 5 under fontconfig/harfbuzz: Arabic advance widths differ between
+    // shaping stacks, so `assert_eq!(.., 4)` was asserting the shaper, not the indent.
+    // That is exactly how these three tests failed the first time this crate's tests
+    // ever ran on Linux. Every claim below is RELATIVE to this build's own baseline,
+    // which holds on any stack.
+    let baseline = no_indent_frame.lines().len();
+    assert!(
+        baseline > 1,
+        "the fixture must wrap for a first-line-indent test to mean anything; got {baseline}"
+    );
     assert!(first_line_bounded(&no_indent_frame, 0., FRAME_WIDTH));
     // assert!(all_lines_bounded(&no_indent_frame, FRAME_WIDTH));
 
@@ -397,8 +404,12 @@ fn test_layout_text_first_line_indent_small_bidirectional() -> Result<()> {
     );
 
     // The first line has about the same amount of content as the others,
-    // since the head indent is small.
-    assert_eq!(small_indent_frame.lines().len(), 4);
+    // since the head indent is small: at most one extra line, never fewer.
+    assert!(
+        (baseline..=baseline + 1).contains(&small_indent_frame.lines().len()),
+        "a 5px head indent may cost at most one line; baseline {baseline}, got {}",
+        small_indent_frame.lines().len()
+    );
     assert!(first_line_bounded(&small_indent_frame, 5., FRAME_WIDTH));
     // assert!(all_lines_bounded(&small_indent_frame, FRAME_WIDTH));
 
@@ -415,7 +426,11 @@ fn test_layout_text_first_line_indent_small_bidirectional() -> Result<()> {
     );
 
     // The text contains an additional line to accommodate the indent.
-    assert_eq!(half_indent_frame.lines().len(), 5);
+    assert_eq!(
+        half_indent_frame.lines().len(),
+        baseline + 1,
+        "a half-frame head indent must cost exactly one extra line (baseline {baseline})"
+    );
     assert!(first_line_bounded(
         &half_indent_frame,
         FRAME_WIDTH / 2.,
@@ -460,7 +475,17 @@ fn test_layout_text_first_line_indent_medium_bidirectional() -> Result<()> {
     // The text should contain multiple lines.
     // The first line has about the same amount of content as the others,
     // since there's no head indent.
-    assert_eq!(no_indent_frame.lines().len(), 4);
+    // Line COUNT is deliberately NOT pinned. This same string wraps to 4 lines under
+    // CoreText and 5 under fontconfig/harfbuzz: Arabic advance widths differ between
+    // shaping stacks, so `assert_eq!(.., 4)` was asserting the shaper, not the indent.
+    // That is exactly how these three tests failed the first time this crate's tests
+    // ever ran on Linux. Every claim below is RELATIVE to this build's own baseline,
+    // which holds on any stack.
+    let baseline = no_indent_frame.lines().len();
+    assert!(
+        baseline > 1,
+        "the fixture must wrap for a first-line-indent test to mean anything; got {baseline}"
+    );
     assert!(first_line_bounded(&no_indent_frame, 0., FRAME_WIDTH));
     // assert!(all_lines_bounded(&no_indent_frame, FRAME_WIDTH));
 
@@ -478,7 +503,11 @@ fn test_layout_text_first_line_indent_medium_bidirectional() -> Result<()> {
 
     // The first line should have some glyphs on it, but not the whole
     // first word.
-    assert_eq!(overflow_indent_frame.lines().len(), 5);
+    assert_eq!(
+        overflow_indent_frame.lines().len(),
+        baseline + 1,
+        "a near-frame-width head indent must cost exactly one extra line (baseline {baseline})"
+    );
     assert!(first_line_bounded(
         &overflow_indent_frame,
         FRAME_WIDTH - 20.,
@@ -523,7 +552,17 @@ fn test_layout_text_first_line_indent_large_bidirectional() -> Result<()> {
     // The text should contain multiple lines.
     // The first line has about the same amount of content as the others,
     // since there's no head indent.
-    assert_eq!(no_indent_frame.lines().len(), 4);
+    // Line COUNT is deliberately NOT pinned. This same string wraps to 4 lines under
+    // CoreText and 5 under fontconfig/harfbuzz: Arabic advance widths differ between
+    // shaping stacks, so `assert_eq!(.., 4)` was asserting the shaper, not the indent.
+    // That is exactly how these three tests failed the first time this crate's tests
+    // ever ran on Linux. Every claim below is RELATIVE to this build's own baseline,
+    // which holds on any stack.
+    let baseline = no_indent_frame.lines().len();
+    assert!(
+        baseline > 1,
+        "the fixture must wrap for a first-line-indent test to mean anything; got {baseline}"
+    );
     assert!(first_line_bounded(&no_indent_frame, 0., FRAME_WIDTH));
     // assert!(all_lines_bounded(&no_indent_frame, FRAME_WIDTH));
 
@@ -539,7 +578,11 @@ fn test_layout_text_first_line_indent_large_bidirectional() -> Result<()> {
     );
 
     // The first line is left entirely blank since no glyphs fit on it.
-    assert_eq!(overflow_indent_frame.lines().len(), 5);
+    assert_eq!(
+        overflow_indent_frame.lines().len(),
+        baseline + 1,
+        "a head indent wider than the frame must cost exactly one extra line (baseline {baseline})"
+    );
     assert!(
         collect_glyph_indices(&overflow_indent_frame)
             .first()
@@ -566,7 +609,11 @@ fn test_layout_text_first_line_indent_large_bidirectional() -> Result<()> {
     );
 
     // The first line is left entirely blank since no glyphs fit on it.
-    assert_eq!(big_indent_frame.lines().len(), 5);
+    assert_eq!(
+        big_indent_frame.lines().len(),
+        baseline + 1,
+        "a head indent spanning the frame must cost exactly one extra line (baseline {baseline})"
+    );
     assert!(
         collect_glyph_indices(&big_indent_frame)
             .first()
