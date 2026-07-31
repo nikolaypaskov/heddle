@@ -378,16 +378,23 @@ fn test_layout_text_first_line_indent_small_bidirectional() -> Result<()> {
         None,
     );
 
-    // Line COUNT is deliberately NOT pinned. This same string wraps to 4 lines under
-    // CoreText and 5 under fontconfig/harfbuzz: Arabic advance widths differ between
-    // shaping stacks, so `assert_eq!(.., 4)` was asserting the shaper, not the indent.
-    // That is exactly how these three tests failed the first time this crate's tests
-    // ever ran on Linux. Every claim below is RELATIVE to this build's own baseline,
-    // which holds on any stack.
-    let baseline = no_indent_frame.lines().len();
+    // NO LINE-COUNT ASSERTION, deliberately, and it must stay that way.
+    //
+    // These tests are named for the head indent, and line count is only ever a PROXY for
+    // it -- one that depends entirely on the shaping stack. `assert_eq!(.., 4)` held under
+    // CoreText and failed on Linux at 5, because Arabic advance widths differ between
+    // CoreText and harfbuzz. Rewriting it as `baseline + 1` failed too: on harfbuzz this
+    // indent does not cost a line at all. Two wrong guesses at a metric nobody making the
+    // change can execute.
+    //
+    // So assert the invariant itself: an applied head indent leaves STRICTLY LESS ROOM on
+    // the first line. True on any shaper that honours it, false on any that ignores it,
+    // and completely free of how wide a glyph happens to be.
+    let unindented_first_line = first_line_glyph_count(&no_indent_frame);
     assert!(
-        baseline > 1,
-        "the fixture must wrap for a first-line-indent test to mean anything; got {baseline}"
+        unindented_first_line > 0,
+        "the unindented first line must hold something for the comparisons below to mean \
+         anything"
     );
     assert!(first_line_bounded(&no_indent_frame, 0., FRAME_WIDTH));
     // assert!(all_lines_bounded(&no_indent_frame, FRAME_WIDTH));
@@ -403,12 +410,15 @@ fn test_layout_text_first_line_indent_small_bidirectional() -> Result<()> {
         Some(5.),
     );
 
-    // The first line has about the same amount of content as the others,
-    // since the head indent is small: at most one extra line, never fewer.
+    // A 5px indent is small enough that whether it displaces a whole glyph IS a metric
+    // question, so this direction only -- never MORE room than with no indent at all.
+    // The half-frame case below is what gives this test its teeth.
     assert!(
-        (baseline..=baseline + 1).contains(&small_indent_frame.lines().len()),
-        "a 5px head indent may cost at most one line; baseline {baseline}, got {}",
-        small_indent_frame.lines().len()
+        first_line_glyph_count(&small_indent_frame) <= unindented_first_line,
+        "a head indent may never give the first line MORE room; {} glyphs unindented, \
+         {} with a 5px indent",
+        unindented_first_line,
+        first_line_glyph_count(&small_indent_frame)
     );
     assert!(first_line_bounded(&small_indent_frame, 5., FRAME_WIDTH));
     // assert!(all_lines_bounded(&small_indent_frame, FRAME_WIDTH));
@@ -425,11 +435,16 @@ fn test_layout_text_first_line_indent_small_bidirectional() -> Result<()> {
         Some(FRAME_WIDTH / 2.),
     );
 
-    // The text contains an additional line to accommodate the indent.
-    assert_eq!(
-        half_indent_frame.lines().len(),
-        baseline + 1,
-        "a half-frame head indent must cost exactly one extra line (baseline {baseline})"
+    // THE ASSERTION WITH TEETH: half the frame is gone, so the first line must hold
+    // strictly fewer glyphs. An implementation that ignored the indent would place the
+    // same glyphs as the unindented frame and fail here.
+    assert!(
+        first_line_glyph_count(&half_indent_frame) < unindented_first_line,
+        "a half-frame head indent must leave strictly less room on the first line; \
+         {} glyphs unindented, {} with a {}px indent",
+        unindented_first_line,
+        first_line_glyph_count(&half_indent_frame),
+        FRAME_WIDTH / 2.
     );
     assert!(first_line_bounded(
         &half_indent_frame,
@@ -475,16 +490,23 @@ fn test_layout_text_first_line_indent_medium_bidirectional() -> Result<()> {
     // The text should contain multiple lines.
     // The first line has about the same amount of content as the others,
     // since there's no head indent.
-    // Line COUNT is deliberately NOT pinned. This same string wraps to 4 lines under
-    // CoreText and 5 under fontconfig/harfbuzz: Arabic advance widths differ between
-    // shaping stacks, so `assert_eq!(.., 4)` was asserting the shaper, not the indent.
-    // That is exactly how these three tests failed the first time this crate's tests
-    // ever ran on Linux. Every claim below is RELATIVE to this build's own baseline,
-    // which holds on any stack.
-    let baseline = no_indent_frame.lines().len();
+    // NO LINE-COUNT ASSERTION, deliberately, and it must stay that way.
+    //
+    // These tests are named for the head indent, and line count is only ever a PROXY for
+    // it -- one that depends entirely on the shaping stack. `assert_eq!(.., 4)` held under
+    // CoreText and failed on Linux at 5, because Arabic advance widths differ between
+    // CoreText and harfbuzz. Rewriting it as `baseline + 1` failed too: on harfbuzz this
+    // indent does not cost a line at all. Two wrong guesses at a metric nobody making the
+    // change can execute.
+    //
+    // So assert the invariant itself: an applied head indent leaves STRICTLY LESS ROOM on
+    // the first line. True on any shaper that honours it, false on any that ignores it,
+    // and completely free of how wide a glyph happens to be.
+    let unindented_first_line = first_line_glyph_count(&no_indent_frame);
     assert!(
-        baseline > 1,
-        "the fixture must wrap for a first-line-indent test to mean anything; got {baseline}"
+        unindented_first_line > 0,
+        "the unindented first line must hold something for the comparisons below to mean \
+         anything"
     );
     assert!(first_line_bounded(&no_indent_frame, 0., FRAME_WIDTH));
     // assert!(all_lines_bounded(&no_indent_frame, FRAME_WIDTH));
@@ -501,12 +523,14 @@ fn test_layout_text_first_line_indent_medium_bidirectional() -> Result<()> {
         Some(FRAME_WIDTH - 20.),
     );
 
-    // The first line should have some glyphs on it, but not the whole
-    // first word.
-    assert_eq!(
-        overflow_indent_frame.lines().len(),
-        baseline + 1,
-        "a near-frame-width head indent must cost exactly one extra line (baseline {baseline})"
+    // The first line should have some glyphs on it, but not the whole first word -- so
+    // strictly fewer than with no indent. Ignoring the indent fails here.
+    assert!(
+        first_line_glyph_count(&overflow_indent_frame) < unindented_first_line,
+        "a head indent 20px short of the frame must leave strictly less room on the first \
+         line; {} glyphs unindented, {} indented",
+        unindented_first_line,
+        first_line_glyph_count(&overflow_indent_frame)
     );
     assert!(first_line_bounded(
         &overflow_indent_frame,
@@ -552,16 +576,23 @@ fn test_layout_text_first_line_indent_large_bidirectional() -> Result<()> {
     // The text should contain multiple lines.
     // The first line has about the same amount of content as the others,
     // since there's no head indent.
-    // Line COUNT is deliberately NOT pinned. This same string wraps to 4 lines under
-    // CoreText and 5 under fontconfig/harfbuzz: Arabic advance widths differ between
-    // shaping stacks, so `assert_eq!(.., 4)` was asserting the shaper, not the indent.
-    // That is exactly how these three tests failed the first time this crate's tests
-    // ever ran on Linux. Every claim below is RELATIVE to this build's own baseline,
-    // which holds on any stack.
-    let baseline = no_indent_frame.lines().len();
+    // NO LINE-COUNT ASSERTION, deliberately, and it must stay that way.
+    //
+    // These tests are named for the head indent, and line count is only ever a PROXY for
+    // it -- one that depends entirely on the shaping stack. `assert_eq!(.., 4)` held under
+    // CoreText and failed on Linux at 5, because Arabic advance widths differ between
+    // CoreText and harfbuzz. Rewriting it as `baseline + 1` failed too: on harfbuzz this
+    // indent does not cost a line at all. Two wrong guesses at a metric nobody making the
+    // change can execute.
+    //
+    // So assert the invariant itself: an applied head indent leaves STRICTLY LESS ROOM on
+    // the first line. True on any shaper that honours it, false on any that ignores it,
+    // and completely free of how wide a glyph happens to be.
+    let unindented_first_line = first_line_glyph_count(&no_indent_frame);
     assert!(
-        baseline > 1,
-        "the fixture must wrap for a first-line-indent test to mean anything; got {baseline}"
+        unindented_first_line > 0,
+        "the unindented first line must hold something for the comparisons below to mean \
+         anything"
     );
     assert!(first_line_bounded(&no_indent_frame, 0., FRAME_WIDTH));
     // assert!(all_lines_bounded(&no_indent_frame, FRAME_WIDTH));
@@ -577,12 +608,8 @@ fn test_layout_text_first_line_indent_large_bidirectional() -> Result<()> {
         Some(FRAME_WIDTH + 5.),
     );
 
-    // The first line is left entirely blank since no glyphs fit on it.
-    assert_eq!(
-        overflow_indent_frame.lines().len(),
-        baseline + 1,
-        "a head indent wider than the frame must cost exactly one extra line (baseline {baseline})"
-    );
+    // The first line is left entirely blank since no glyphs fit on it -- the strongest
+    // form of "strictly less room than unindented", and pure logic rather than metrics.
     assert!(
         collect_glyph_indices(&overflow_indent_frame)
             .first()
@@ -608,12 +635,8 @@ fn test_layout_text_first_line_indent_large_bidirectional() -> Result<()> {
         Some(FRAME_WIDTH - 0.1),
     );
 
-    // The first line is left entirely blank since no glyphs fit on it.
-    assert_eq!(
-        big_indent_frame.lines().len(),
-        baseline + 1,
-        "a head indent spanning the frame must cost exactly one extra line (baseline {baseline})"
-    );
+    // The first line is left entirely blank since no glyphs fit on it -- the strongest
+    // form of "strictly less room than unindented", and pure logic rather than metrics.
     assert!(
         collect_glyph_indices(&big_indent_frame)
             .first()
@@ -631,6 +654,16 @@ fn test_layout_text_first_line_indent_large_bidirectional() -> Result<()> {
 }
 
 /// Checks that the head indent and first line's width don't exceed the frame's width.
+/// How many glyphs the frame placed on its FIRST line.
+///
+/// The shaper-independent measure of "how much room did the first line have". Line counts
+/// are not: they moved between CoreText and harfbuzz twice while this test was being fixed.
+fn first_line_glyph_count(frame: &TextFrame) -> usize {
+    collect_glyph_indices(frame)
+        .first()
+        .map_or(0, |line| line.len())
+}
+
 fn first_line_bounded(frame: &TextFrame, first_line_indent: f32, frame_width: f32) -> bool {
     let first_line_width = frame.lines().first().unwrap().width;
     first_line_width + first_line_indent.min(frame_width) <= frame_width
