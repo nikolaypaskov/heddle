@@ -272,16 +272,17 @@ gate:
     #   gui-surface-gate           -selftest script, run only by CI            canary: CI
     #   wasm-diagnostic-gate       canary is inline CI YAML, GNU-`sed` only    canary: CI
     #   verify-no-warp-endpoints   canary is inline CI YAML; gate not run here canary: CI
-    #   verify-bundled-assets      NO canary exists anywhere                   canary: none
+    #   verify-bundled-assets      verify-bundled-assets-selftest              canary: gate + CI
     #
-    # So `verify-bundled-assets` has never been shown able to fail, and three canaries fire
-    # only in CI. Writing the two missing self-tests and calling gui-surface-gate-selftest
-    # here is open work; until then this list is the scope, not the aspiration.
+    # `verify-bundled-assets` now has a self-test, so it is no longer the one gate nothing
+    # had ever shown able to fail. Two canaries still fire only in CI, and
+    # gui-surface-gate-selftest exists but is not called here -- open work. This list is the
+    # scope, not the aspiration.
     - name: privacy — supply chain
       run: script/heddle/verify-warp-supply-chain-selftest && script/heddle/verify-warp-supply-chain
 
     - name: privacy — bundled assets
-      run: script/heddle/verify-bundled-assets
+      run: script/heddle/verify-bundled-assets-selftest && script/heddle/verify-bundled-assets
 
     - name: privacy — commercial surfaces
       run: script/heddle/gui-surface-gate

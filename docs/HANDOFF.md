@@ -247,10 +247,13 @@ columns — conflating them is how this table was wrong on its first attempt:
 | `gui-surface-gate` | `-selftest` script | yes | yes | **no** — CI only |
 | `wasm-diagnostic-gate` | inline CI YAML, GNU-`sed` only | **no** | yes | no |
 | `verify-no-warp-endpoints` | inline CI YAML (plants `oz.warp.dev`) | **no** | **no** | no |
-| `verify-bundled-assets` | **none exists** | — | yes | **none exists** |
+| `verify-bundled-assets` | `-selftest` script | yes | yes | yes |
 
-So: two of the five have a runnable self-test, and **only one canary fires in the local
-gate**. `verify-bundled-assets` has never been shown able to fail anywhere.
+So: three of the five have a runnable self-test, and **two canaries fire in the local
+gate**. `verify-bundled-assets` was the one that had never been shown able to fail anywhere;
+its self-test plants a changed asset, an added one and a removed one, across several entries
+spanning the manifest — a single-asset check would pass a gate that compared only the first
+hash and the total count. `gui-surface-gate-selftest` exists but is still CI-only.
 `verify-no-warp-endpoints` is the one gate not in the local run at all — it scans a *built*
 artifact, so it needs a full GUI codegen+link first (CI allows it 90 minutes). Run it by hand
 before a PR that touches endpoints, config or bundled assets; a green `lefthook run gate` says

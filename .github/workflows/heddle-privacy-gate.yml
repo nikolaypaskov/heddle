@@ -226,6 +226,12 @@ jobs:
       - name: Verify no Warp endpoints in the shipped binary
         run: ./script/heddle/verify-no-warp-endpoints "${CARGO_TARGET_DIR:-target}/debug/heddle"
 
+      # Self-test first, same reason as the supply-chain job above: a gate that has not
+      # been shown to fail is not evidence. This one plants a changed asset, an added one
+      # and a removed one, and requires each to be rejected.
+      - name: Self-test the bundled-asset gate
+        run: ./script/heddle/verify-bundled-assets-selftest
+
       - name: Verify bundled binary assets match the reviewed manifest
         run: ./script/heddle/verify-bundled-assets
 
