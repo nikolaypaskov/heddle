@@ -232,9 +232,35 @@ payload itself is what authorises the install.
 ./script/heddle/verify-bundled-assets         # bundled binary assets match a reviewed manifest
 ./script/heddle/verify-warp-supply-chain      # no Warp-controlled code path; deps pinned by rev
 ./script/heddle/gui-surface-gate              # commercial UI + Warp strings may only shrink
+./script/heddle/wasm-diagnostic-gate          # wasm32 diagnostics may only shrink
 ```
 
-Each has a `-selftest` companion. **Run the self-test, not just the gate.** The reason is §4.
+**Run the self-test, not just the gate.** The reason is §4. But "each has a `-selftest`
+companion" — which this section used to claim — is false, and enumerating it is the point:
+
+"Has a self-test" and "the gate runs it" are different questions, so they get different
+columns — conflating them is how this table was wrong on its first attempt:
+
+| gate | canary | canary runnable locally? | gate in `lefthook run gate`? | canary in `lefthook run gate`? |
+| --- | --- | --- | --- | --- |
+| `verify-warp-supply-chain` | `-selftest` script | yes | yes | **yes** |
+| `gui-surface-gate` | `-selftest` script | yes | yes | **no** — CI only |
+| `wasm-diagnostic-gate` | inline CI YAML, GNU-`sed` only | **no** | yes | no |
+| `verify-no-warp-endpoints` | inline CI YAML (plants `oz.warp.dev`) | **no** | **no** | no |
+| `verify-bundled-assets` | **none exists** | — | yes | **none exists** |
+
+So: two of the five have a runnable self-test, and **only one canary fires in the local
+gate**. `verify-bundled-assets` has never been shown able to fail anywhere.
+`verify-no-warp-endpoints` is the one gate not in the local run at all — it scans a *built*
+artifact, so it needs a full GUI codegen+link first (CI allows it 90 minutes). Run it by hand
+before a PR that touches endpoints, config or bundled assets; a green `lefthook run gate` says
+nothing about it. Open items: write the two missing `-selftest` scripts, call
+`gui-surface-gate-selftest` from the gate, and add a `check-project-gates` asserting every
+`projectGates` entry in `.claudeconf/manifest.json` has a job.
+
+`wasm-diagnostic-gate` needs `rustup target add wasm32-unknown-unknown`, and on macOS a
+clang with the WebAssembly backend (Apple's has none — the script finds Homebrew's LLVM by
+itself). It exits 2 with instructions rather than passing if it cannot really check.
 
 To record a deliberate addition to a baseline: `--update --allow-additions`, and say why in the
 commit. The gate refuses additions otherwise, on purpose.
@@ -242,14 +268,63 @@ commit. The gate refuses additions otherwise, on purpose.
 ### Testing
 
 ```bash
+# What the gate and CI run — byte-identical to both. ~9,180 tests, ~100s warm.
+cargo nextest run --locked --no-fail-fast --workspace \
+  --exclude command-signatures-v2 --exclude integration --exclude remote_server
+
 cargo test -p warp --lib      # ~5,593 pass, 13 known isolation failures
-cargo test -p warp_core       # 49
+cargo test -p warp_core       # 52
 cargo test -p warp_tui        # 524
 cargo test -p onboarding      # 12
 ```
 
 **`cargo test` alone covers only workspace default members, and `warp_core` is not one of them.**
 Four failures hid behind that for a long time. Always name the crate.
+
+**The gate used to run only those four packages.** 52 crates under `crates/` contain tests and
+49 were outside that set — they compiled as dependencies, so only their *tests* were skipped.
+Widening to the whole workspace took the suite from 6,293 tests to 9,167 (+47s warm) and every
+newly-included test passed. Three crates are excluded **by name**, each for a stated reason in
+`lefthook.yml`:
+
+| crate | why | cost |
+| --- | --- | --- |
+| `command-signatures-v2` | `build.rs` needs `yarn`; `js/build/` is gitignored | no tests |
+| `integration` | enables `warp/integration_tests`, which does not compile (7 errors in `app/src/integration_testing/agent_mode/`) — including it breaks `warp` itself | **~310 tests, incl. hard-constraint UI** |
+| `remote_server` | `setup_tests.rs` does not compile — `install_script()` is `Option<String>` and is `None` on the OSS channel (`:288 :289 :343 :496`) | ~99 tests |
+
+Deleting an exclusion is the fix. `remote_server` needs a decision about what its tests should
+assert when there *is* no install script, which is why it was not patched to force the gate green.
+
+**`integration` is the expensive one, and it is easy to under-read.** Its bin sets
+`test = false`, and grepping the crate for `#[test]` returns **0** — so it looks empty. It is
+not: `tests/integration.rs` is a Cargo integration-test target pulling in `ui_tests.rs` (248)
+and `shell_integration_tests.rs` (62), whose `integration_tests!` macro
+(`tests/common/mod.rs:102`) *generates* the `#[test]` fns. Among the 310 are
+`test_inline_model_selector_restores_prompt_on_*` (`ui_tests.rs:143-145`) and
+`test_agent_mode_pane_minimum_size` (`:323`) — local model selection and Agent Mode UI, two of
+the four capabilities this fork must never break. **Nothing is testing them.** That is
+pre-existing (the old four-package command skipped this crate too), not a regression from
+widening — but do not let "whole workspace" imply otherwise. Note also that these drive the
+real GUI binary as a subprocess and are `#[ignore]`d off macOS unless `run_on_linux` is set,
+so making the crate compile is necessary but not sufficient to gate on them.
+
+**Exclude a crate only when it cannot BUILD, never because its tests are inconvenient.**
+`http_client` was excluded for one round on the strength of two compile errors in its
+positive-origin test — which would also have dropped the independent
+`third_party_origin_does_not_match` beside it, the only thing covering `is_warp_server_origin`,
+the predicate that scopes IAP bearer-token attachment. A whole-crate exclusion silently drops
+every invariant in the crate, not just the broken one. The errors were `Option`-migration
+fallout and are fixed; the crate runs. If a crate ever genuinely must be skipped, skip at the
+*test* level so its neighbours keep running.
+
+**A test module can be compiled away and nobody notices.** `crates/warp_core/src/channel/state.rs`
+gated its tests on `#[cfg(all(test, not(feature = "test-util")))]`. Building `warp_core` alongside
+`warp` — which the gate, CI and `cargo test -p warp` all do — turns `test-util` on, so those three
+tests ran **zero** times in every configuration anyone actually runs. Fixed by moving the feature
+guard to the function under test (`any(test, not(feature = "test-util"))`) and giving the module a
+plain `#[cfg(test)]`. It is the only such module in the tree; the other `not(feature = "test-util")`
+sites are production alternates, not tests.
 
 The 13 failures in `-p warp --lib` are pre-existing test-isolation issues, unrelated to this fork's
 work. Two secret-redaction tests alternate, so the count is sometimes 14. If you see a different

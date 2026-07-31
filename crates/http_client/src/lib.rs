@@ -400,17 +400,39 @@ impl Client {
     }
 }
 
+/// Does `url` share an origin with any of `configured`?
+///
+/// The DECISION, split out from where the origins come from, and pure. That split is
+/// load-bearing for testing, not tidiness: `ChannelState`'s accessors are `cfg_if`'d to
+/// return a MOCK under `test-util` (state.rs:298, :335), and `test-util` is on in every
+/// configuration the gate and CI build. So a test that reaches this logic through
+/// `ChannelState` can never observe the empty-origin case — the one this fork actually
+/// ships — and an empty list silently matching everything would be invisible.
+///
+/// An empty `configured` must match NOTHING. That is what keeps IAP bearer tokens and
+/// first-party headers off arbitrary hosts in a build with no server config.
+fn origin_matches(
+    configured: impl IntoIterator<Item = impl AsRef<str>>,
+    url: &reqwest::Url,
+) -> bool {
+    configured
+        .into_iter()
+        .filter_map(|candidate| reqwest::Url::parse(candidate.as_ref()).ok())
+        .any(|candidate| candidate.origin() == url.origin())
+}
+
 fn is_warp_server_origin(url: &reqwest::Url) -> bool {
-    [
-        ChannelState::server_root_url(),
-        ChannelState::rtc_http_url(),
-    ]
-    .into_iter()
-    // A build with no server config has no Warp origin, so nothing matches and
-    // no Warp headers or IAP tokens are ever attached.
-    .flatten()
-    .filter_map(|candidate| reqwest::Url::parse(candidate.as_ref()).ok())
-    .any(|candidate| candidate.origin() == url.origin())
+    origin_matches(
+        [
+            ChannelState::server_root_url(),
+            ChannelState::rtc_http_url(),
+        ]
+        .into_iter()
+        // A build with no server config has no Warp origin, so nothing matches and
+        // no Warp headers or IAP tokens are ever attached.
+        .flatten(),
+        url,
+    )
 }
 
 /// Returns the current OTEL span context formatted as a W3C `traceparent` value
@@ -824,17 +846,86 @@ impl<'c> oauth2::AsyncHttpClient<'c> for Client {
 mod origin_tests {
     use super::*;
 
+    fn url(s: &str) -> reqwest::Url {
+        reqwest::Url::parse(s).expect("test URL should parse")
+    }
+
+    /// NO CONFIGURED ORIGIN MATCHES NOTHING — the invariant that keeps IAP bearer tokens
+    /// and first-party headers off arbitrary hosts in the build this fork ships.
+    ///
+    /// Driven through `origin_matches` rather than `is_warp_server_origin`, deliberately.
+    /// Under `test-util` — on in every configuration the gate and CI build —
+    /// `ChannelState` returns a MOCK, never `None`, so a test that goes through it can
+    /// never reach the empty case. An earlier version of this file guarded the assertion
+    /// with `if configured == 0`, which under the gate was simply dead code: the branch
+    /// never ran, and the invariant was unprotected everywhere it mattered.
+    #[test]
+    fn no_configured_origin_matches_nothing() {
+        for candidate in [
+            "https://example.invalid/graphql/v2",
+            "http://localhost:8080/api/v1/agent/events/stream",
+            "https://example.test/",
+        ] {
+            assert!(
+                !origin_matches(std::iter::empty::<&str>(), &url(candidate)),
+                "with no configured origin nothing may match; otherwise IAP tokens and \
+                 auth headers attach to a third party"
+            );
+        }
+    }
+
+    /// The paired positive/negative cases, also `ChannelState`-free — without these,
+    /// "always return false" would satisfy the empty-list test above.
+    #[test]
+    fn origin_matching_is_exact() {
+        let configured = [
+            "https://server.example.invalid",
+            "https://rtc.example.invalid",
+        ];
+
+        // Same origin, any path.
+        assert!(origin_matches(
+            configured,
+            &url("https://server.example.invalid/graphql/v2")
+        ));
+        assert!(origin_matches(
+            configured,
+            &url("https://rtc.example.invalid/api/v1/agent/events/stream")
+        ));
+
+        // Origin is scheme + host + port. Differ in any one and it is a different party.
+        assert!(!origin_matches(
+            configured,
+            &url("https://evil.example.invalid/graphql/v2")
+        ));
+        assert!(!origin_matches(
+            configured,
+            &url("http://server.example.invalid/graphql/v2")
+        ));
+        assert!(!origin_matches(
+            configured,
+            &url("https://server.example.invalid:8443/graphql/v2")
+        ));
+    }
+
+    /// Whatever origins THIS build has configured must be recognised by the real
+    /// predicate. Complements the pure tests above: they cover the decision, this covers
+    /// the wiring from `ChannelState` into it.
     #[test]
     fn server_and_rtc_origins_match() {
-        // Derive the expected origins from `ChannelState` so the assertion holds
-        // regardless of which channel config the test build resolves to.
-        let server = reqwest::Url::parse(ChannelState::server_root_url().as_ref()).unwrap();
-        assert!(is_warp_server_origin(&server.join("/graphql/v2").unwrap()));
-
-        let rtc = reqwest::Url::parse(ChannelState::rtc_http_url().as_ref()).unwrap();
-        assert!(is_warp_server_origin(
-            &rtc.join("/api/v1/agent/events/stream").unwrap()
-        ));
+        for root in [
+            ChannelState::server_root_url(),
+            ChannelState::rtc_http_url(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let root = url(root.as_ref());
+            assert!(is_warp_server_origin(&root.join("/graphql/v2").unwrap()));
+            assert!(is_warp_server_origin(
+                &root.join("/api/v1/agent/events/stream").unwrap()
+            ));
+        }
     }
 
     #[test]

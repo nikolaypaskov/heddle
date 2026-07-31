@@ -1,3 +1,16 @@
+//! Unit tests for `derive_http_origin_from_ws_url`.
+//!
+//! These ran ZERO times until the `not(feature = "test-util")` guard on this module was
+//! fixed — building `warp_core` alongside `warp` turns that feature on, which compiled the
+//! whole module away. See the note on the function in `state.rs`.
+//!
+//! KNOWN LIMIT, so nobody reads more into a green run than is there: they call the helper
+//! DIRECTLY. Under `test-util` — which is exactly the configuration the gate and CI build —
+//! `ChannelState::rtc_http_url` returns a mock and never invokes it (`state.rs:298`). So all
+//! three would still pass if the production path stopped calling the helper altogether.
+//! They cover the derivation, not its wiring; a test that the caller still uses it would
+//! need to run without `test-util`, which no tier currently does.
+
 use super::derive_http_origin_from_ws_url;
 
 #[test]

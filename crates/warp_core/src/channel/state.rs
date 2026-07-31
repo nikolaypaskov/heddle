@@ -514,7 +514,14 @@ impl ChannelState {
 /// (`wss`→`https`, `ws`→`http`) and stripping the path, query, and fragment.
 /// Returns [`None`] when the input cannot be parsed as a URL or uses a scheme
 /// other than `ws` or `wss`.
-#[cfg(not(feature = "test-util"))]
+///
+/// `any(test, ...)` rather than a bare `not(feature = "test-util")`: the function is
+/// only CALLED on the non-test-util path, but its tests must still be able to reach it
+/// when that feature is on. Building `warp_core` alongside `warp` -- which the gate, CI
+/// and every `cargo test -p warp` do -- turns `test-util` on, so under the plain guard
+/// this function vanished and `state_tests.rs` with it. Three tests then ran zero times
+/// in every configuration anyone actually runs.
+#[cfg(any(test, not(feature = "test-util")))]
 fn derive_http_origin_from_ws_url(ws_url: &str) -> Option<String> {
     let url = Url::parse(ws_url).ok()?;
     let http_scheme = match url.scheme() {
@@ -530,7 +537,11 @@ fn derive_http_origin_from_ws_url(ws_url: &str) -> Option<String> {
     Some(origin)
 }
 
-#[cfg(all(test, not(feature = "test-util")))]
+// Plain `#[cfg(test)]`. It used to be `all(test, not(feature = "test-util"))`, which
+// compiled the whole module away in the only configurations the gate and CI ever build,
+// so its tests passed exclusively under a bare `cargo test -p warp_core` that nothing
+// runs. See the guard on `derive_http_origin_from_ws_url` above.
+#[cfg(test)]
 #[path = "state_tests.rs"]
 mod tests;
 

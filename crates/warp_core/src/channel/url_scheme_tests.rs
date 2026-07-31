@@ -1,11 +1,16 @@
 //! The URL scheme this build registers must be the one it accepts.
 //!
-//! Deliberately NOT in state_tests.rs. That module is
+//! Deliberately NOT in state_tests.rs. That module used to be
 //! `#[cfg(all(test, not(feature = "test-util")))]`, because the function it
-//! covers only exists without that feature -- and building warp_core alongside
+//! covers only existed without that feature -- and building warp_core alongside
 //! `warp` (which the gate and CI both do) turns `test-util` on, compiling the
 //! whole module away. A test that silently stops being built protects nothing,
 //! and this one exists precisely because the bug it guards is invisible.
+//!
+//! That guard is now fixed (state.rs takes `#[cfg(test)]`, and the function it
+//! covers `#[cfg(any(test, not(feature = "test-util")))]`), so this file could be
+//! merged back in. It stays separate anyway: it is a cross-artifact consistency
+//! check over four files in the tree, not a unit test of `state.rs`.
 
 // A URL scheme is only useful if every artifact that names it agrees: the string
 // the app accepts (`ChannelState::url_scheme`), the two strings the macOS

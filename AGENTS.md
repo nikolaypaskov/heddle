@@ -25,7 +25,7 @@ There is no server to connect to — Heddle removed the backend, so the upstream
 `WITH_LOCAL_SERVER` / `SERVER_ROOT_URL` workflow does not apply.
 
 ### Testing
-- `cargo nextest run --no-fail-fast --workspace --exclude command-signatures-v2` - Run tests with nextest
+- `cargo nextest run --locked --no-fail-fast --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server` - Run tests with nextest. Byte-identical to the `unit` job in both `lefthook.yml` and `.github/workflows/ci.yml`; if you change it, change all three. The two extra exclusions are crates that cannot build (see the `unit` job in `lefthook.yml` for the per-crate reason) — without them this command fails to compile.
 - `cargo nextest run -p warp_completer --features v2` - Run completer tests with v2 features
 - `cargo test --doc` - Run doc tests
 - `cargo test` - Run standard tests for individual packages

@@ -1,10 +1,15 @@
 # Heddle quality + security harness — CI tier.
 #
-# Gate ≡ CI (constitution §1): this runs the same milestone set as `lefthook run gate`,
-# so anything that can only fail at full scope fails locally first, not here for the
-# first time. The one deliberate exception is the Codex review gate, which needs local
-# credentials CI does not have; it is a local pre-merge step and its absence here is a
-# recorded decision, not an oversight.
+# This file's MILESTONE set matches `lefthook run gate` — same tools, same scopes, and the
+# `unit` command is byte-identical to the local one. Constitution §1 calls that Gate ≡ CI.
+#
+# But do not read "Gate ≡ CI" as "a green local gate means a green CI". It does not, and
+# saying so has cost this project real round trips. The gaps are enumerated in lefthook.yml's
+# gate header and are the authoritative list; in short, heddle-privacy-gate.yml additionally
+# scans the BUILT GUI binary for Warp endpoints and self-tests the wasm gate, neither of
+# which runs locally. The Codex review gate runs only locally, needing credentials CI does
+# not have. Every one of those is a recorded decision, not an oversight — but they are
+# decisions about what is NOT checked in each place, so keep both lists honest.
 #
 # This complements the existing heddle-privacy-gate.yml (endpoint/asset/supply-chain
 # scans) rather than replacing it. That workflow remains the authoritative privacy check.
@@ -273,8 +278,15 @@ jobs:
       - name: typecheck
         run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding
 
-      # `cargo test` alone covers only the workspace DEFAULT MEMBERS, and warp_core is
-      # not one of them — four failures hid behind that for a long time. Name the crates.
+      # SCOPE: the whole workspace minus three NAMED exclusions. Byte-identical to the
+      # `unit` job in lefthook.yml — verify with `diff`, not by eye. It was NOT identical
+      # for one round: this side carried `--no-fail-fast` and the local side did not, under
+      # a comment claiming they matched. The reasons for each exclusion are written out in
+      # lefthook.yml rather than duplicated here.
+      #
+      # This ran `-p warp -p warp_core -p warp_tui -p onboarding` and therefore skipped the
+      # tests of 49 of the 52 crates under crates/ that have any. Measured warm on an
+      # aarch64 dev machine: 6293 tests / 49.8s before, 9167 tests / 96.7s after.
       #
       # `--no-fail-fast` because this suite had never run on Linux until today, and it is
       # turning up host-dependent tests one at a time. Stopping at the first failure means one
@@ -282,7 +294,7 @@ jobs:
       # to completion costs a slower red build and buys the whole list at once; a green build
       # is unaffected, since nothing is failing to keep going past.
       - name: unit
-        run: cargo nextest run --locked --no-fail-fast -p warp -p warp_core -p warp_tui -p onboarding
+        run: cargo nextest run --locked --no-fail-fast --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
 
       # Drives the BUILT binary as a subprocess. Unattended: no TTY, no credentials,
       # no network.
