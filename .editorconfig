@@ -1,4 +1,4 @@
-# >>> claudeconf managed >>>
+# >>> Heddle policy >>>
 root = true
 
 [*]
@@ -18,4 +18,4 @@ trim_trailing_whitespace = false
 
 [Makefile]
 indent_style = tab
-# <<< claudeconf managed <<<
+# <<< Heddle policy <<<

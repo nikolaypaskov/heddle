@@ -1,4 +1,0 @@
-interface:
-  display_name: "GUI Integration Test Video"
-  short_description: "Record Heddle GUI integration test artifacts"
-  default_prompt: "Use $gui-integration-test-video to record a Heddle GUI integration test."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "GUI Integration Tests"
-  short_description: "Test Heddle GUI flows with integration harness"
-  default_prompt: "Use $gui-integration-test to add or run a Heddle GUI integration test."

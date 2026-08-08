@@ -1,4 +1,0 @@
-interface:
-  display_name: "GUI UI Guidelines"
-  short_description: "Build Heddle GUI surfaces with WarpUI"
-  default_prompt: "Use $gui-ui-guidelines for this Heddle GUI change."

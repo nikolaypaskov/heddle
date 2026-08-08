@@ -1,4 +1,0 @@
-interface:
-  display_name: "TUI Testing"
-  short_description: "Test Heddle TUI elements with rendered lines"
-  default_prompt: "Use $tui-testing to test this Heddle TUI change."

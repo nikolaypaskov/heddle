@@ -1,7 +1,6 @@
 {
-  "constitutionVersion": "3",
-  "generator": "claudeconf-skill",
-  "agentUse": true,
+  "policyFormatVersion": "1",
+  "policyOwner": "repository",
   "stacks": [
     "rust"
   ],
@@ -14,7 +13,6 @@
       "tool": "rustfmt",
       "version": "1.92.0",
       "tiers": [
-        "edit",
         "gate",
         "ci"
       ]
@@ -114,15 +112,6 @@
   "e2e": {
     "framework": "cargo-nextest",
     "suite": "crates/warp_tui/tests/"
-  },
-  "reviewGate": {
-    "tool": "codex",
-    "version": "0.145.0",
-    "model": "gpt-5.6-sol",
-    "effort": "xhigh",
-    "sandbox": "read-only",
-    "tiers": [],
-    "note": "Local-only adversarial reviewer, invoked manually as `script/heddle/codex-review` before opening a PR. Deliberately NOT in the gate tier: it costs minutes and a paid API call per run, and a tier people skip protects nothing. It cannot run in GitHub CI either, which has no credentials for it."
   },
   "projectGates": [
     "script/heddle/verify-no-warp-endpoints",

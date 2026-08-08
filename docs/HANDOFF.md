@@ -248,7 +248,7 @@ artifact, so it needs a full GUI codegen+link first (CI allows it 90 minutes). R
 before a PR that touches endpoints, config or bundled assets; a green `lefthook run gate` says
 nothing about it. Open items: write the two missing `-selftest` scripts, call
 `gui-surface-gate-selftest` from the gate, and add a `check-project-gates` asserting every
-`projectGates` entry in `.claudeconf/manifest.json` has a job.
+`projectGates` entry in `policy/manifest.json` has a job.
 
 `wasm-diagnostic-gate` needs `rustup target add wasm32-unknown-unknown`, and on macOS a
 clang with the WebAssembly backend (Apple's has none — the script finds Homebrew's LLVM by

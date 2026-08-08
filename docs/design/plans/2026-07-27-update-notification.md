@@ -24,9 +24,8 @@ checks (notarization, monotonicity) in front of install.
 - **Team ID is `4STAAHTNCN`** (`warp_core::macos::APPLE_TEAM_ID`). `2BBY89MBSN` is Warp's and
   appears only in `LEGACY_WARP_APP_GROUP_TEAM_ID` for data migration. Never use it here.
 - **Manifest URL:** `https://github.com/nikolaypaskov/heddle/releases/latest/download/channel_versions.json`
-- **No `curl … | sh` anywhere.** `.claudeconf/rules/heddle.yaml` fails the build on it.
-- **Run the gate before pushing:** `lefthook run gate`. Run `script/heddle/codex-review`
-  before opening the PR.
+- **No `curl … | sh` anywhere.** `policy/semgrep/heddle.yaml` fails the build on it.
+- **Run the gate before pushing:** `lefthook run gate`.
 - Every failure mode except verification failure is **silent and non-blocking**. The app
   must behave exactly as if the feature were off.
 
@@ -717,14 +716,7 @@ Run: `lefthook run gate`
 Expected: all jobs pass. If the surface gate reports additions, they are new Warp strings
 compiled in by the feature — read each one before recording it.
 
-- [ ] **Step 6: Independent review before the PR**
-
-Run: `script/heddle/codex-review`
-
-This feature is the reason that gate exists: it makes a signature check load-bearing for
-the first time, and that check trusted the wrong team ID until recently.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/heddle-release.yml app/Cargo.toml

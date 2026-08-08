@@ -2,8 +2,8 @@
 crates/input_classifier/models/** filter=lfs diff=lfs merge=lfs -text
 crates/input_classifier/models/**/*tokenizer.json -filter -diff -merge text linguist-generated=true
 
-# >>> claudeconf managed >>>
+# >>> Heddle policy >>>
 # Normalize line endings in the repository. Determinism depends on it: a CRLF
 # checkout makes formatters and hash-based gates disagree across platforms.
 * text=auto eol=lf
-# <<< claudeconf managed <<<
+# <<< Heddle policy <<<

@@ -22,7 +22,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 
-MANIFEST=".claudeconf/manifest.json"
+MANIFEST="policy/manifest.json"
 [[ -f "$MANIFEST" ]] || { echo "error: $MANIFEST not found" >&2; exit 2; }
 
 command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 2; }
@@ -34,7 +34,7 @@ pinned() {
   python3 - "$1" <<'PY'
 import json, sys
 key = sys.argv[1]
-m = json.load(open(".claudeconf/manifest.json"))
+m = json.load(open("policy/manifest.json"))
 if key in m["milestones"]:
     print(m["milestones"][key].get("version", ""))
 elif key == "hookRunner":
@@ -105,6 +105,6 @@ if [[ "$STATUS" -eq 0 ]]; then
 else
   echo
   echo "A mismatch means the harness is not running what it records. Install the pinned"
-  echo "version, or re-run the claudeconf skill to record a deliberate upgrade."
+  echo "version, then update the repository policy manifest in the same reviewable change."
 fi
 exit "$STATUS"

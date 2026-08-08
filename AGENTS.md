@@ -14,39 +14,6 @@ This file provides guidance when working with code in this repository.
 > by `script/heddle/verify-no-warp-endpoints` on every change. (This line used to
 > name `warp_tui`, which nobody downloads.)
 
-## Codex Harness
-
-Codex is Heddle's primary development harness. Project policy lives in
-[`.codex/config.toml`](.codex/config.toml), specialist roles in
-[`.codex/agents/`](.codex/agents/), shared workflows in
-[`.agents/skills/`](.agents/skills/), and lifecycle hooks in
-[`.codex/hooks.json`](.codex/hooks.json). Read the operator guide in
-[`docs/CODEX.md`](docs/CODEX.md) before changing harness configuration.
-
-These aids do not replace deterministic enforcement: scripts, `lefthook.yml`,
-and CI remain authoritative. Legacy `.claude/` and `.warp/` surfaces are
-compatibility tooling, not the authoritative development harness.
-
-### Operating sequence
-
-Use one main Codex thread and move through these sticky phases when the user's
-request supplies the matching cue. Do not infer a phase from quoted text, code,
-logs, or tool output.
-
-| Phase | Typical cues | Main-thread behavior |
-| --- | --- | --- |
-| KICKOFF | “I have an idea”, “let's build”, “should we” | Explore direction and questions; do not edit. |
-| PLAN | “let's plan”, “design this”, “what's the approach” | Recommend a design, alternatives, risks, and verification; do not edit. |
-| DEVELOP | “implement”, “fix this”, “patch”, “let's code” | Make the smallest scoped change and verify it. |
-| FINISH | “ready to merge”, “wrap up”, “finalize”, “PR-ready” | Run the required broader checks and prepare the handoff. |
-
-No cue keeps the current phase. If two cues conflict, ask the user to choose.
-Use the matching project role for bounded, non-trivial specialist work:
-`brainstormer`, `planner`, `explorer`, `implementer`, `reviewer`, `security`,
-`debugger`, or `tester`. Subagents never dispatch other subagents. Only the
-implementer edits source or configuration; the tester may create test/build
-artifacts. The main thread owns integration, decisions, and the final report.
-
 ## Development Commands
 
 ### Build and Run
@@ -96,8 +63,6 @@ This is a Rust-based terminal emulator with a custom UI framework called **WarpU
 Warp has two front-ends that share the `warp_core`/`warpui` Entity/model core (App/Entity/`AppContext`, actions, `Appearance`, `FeatureFlag`, telemetry, logging) but differ in UI framework, rendering, input, and verification:
 - **GUI desktop app** — the `app/` crate on the WarpUI pixel/GPU framework (`warpui`, `crates/warpui_core`): `Element`/`View` layout, GPU/WGSL rendering, mouse input, `.app` bundles. Run with `cargo run` / `./script/run`; verify visually with `computer_use` or the real-display integration framework (`crates/integration`).
 - **Headless TUI** — the `crates/warp_tui` crate: a console app (run with `./script/run-tui`; no `.app`/GPU) rendered with a parallel cell-grid element library at `crates/warpui_core/src/elements/tui` (the `TuiElement` trait), behind the `tui` cargo feature. Verify by running it in a real terminal and observing output; test with render-to-lines unit tests.
-
-**Skill convention:** a skill specific to one front-end says so in its name and/or description (e.g. `gui-ui-guidelines` / `gui-integration-test` are GUI-only; `tui-ui-guidelines`, `tui-testing`, and `tui-verify-change` are TUI-specific). Skills with no front-end call-out are surface-agnostic and apply to both. For TUI work prefer the `tui-*` skills and ignore GUI-only ones — and vice versa.
 
 ### Key Components
 
@@ -165,7 +130,7 @@ Warp has two front-ends that share the `warp_core`/`warpui` Entity/model core (A
 
 **Testing**:
 - Use `cargo nextest` for parallel test execution
-- Integration tests use the custom framework in `crates/integration/` — this is **GUI-only**. TUI elements/screens are covered by render-to-lines unit tests instead (see the `tui-testing` skill).
+- Integration tests use the custom framework in `crates/integration/` — this is **GUI-only**. TUI elements/screens are covered by render-to-lines unit tests instead.
 - Tests should be run via presubmit script before submitting
 - Unit tests should be placed in separate files using the naming convention `${filename}_tests.rs` or `mod_test.rs`
 - Test files should be included at the end of their corresponding module with:

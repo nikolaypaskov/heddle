@@ -1,15 +1,8 @@
 # Heddle quality + security harness — CI tier.
 #
-# This file's MILESTONE set matches `lefthook run gate` — same tools, same scopes, and the
-# `unit` command is byte-identical to the local one. Constitution §1 calls that Gate ≡ CI.
-#
-# But do not read "Gate ≡ CI" as "a green local gate means a green CI". It does not, and
-# saying so has cost this project real round trips. The gaps are enumerated in lefthook.yml's
-# gate header and are the authoritative list; in short, heddle-privacy-gate.yml additionally
-# scans the BUILT GUI binary for Warp endpoints and self-tests the wasm gate, neither of
-# which runs locally. The Codex review gate runs only locally, needing credentials CI does
-# not have. Every one of those is a recorded decision, not an oversight — but they are
-# decisions about what is NOT checked in each place, so keep both lists honest.
+# The local gate and this workflow share the public toolchain checks and the exact unit command.
+# They are not identical coverage: heddle-privacy-gate.yml separately builds the GUI binary for
+# endpoint scanning and self-tests the wasm gate. Keep those distinct scopes explicit.
 #
 # This complements the existing heddle-privacy-gate.yml (endpoint/asset/supply-chain
 # scans) rather than replacing it. That workflow remains the authoritative privacy check.
@@ -21,7 +14,7 @@
 #
 # Note there is no `curl ... | sh` here. Fetching an installer over the network and
 # piping it to a shell is the exact pattern this project removed from `script/bootstrap`,
-# and .claudeconf/rules/heddle.yaml fails the build on it — a CI file that did it anyway
+# and policy/semgrep/heddle.yaml fails the build on it — a CI file that did it anyway
 # would be the harness exempting itself from its own rule.
 
 name: ci
@@ -162,7 +155,7 @@ jobs:
           args: >-
             filesystem /github/workspace
             --no-update --no-verification --fail
-            --exclude-paths /github/workspace/.claudeconf/trufflehog-exclude.txt
+            --exclude-paths /github/workspace/policy/trufflehog-exclude.txt
 
   sast:
     name: SAST
@@ -180,9 +173,9 @@ jobs:
         run: |
           set -euo pipefail
           # ERROR-severity rules block.
-          semgrep scan --error --quiet --metrics=off --severity=ERROR --config .claudeconf/rules/ app crates
+          semgrep scan --error --quiet --metrics=off --severity=ERROR --config policy/semgrep/ app crates
           # WARNING-severity rules report; see lefthook.yml for why they do not block.
-          semgrep scan --quiet --metrics=off --config .claudeconf/rules/ app crates || true
+          semgrep scan --quiet --metrics=off --config policy/semgrep/ app crates || true
 
   # ── The Rust battery. One job so the compile cache is shared across milestones;
   # ── splitting them would rebuild 1.5M lines per job.
@@ -190,26 +183,9 @@ jobs:
     name: rust battery
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # Trusted code builds on the self-hosted runner (voltron/roles/heddle_runner);
-    # untrusted code does not. `pull_request.head.repo.fork` is the trust boundary:
-    #
-    #   fork PR          -> fork == true  -> ubuntu-latest
-    #   same-repo PR     -> fork == false -> voltron-linux   (branch needs write access)
-    #   push to master   -> event has no  -> voltron-linux
-    #   workflow_dispatch   pull_request     voltron-linux   (dispatch needs write access)
-    #
-    # heddle is a PUBLIC repo and the runner sits on a home network alongside real
-    # services, so a fork PR must never land there. Everything that does reach it
-    # required write access to this repo first.
-    #
-    # This keys on the fork flag rather than on `event_name == 'push'`, because
-    # `on.push` here is restricted to master: branch pushes raise no push event at
-    # all, so a push-only condition would leave every PR -- the checks that gate
-    # merges -- on the 4-core hosted runner and buy almost nothing.
-    #
-    # Only this job is routed. The rest are seconds-to-minutes and several run in
-    # containers; leaving them hosted keeps the change small and the fallback obvious.
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'voltron-linux' }}
+    # Pull requests run on GitHub-hosted infrastructure. Only master pushes may use
+    # the configured heavy runner; an unset variable safely falls back to hosted.
+    runs-on: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.HEAVY_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -221,13 +197,7 @@ jobs:
         # rust-toolchain.toml pins the version; `rustup show` installs exactly that.
         run: rustup show
 
-      # flock, because voltron hosts three runner instances that share one apt
-      # database. Two jobs installing at once is the normal case, not the rare one,
-      # and the loser died on `Could not get lock /var/lib/apt/lists/lock` after 11
-      # seconds -- a red X that looks like a code failure and is not. The lock file
-      # is our own path, not apt's: apt takes /var/lib/apt/lists/lock itself, so
-      # waiting on that one would deadlock against the process we are waiting for.
-      # Harmless on hosted runners, where the job is alone on the VM.
+      # Serialize package-manager access to avoid concurrent installation locks.
       - name: install build dependencies
         run: |
           set -euo pipefail
@@ -251,11 +221,7 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      # Hosted runners only. The self-hosted builder keeps CARGO_HOME and its _work
-      # directory on local disk between jobs, so target/ is already warm; running this
-      # there would upload and download multi-GB archives over a home connection to
-      # restore a cache that never left. `runner.environment` is 'github-hosted' or
-      # 'self-hosted', set by the runner itself rather than inferred from the label.
+      # Cache only on GitHub-hosted runners.
       - if: runner.environment == 'github-hosted'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
@@ -267,7 +233,7 @@ jobs:
           cargo install cargo-nextest --version 0.9.140 --locked
           cargo install cargo-deny --version 0.20.2 --locked
 
-      # format is ADVISORY at every tier (constitution §2) — it reports, never blocks.
+      # Format is ADVISORY by repository policy — it reports, never blocks.
       - name: format check (advisory)
         run: cargo fmt --all -- --check
         continue-on-error: true

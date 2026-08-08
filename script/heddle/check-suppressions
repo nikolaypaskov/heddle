@@ -9,7 +9,7 @@
 # anything.
 #
 # The approval path: add the suppression AND a matching entry to
-# .claudeconf/suppressions.json in the same change. Because the ledger sits on the
+# policy/suppressions.json in the same change. Because the ledger sits on the
 # protected surface (CODEOWNERS), a code-owner review of that change IS the recorded
 # sign-off. The check cannot be turned green by re-running it.
 #
@@ -24,7 +24,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 
-LEDGER=".claudeconf/suppressions.json"
+LEDGER="policy/suppressions.json"
 [[ -f "$LEDGER" ]] || { echo "error: $LEDGER not found" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 2; }
 
@@ -47,7 +47,7 @@ python3 - "$BASE" <<'PY'
 import hashlib, json, re, subprocess, sys
 
 base = sys.argv[1]
-ledger = json.load(open(".claudeconf/suppressions.json"))
+ledger = json.load(open("policy/suppressions.json"))
 approved = {e["fingerprint"] for e in ledger}
 
 # Tokens that silence a control. Deliberately narrow: broad patterns would flag ordinary
@@ -56,7 +56,7 @@ TOKENS = re.compile(
     r"#\[allow\(|#!\[allow\(|nosemgrep|trufflehog:ignore|"
     r"expect\(clippy::|#\[expect\(",
 )
-WATCHED_CONFIG = ("deny.toml", ".claudeconf/trufflehog-exclude.txt", ".clippy.toml")
+WATCHED_CONFIG = ("deny.toml", "policy/trufflehog-exclude.txt", ".clippy.toml")
 
 # This script must contain the very tokens it forbids in order to search for them, so it
 # excludes itself -- the same exemption the supply-chain gate needs for the same reason.
@@ -89,7 +89,7 @@ for fp, f, body in offenders:
     print(f"    {body}")
     print(f"    fingerprint: {fp}\n")
 print("Each of these silences a check. If it is the right call, add it to")
-print(".claudeconf/suppressions.json in THIS change with a rationale:\n")
+print("policy/suppressions.json in THIS change with a rationale:\n")
 print(json.dumps([{"fingerprint": o[0], "file": o[1], "rule": "<which check>",
                    "rationale": "<why silencing it is correct>"} for o in offenders], indent=2))
 sys.exit(1)

@@ -1,103 +1,120 @@
 [
   {
-    "fingerprint": "498e89a2289fdf73",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "db410eb39902919a",
+    "historicalFingerprint": "498e89a2289fdf73",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "actions/checkout writes the runner's ephemeral GITHUB_TOKEN into .git/config. Without this the whole-tree scan fails on every CI run on a token the platform injected itself -- a guaranteed false positive, not a finding."
   },
   {
-    "fingerprint": "f4a00d7f2c75dde7",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "024b67e648542fed",
+    "historicalFingerprint": "f4a00d7f2c75dde7",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Cargo build output. Contains compiled copies of source strings, so scanning it re-reports whatever the source already had, at enormous cost."
   },
   {
-    "fingerprint": "52709d7dc43a4781",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "99f1c1e66dd0663a",
+    "historicalFingerprint": "52709d7dc43a4781",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Vendored JS dependencies. Their docs and fixtures legitimately contain example credentials (URI-style user:pass@ hosts); none are this project's secrets."
   },
   {
-    "fingerprint": "0c3bb31d97c271c9",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "d4e4d0024c5aa0b1",
+    "historicalFingerprint": "0c3bb31d97c271c9",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Yarn's zero-install cache for crates/command-signatures-v2/js. Same reasoning as node_modules."
   },
   {
-    "fingerprint": "278e27333f42d5f0",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "d1accb482fb66c27",
+    "historicalFingerprint": "278e27333f42d5f0",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "A dependency lockfile: names, versions and checksums. No credentials, and it is large enough to slow every scan."
   },
   {
-    "fingerprint": "737dcec66e485ed5",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "86c577f010bfb333",
+    "historicalFingerprint": "737dcec66e485ed5",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Same as Cargo.lock, for the JS sub-package."
   },
   {
-    "fingerprint": "de4644304bf6a6b3",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "4b568dee30d7c762",
+    "historicalFingerprint": "de4644304bf6a6b3",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Same as Cargo.lock, for the JS sub-package."
   },
   {
-    "fingerprint": "1c387fb85e265ddc",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "1cb85f8ccac70299",
+    "historicalFingerprint": "1c387fb85e265ddc",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Recorded gate baselines: literal lists of strings found in the tree. A scanner walking them re-reports whatever they record, so a finding here is always a duplicate of a finding elsewhere."
   },
   {
-    "fingerprint": "47c64fe9aaa88945",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "0a5e627503f45c04",
+    "historicalFingerprint": "47c64fe9aaa88945",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Same as the baselines -- these files exist to record what the gates found."
   },
   {
-    "fingerprint": "44a27038305218cc",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "b02190f27892cfcc",
+    "historicalFingerprint": "44a27038305218cc",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Upstream's fixtures for the product's own secret-REDACTION feature. The file states the keys are fake, and their hashes differ from any real credential. The tests exist precisely to stop real secrets reaching logs; deleting the fixtures to quiet the scanner would remove that protection."
   },
   {
-    "fingerprint": "e087bb44fd7f1a3f",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "e6193301bc13af2f",
+    "historicalFingerprint": "e087bb44fd7f1a3f",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Binary sqlite fixtures for the integration suite; the URI-style user:pass@host strings are serialised sample rows, not credentials."
   },
   {
-    "fingerprint": "b0866153da8cd983",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "f976a60cfcfc2ec1",
+    "historicalFingerprint": "b0866153da8cd983",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Fake Stripe/GitHub keys that are the INPUT to the product's own secret-redaction tests. Removing them to quiet the scanner would delete the protection they verify."
   },
   {
-    "fingerprint": "02e1517b91967737",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "6afb667723f3a9ac",
+    "historicalFingerprint": "02e1517b91967737",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "URI literals exercising git credential-handling paths."
   },
   {
-    "fingerprint": "12f1f56dd103d7a8",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "8209328b0e7224a8",
+    "historicalFingerprint": "12f1f56dd103d7a8",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "URI literals exercising websocket proxy URL parsing."
   },
   {
-    "fingerprint": "6fac46324446cc6c",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "aa9a20e49395836d",
+    "historicalFingerprint": "6fac46324446cc6c",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "A URI literal in terminal input parsing tests."
   },
   {
-    "fingerprint": "9231bbc389a93599",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "89faa6bddf29a8e1",
+    "historicalFingerprint": "9231bbc389a93599",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "A URI literal used by semantic-selection tests."
   },
   {
-    "fingerprint": "ce2b3c3744b8e914",
-    "file": ".claudeconf/trufflehog-exclude.txt",
+    "fingerprint": "464a2cf14e5f93e7",
+    "historicalFingerprint": "ce2b3c3744b8e914",
+    "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Packaged release artifacts: copies of the built binary, so findings duplicate the source. 290 MB per scan with brotli decode errors on compressed Mach-O sections."
   },

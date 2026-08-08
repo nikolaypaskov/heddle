@@ -26,17 +26,7 @@ concurrency:
   group: heddle-privacy-gate-${{ github.ref }}
   cancel-in-progress: true
 
-# Incremental compilation off, everywhere.
-#
-# CI never reuses an incremental cache the way a developer's machine does: every
-# job is a fresh checkout, so the artifacts are written and then almost never hit.
-# On the self-hosted runner, where the target dir persists deliberately, they were
-# 87G of a 144G cache -- 60% of the disk spent on a speedup CI cannot collect.
-#
-# This used to be set for us as a side-effect of Swatinem/rust-cache, which exports
-# CARGO_INCREMENTAL=0. Guarding that action to hosted runners silently turned
-# incremental back ON for self-hosted jobs. Relying on a caching action to set a
-# compiler flag was the real mistake; it is explicit now.
+# Keep incremental compilation disabled for predictable CI resource use.
 env:
   CARGO_INCREMENTAL: "0"
 
@@ -119,12 +109,9 @@ jobs:
     name: Binary contains no Warp endpoints
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # Trusted code builds on the self-hosted runner; fork PRs stay hosted. This job
-    # now compiles the GUI, which is far heavier than the TUI it used to build, and
-    # the 32-core builder with a persistent target dir is what makes that affordable.
-    # The fork test is the same trust boundary ci.yml uses -- untrusted code must
-    # never reach that machine.
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'voltron-linux' }}
+    # Pull requests run on GitHub-hosted infrastructure. Only master pushes may use
+    # the configured heavy runner; an unset variable safely falls back to hosted.
+    runs-on: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.HEAVY_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 90
 
     steps:
@@ -136,8 +123,7 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show   # installs the version pinned by rust-toolchain.toml
 
-      # flock: see the note in ci.yml. Three runner instances share one apt
-      # database on voltron, and concurrent jobs collided on the lists lock.
+      # Serialize package-manager access to avoid concurrent installation locks.
       - name: Install build dependencies
         run: |
           set -euo pipefail
@@ -165,17 +151,7 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      # Hosted runners only -- this ACTION DELETED THE SELF-HOSTED RUNNER'S TOOLCHAIN.
-      #
-      # On a hosted runner the cargo home is disposable, so rust-cache restoring and
-      # pruning it is free. On the self-hosted runner it is persistent and shared:
-      # restoring a cached ~/.cargo/bin over the top left `cargo` and `rustc` but no
-      # `rustup`, so every later job died at `rustup show` with "command not found".
-      #
-      # ci.yml already guards this the same way; the guard was missed here, and then
-      # the endpoint job was routed to the self-hosted runner, which is what broke it.
-      # There is also nothing to gain: that runner keeps CARGO_TARGET_DIR outside the
-      # workspace, so its cache already survives between jobs.
+      # Cache only on GitHub-hosted runners.
       - if: runner.environment == 'github-hosted'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
@@ -192,11 +168,7 @@ jobs:
       # The feature list matches script/heddle/gui-surface-gate, which type-checks
       # the same target; keep them in step.
       #
-      # Paths below go through CARGO_TARGET_DIR. The self-hosted runner sets it
-      # outside the workspace so the build cache survives actions/checkout's
-      # `git clean -ffdx`, which means a hardcoded `target/debug/...` resolves to
-      # nothing there -- `cp: cannot stat 'target/debug/heddle'`, exactly what the
-      # first run of this job hit.
+      # Use CARGO_TARGET_DIR when set rather than assuming a target-directory path.
       - name: Build the shipped GUI binary
         run: cargo build -p warp --bin heddle --features release_bundle,extern_plist,gui,nld_classifier_v3,nld_heuristic_v2
 
@@ -217,12 +189,7 @@ jobs:
           echo "Scanner correctly rejected the canary."
           rm -f /tmp/heddle-canary
 
-      # Pass the path explicitly. The script's default is target/debug/heddle --
-      # correct here, but only for a runner that keeps its target directory in
-      # the workspace. The self-hosted runner sets CARGO_TARGET_DIR elsewhere, so
-      # a bare call would scan a path that does not exist, or worse, a stale one.
-      # (The default used to be target/debug/heddle-tui, which was the exact
-      # silent-wrong-target failure this job exists to remove.)
+      # Pass the build output path explicitly.
       - name: Verify no Warp endpoints in the shipped binary
         run: ./script/heddle/verify-no-warp-endpoints "${CARGO_TARGET_DIR:-target}/debug/heddle"
 
@@ -340,8 +307,7 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show   # installs the version pinned by rust-toolchain.toml
 
-      # flock: see the note in ci.yml. Three runner instances share one apt
-      # database on voltron, and concurrent jobs collided on the lists lock.
+      # Serialize package-manager access to avoid concurrent installation locks.
       - name: Install build dependencies
         run: |
           set -euo pipefail
@@ -364,17 +330,7 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
 
-      # Hosted runners only -- this ACTION DELETED THE SELF-HOSTED RUNNER'S TOOLCHAIN.
-      #
-      # On a hosted runner the cargo home is disposable, so rust-cache restoring and
-      # pruning it is free. On the self-hosted runner it is persistent and shared:
-      # restoring a cached ~/.cargo/bin over the top left `cargo` and `rustc` but no
-      # `rustup`, so every later job died at `rustup show` with "command not found".
-      #
-      # ci.yml already guards this the same way; the guard was missed here, and then
-      # the endpoint job was routed to the self-hosted runner, which is what broke it.
-      # There is also nothing to gain: that runner keeps CARGO_TARGET_DIR outside the
-      # workspace, so its cache already survives between jobs.
+      # Cache only on GitHub-hosted runners.
       - if: runner.environment == 'github-hosted'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:

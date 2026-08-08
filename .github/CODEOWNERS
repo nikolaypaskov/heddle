@@ -1,4 +1,4 @@
-# Control-plane ownership (claudeconf constitution §4.7.1).
+# Control-plane ownership.
 #
 # These paths are the ones that can WEAKEN the harness: change a gate, silence a scanner,
 # widen an exclude, or repoint a pinned tool. Everything here requires review by someone
@@ -22,7 +22,7 @@
 
 # ── The harness itself ────────────────────────────────────────────────────────────
 /lefthook.yml                       @nikolaypaskov
-/.claudeconf/                       @nikolaypaskov
+/policy/                            @nikolaypaskov
 
 # ── Pinned tool configs: changing these changes what the gates actually check ──────
 /rust-toolchain.toml                @nikolaypaskov
@@ -34,6 +34,3 @@
 # ── Heddle's own privacy gates and their recorded baselines ───────────────────────
 # A baseline edit can make a removed commercial surface look like it was never there.
 /script/heddle/                     @nikolaypaskov
-
-# ── The agent's own permission surface ────────────────────────────────────────────
-/.claude/settings.json              @nikolaypaskov
