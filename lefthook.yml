@@ -25,7 +25,7 @@ pre-commit:
     # every run. The whole-tree scan takes ~3s here, sidesteps the quoting problem
     # entirely, and is strictly more thorough than scanning only what is staged.
     - name: secret-scan
-      run: trufflehog filesystem . --no-update --no-verification --fail --exclude-paths policy/trufflehog-exclude.txt
+      run: trufflehog filesystem . --github-actions --no-update --no-verification --fail --fail-on-scan-errors --exclude-paths policy/trufflehog-exclude.txt
 
     # Typechecking and linting stay narrow enough for the fast pre-commit layer.
     #
@@ -214,7 +214,7 @@ gate:
       run: semgrep scan --quiet --metrics=off --config policy/semgrep/ app crates || true
 
     - name: secret-scan (whole tree)
-      run: trufflehog filesystem . --no-update --no-verification --fail --exclude-paths policy/trufflehog-exclude.txt
+      run: trufflehog filesystem . --github-actions --no-update --no-verification --fail --fail-on-scan-errors --exclude-paths policy/trufflehog-exclude.txt
 
     - name: dependency-audit (advisory)
       run: cargo deny check advisories bans sources licenses || true

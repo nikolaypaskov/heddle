@@ -4,7 +4,7 @@
     "historicalFingerprint": "498e89a2289fdf73",
     "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
-    "rationale": "actions/checkout writes the runner's ephemeral GITHUB_TOKEN into .git/config. Without this the whole-tree scan fails on every CI run on a token the platform injected itself -- a guaranteed false positive, not a finding."
+    "rationale": "The filesystem tier owns the checked-out tree while the Git tier owns incoming commit history. Excluding .git avoids duplicate scans of inherited objects and local-only repository metadata."
   },
   {
     "fingerprint": "024b67e648542fed",
@@ -26,27 +26,6 @@
     "file": "policy/trufflehog-exclude.txt",
     "rule": "trufflehog-exclude",
     "rationale": "Yarn's zero-install cache for crates/command-signatures-v2/js. Same reasoning as node_modules."
-  },
-  {
-    "fingerprint": "d1accb482fb66c27",
-    "historicalFingerprint": "278e27333f42d5f0",
-    "file": "policy/trufflehog-exclude.txt",
-    "rule": "trufflehog-exclude",
-    "rationale": "A dependency lockfile: names, versions and checksums. No credentials, and it is large enough to slow every scan."
-  },
-  {
-    "fingerprint": "86c577f010bfb333",
-    "historicalFingerprint": "737dcec66e485ed5",
-    "file": "policy/trufflehog-exclude.txt",
-    "rule": "trufflehog-exclude",
-    "rationale": "Same as Cargo.lock, for the JS sub-package."
-  },
-  {
-    "fingerprint": "4b568dee30d7c762",
-    "historicalFingerprint": "de4644304bf6a6b3",
-    "file": "policy/trufflehog-exclude.txt",
-    "rule": "trufflehog-exclude",
-    "rationale": "Same as Cargo.lock, for the JS sub-package."
   },
   {
     "fingerprint": "1cb85f8ccac70299",

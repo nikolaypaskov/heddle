@@ -1,10 +1,10 @@
-# trufflehog --exclude-paths entries are REGEXES, not globs. A glob such as `*.lock`
-# fails to compile ("can not compile regular expression") and takes the whole scan
-# down with it. This differs from lefthook's `exclude:` key, which DOES take globs --
-# the same intent, spelled two ways.
+# trufflehog --exclude-paths entries are REGEXES, not globs. Keep each exclusion
+# narrow: malformed patterns break the whole scan. This differs from lefthook's
+# `exclude:` key, which DOES take globs -- the same intent, spelled two ways.
 
-# VCS metadata. actions/checkout injects the runner's ephemeral GITHUB_TOKEN into
-# .git/config; without this line every CI run fails on a guaranteed false positive.
+# VCS metadata and object storage. The filesystem tier scans the checked-out tree; the
+# separate Git tier scans incoming commit history. Including .git/ here would duplicate
+# that work, rescan inherited history, and inspect local-only repository configuration.
 \.git/
 
 # Build output and vendored trees: dependency docs and fixtures legitimately contain
@@ -12,11 +12,6 @@
 ^target/
 node_modules/
 \.yarn/
-
-# Lockfiles.
-Cargo\.lock$
-yarn\.lock$
-package-lock\.json$
 
 # The harness's own recorded baselines: these are lists of strings found in the tree,
 # so a scanner walking them re-reports whatever they record.
