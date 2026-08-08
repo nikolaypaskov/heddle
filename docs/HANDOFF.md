@@ -1,6 +1,6 @@
 # Handoff
 
-**As of 2026-07-26.** Written to be read by someone — or some agent — starting in a fresh checkout
+**Updated for v0.5.0.** Written to be read by someone — or some agent — starting in a fresh checkout
 with no memory of how any of this came to be. It records the things that are *not* recoverable by
 reading the code: the standing constraints, the procedures, and the mistakes that cost the most.
 
@@ -53,36 +53,25 @@ keybindings. The distinction is: user-visible copy gets renamed, contracts do no
 
 ## 2. Where things stand
 
-Released: v0.1.0, v0.2.0, v0.3.0 — each superseded by the next, with the reason stated on the
-superseded release rather than quietly replaced.
+Released through **v0.5.0**. The current release ships the GUI on macOS and Linux, restores local
+harness/model selection, and implements the opt-in, one-time macOS update notification described in
+[`design/specs/2026-07-27-update-notification-design.md`](design/specs/2026-07-27-update-notification-design.md).
 
-In flight at the time of writing: **v0.3.1**, carrying
+Current backend boundary:
 
-- login-item registration made opt-in (it previously added itself to startup items without asking)
-- state moved out of Warp's app-group container, with a migration for anyone who already had data
-  there
-- the persisted telemetry queue discarded rather than accumulating forever
-- the updater's team-ID check corrected (it trusted *Warp's* signing team, so it would have accepted
-  a Warp-signed update and rejected a Heddle-signed one)
-- `email_address` pinned to a revision — it was the last dependency tracking a branch on a
-  Warp-owned repository
-- Warp's logomark glyph removed from the renderers (see §4)
-- macOS permissions reduced from seven entitlements to one (see §5)
-- the bundle version fixed: every release before this one reported itself as `0.1.0`
+- `warp_multi_agent_client` is removed; Oz requests fail locally as unavailable and do not have a
+  Warp endpoint to reach.
+- Drive's local workflows, notebooks, prompts, and environment variables remain. Its cloud sync and
+  object-sharing surfaces are removed.
+- ACP remains deliberately deferred. Heddle is a terminal, not an agentic environment, until its
+  permission and cancellation requirements are implemented end to end.
 
 Deliberately **not** done, in rough priority order:
 
-1. **Delete `app/src/drive/` and `app/src/billing/`.** Warp Drive is 22,807 lines with 179 inbound
-   references; the billing modal is only ever triggered from it, so they are one unit. This is the
-   largest remaining block of dead commercial code. It is a dedicated slice, not a tidy-up.
-2. The remaining ambient cloud-agent slices — see
-   [`design/plans/2026-07-24-ambient-runtime-removal.md`](design/plans/2026-07-24-ambient-runtime-removal.md).
-3. `AuthManager` itself: 164 files, `current_user` at ~197 sites.
-4. The DMG recipe is still Warp-branded, so releases ship a zipped `.app` instead.
-5. `WarpDockTilePlugin` still ships inside the bundle; `warpctrl_command_name` is still
-   `warpctrl-oss`.
-6. The ACP agent bridge — designed, deliberately unimplemented. A half-finished bridge that streams
+1. The ACP agent bridge — designed, deliberately unimplemented. A half-finished bridge that streams
    tool calls without working permission prompts can run commands the user never agreed to.
+2. Remaining legacy implementation cleanup, including `AuthManager`, the DMG recipe, and
+   `WarpDockTilePlugin`, is separate from the removed cloud-product behavior.
 
 ## 3. Procedures
 
@@ -271,7 +260,8 @@ commit. The gate refuses additions otherwise, on purpose.
 ### Testing
 
 ```bash
-# What the gate and CI run — byte-identical to both. ~9,180 tests, ~100s warm.
+# Shared unit command used by presubmit, Lefthook, and CI — byte-identical. Test count and
+# duration are environment-dependent; do not infer coverage beyond the exclusions below.
 cargo nextest run --locked --no-fail-fast --workspace \
   --exclude command-signatures-v2 --exclude integration --exclude remote_server
 

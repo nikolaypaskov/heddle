@@ -273,7 +273,7 @@ jobs:
         continue-on-error: true
 
       - name: lint
-        run: cargo clippy --locked -p warp -p warp_core -p warp_tui -p onboarding
+        run: cargo clippy --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
 
       - name: typecheck
         run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding

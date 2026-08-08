@@ -1,6 +1,9 @@
 # Update notification for Heddle.app
 
-**Status:** designed, not implemented. **Date:** 2026-07-27.
+**Status:** implemented in v0.5.0. **Design date:** 2026-07-27.
+
+The implemented GUI flow is opt-in and asked once; the historical rationale and constraints below
+remain the design record. `heddle-tui` remains deliberately out of scope.
 
 ## The problem
 

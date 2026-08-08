@@ -1,8 +1,8 @@
 # Heddle Phase 6 — ACP agent bridge
 
 **Date:** 2026-07-22
-**Status:** Designed, deliberately NOT implemented in v0.1
-**Decision:** Heddle ships v0.1 as a terminal. It will not be described as an
+**Status:** Designed, deliberately not implemented as of v0.5.0.
+**Decision:** Heddle ships as a terminal. It will not be described as an
 agentic environment until permission handling and cancellation work end to end.
 
 ## Why this is deferred, not abandoned
@@ -16,7 +16,7 @@ dishonest in a specific and dangerous way: an agent that streams tool calls
 without working permission prompts or cancellation can execute commands a user
 did not agree to. A half-implemented agent bridge is worse than none.
 
-So v0.1 ships without it, and the README and release notes say so in plain
+So Heddle ships without it, and the README and release notes say so in plain
 words rather than implying capability.
 
 ## Foundation
@@ -56,8 +56,9 @@ conversation sync, and anything else that only made sense with Warp's backend.
 
 ## Architectural constraint
 
-The current entry point is hardwired to `ServerApi` and
-`warp_multi_agent_client` at `app/src/ai/agent/api/impl.rs:14`.
+The historical entry point was hardwired to `ServerApi` and `warp_multi_agent_client`.
+`warp_multi_agent_client` is now removed and Oz returns a local unavailable error, so ACP must be
+introduced as a new local-provider boundary rather than reviving the old hosted transport.
 
 **Do not make ACP masquerade as `ServerApi`.** Introduce a local-agent provider
 boundary and put ACP behind it. The two have genuinely different shapes: one is

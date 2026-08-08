@@ -64,9 +64,9 @@ There is no server to connect to — Heddle removed the backend, so the upstream
 - `cargo test` - Run standard tests for individual packages
 
 ### Linting and Formatting
-- `./script/presubmit` - Run all presubmit checks (fmt, clippy, tests)
+- `./script/presubmit` - Run the comprehensive local presubmit checks. Rust formatting is advisory while inherited formatter drift remains.
 - `./script/format` - Format code
-- `cargo clippy --workspace --all-targets --all-features --tests -- -D warnings` - Run clippy
+- `cargo clippy --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server` - Run the workspace Clippy contract. It does not deny warnings while inherited warning debt remains.
 - `./script/run-clang-format.py -r --extensions 'c,h,cpp,m' ./crates/warpui/src/ ./app/src/` - Format C/C++/Obj-C code
 - `find . -name "*.wgsl" -exec wgslfmt --check {} +` - Check WGSL shader formatting
 
@@ -176,10 +176,9 @@ Warp has two front-ends that share the `warp_core`/`warpui` Entity/model core (A
   ```
 
 **Pull Request Workflow**:
-- **ALWAYS** run `./script/format` and `cargo clippy` (the versions specified in ./script/presubmit) before opening a PR or pushing updates to an existing PR branch
-- Those commands must pass completely before creating or updating a pull request
-- Specifically, ensure `./script/format` and `cargo clippy` checks pass
-- If they fail, fix all issues before proceeding with the PR
+- **ALWAYS** run `lefthook run gate` before opening a PR or pushing updates to an existing PR branch. The exact workspace Clippy and unit commands above must pass completely.
+- Repository-wide Rust formatting is advisory while inherited formatter drift remains. Format touched Rust files, inspect the resulting scope, and do not mix unrelated formatting changes into a feature patch.
+- If a required gate job fails, fix it before proceeding with the PR. Report advisory failures honestly rather than claiming a clean run.
 - Do not create public pull requests or public issues that disclose a non-public security vulnerability. Refer users to `SECURITY.md` for the proper disclosure methods instead.
 - This applies to:
   - Opening new pull requests

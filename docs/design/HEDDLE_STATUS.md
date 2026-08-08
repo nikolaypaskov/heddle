@@ -1,6 +1,14 @@
 # Heddle — project status
 
-**As of 2026-07-23.**
+**Current release: v0.5.0.** Historical implementation notes remain below.
+
+## Current state
+
+Heddle has released through v0.5.0. The macOS update notification is implemented and opt-in.
+`warp_multi_agent_client` has been removed; Oz is unavailable locally rather than routed to a Warp
+backend. Drive remains for local workflows, notebooks, prompts, and environment variables, while
+cloud sync and object sharing are removed. ACP is deliberately deferred, so Heddle is not described
+as an agentic environment.
 
 ## Delivered: v0.1.0 (Phases 1–5)
 
@@ -16,7 +24,7 @@ rounds.
 | 3 · Verification harness | ✅ string scan + asset-hash manifest, both self-tested |
 | 4 · Rebrand | ✅ name, icon, logo, fonts, bundle ID, paths, copy |
 | 5 · Release engineering | ✅ Linux release + privacy/asset gates |
-| 6 · ACP agent | ⏳ **designed, not implemented — next milestone** |
+| 6 · ACP agent | ⏳ **designed; deliberately deferred — not implemented in v0.5.0** |
 
 ## Post-v0.1 de-commercialization sweep (in progress, 2026-07-23)
 
@@ -39,9 +47,9 @@ Progress on the sweep:
 | P1 · Block sharing (modal, hosted API, settings page, context menu, telemetry) | ✅ removed (`4580b9b8`) |
 | P1 · Teams settings page (plan/seat/invite/billing/upgrade UI + all triggers) | ✅ removed (`072dbc4b`) |
 | P1 · Session sharing (116 files, terminal-core-woven) | ⏳ deep |
-| P1 · Warp Drive (cloud sync/share over local workflows/notebooks — preserve-local) | ⏳ deep |
+| P1 · Warp Drive (cloud sync/share over local workflows/notebooks — preserve-local) | ✅ local Drive preserved; cloud sync/object sharing removed |
 | P1 · Cloud conversation history (cloud loader/retention over local SQLite — preserve-local) | ⏳ deep |
-| P0 · Warp-hosted agent/AI transport, Oz cloud agents | ⏳ (overlaps Phase 6) |
+| P0 · Warp-hosted agent/AI transport, Oz cloud agents | ✅ `warp_multi_agent_client` removed; Oz unavailable |
 
 **The entire P2 tier is complete** (billing, paywalls, paid onboarding, and the
 Oz/orchestration/OpenWarp launch marketing modals) and passed an independent
@@ -215,11 +223,9 @@ localized**) — require careful architectural surgery to separate cloud from
 local without breaking legitimate FOSS features. They do not yield clean
 single-pass, always-compiling increments and are genuinely multi-session.
 
-**P0 is the true "no Warp backend" core:** the app still routes AI (even BYOK)
-through `warp_multi_agent_client`/`ServerApi`, and Oz cloud agents remain. Codex
-estimated the agent-transport replacement (Phase 6 / ACP) alone at **9–14
-engineer-weeks**. Reaching a fully backend-free, production-ready build is a
-multi-week program, not a single session.
+**P0 transport removal is complete:** `warp_multi_agent_client` is gone and Oz is reported as
+unavailable without constructing a Warp request. ACP remains a separate, deliberately deferred
+local-agent feature; it is not a replacement claimed as shipped.
 
 Residual stubs kept inert until their owning feature is removed:
 `UserWorkspaces::upgrade_link[_for_team]` (→ `None`), plus dead team methods /
@@ -232,11 +238,9 @@ agent bridge) is a **9–14 engineer-week** feature that Codex judged must **not
 ship partially — a default-off flag is insufficient protection against a latent
 backend executing unapproved tool calls.
 
-**The owner chose: ship v0.1 now; Phase 6 remains a fully-specified future
-milestone, not claimed as implemented.** This is the honest resolution Codex
-endorsed. "Implemented by design" was explicitly rejected as satisfying "all
-phases implemented" — so the goal is understood as *v0.1 shipped; Phase 6 next*,
-not *all six done*.
+**The owner chose: Phase 6 remains a fully-specified future milestone, not claimed as
+implemented.** This remains true in v0.5.0. "Implemented by design" was explicitly rejected as
+satisfying "all phases implemented."
 
 Full Phase 6 design and effort breakdown:
 `docs/design/specs/2026-07-22-acp-agent-bridge-design.md`.

@@ -28,7 +28,7 @@ pre-commit:
     - name: secret-scan
       run: trufflehog filesystem . --no-update --no-verification --fail --exclude-paths .claudeconf/trufflehog-exclude.txt
 
-    # SCOPE. Not `--workspace --all-targets`, deliberately.
+    # Typechecking and linting stay narrow enough for the fast pre-commit layer.
     #
     # `crates/command-signatures-v2` has a build.rs that shells out to `yarn` to compile a
     # TypeScript bundle, and its generated `js/build/` output is gitignored. On a machine
@@ -36,19 +36,6 @@ pre-commit:
     # fails for a reason unrelated to the change being checked. The project's own release
     # CI has always scoped its build the same way (`-p warp_tui --bin heddle-tui`).
     #
-    # The crates named below are the ones this fork ships. This is the FAST pre-commit
-    # layer and stays narrow on purpose; the gate's `unit` job is the one that carries
-    # workspace scope, and it names its own exclusions.
-    #
-    # Known cost of the mismatch, measured rather than assumed: this narrow set and the
-    # gate's wide one resolve `warp`'s features differently, so a narrow `cargo check`
-    # immediately after a wide `nextest run` rebuilds `warp` -- 0.6s becomes 93s. Across a
-    # whole gate run that churn is ~137s, more than the 47s of extra tests.
-    #
-    # Widening these two to the same expression is the fix and is left as SEPARATE work: it
-    # changes what they REPORT, not just how long they take. It is already de-risked --
-    # `cargo clippy --locked --workspace` with the same exclusions exits 0 with no
-    # errors (162s measured). Do it as its own change, with its own before/after.
     - name: typecheck
       glob: "*.rs"
       run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding
@@ -64,6 +51,9 @@ pre-commit:
 pre-push:
   parallel: false
   jobs:
+    - name: lint
+      run: cargo clippy --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
+
     # Same package expression as the gate and CI, deliberately -- see the note on the
     # gate's `unit` job. Two different package sets for one milestone is not a saving:
     # they resolve `warp`'s features differently, so alternating between them rebuilds
@@ -137,7 +127,7 @@ gate:
       run: cargo fmt --all -- --check || true
 
     - name: lint
-      run: cargo clippy --locked -p warp -p warp_core -p warp_tui -p onboarding
+      run: cargo clippy --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
 
     - name: typecheck
       run: cargo check --locked -p warp -p warp_core -p warp_tui -p onboarding

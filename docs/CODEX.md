@@ -45,16 +45,18 @@ for the headless TUI rather than mixing their verification methods.
 ## Verification and reporting
 
 Run the narrowest relevant check after a meaningful change, then expand to the
-project checks appropriate to the risk. Before a PR, run the required
-formatting, linting, unit suite, and gate from [`AGENTS.md`](../AGENTS.md):
+project checks appropriate to the risk. Before a PR, run the authoritative gate
+and its exact workspace lint and unit contracts from [`AGENTS.md`](../AGENTS.md):
 
 ```bash
-./script/format
-cargo clippy --workspace --all-targets --all-features --tests -- -D warnings
-cargo nextest run --locked --no-fail-fast --workspace \
-  --exclude command-signatures-v2 --exclude integration --exclude remote_server
+cargo clippy --locked --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
+cargo nextest run --locked --no-fail-fast --workspace --exclude command-signatures-v2 --exclude integration --exclude remote_server
 lefthook run gate
 ```
+
+The repository-wide Rust formatting check is advisory while inherited formatter
+drift remains. Format touched Rust files and keep unrelated formatter churn out
+of the patch.
 
 Use the exact project test commands rather than assuming `cargo test` covers
 every workspace surface. Preserve the GUI endpoint and privacy checks whenever
