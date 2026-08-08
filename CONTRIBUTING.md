@@ -38,6 +38,14 @@ See [Non-goals](README.md#non-goals).
 5. **Open a PR** describing *what* changed and *why*, and include proof of manual
    testing for behavioral changes.
 
+## Codex-first development (optional)
+
+Heddle's primary agent harness is Codex, but using Codex is not required to
+contribute. Contributors who use it should follow the project setup, workflow,
+and reporting guidance in [`docs/CODEX.md`](docs/CODEX.md). Regardless of
+tooling, the deterministic commands below, `lefthook.yml`, and CI define what
+must pass before review.
+
 ## Building and testing
 
 **First, on macOS:** the Metal Toolchain is a separate Xcode component and the build fails without

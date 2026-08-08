@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify TUI Change"
+  short_description: "Verify Heddle TUI changes in a real terminal"
+  default_prompt: "Use $tui-verify-change to verify this Heddle TUI change."

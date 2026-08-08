@@ -1,0 +1,4 @@
+interface:
+  display_name: "TUI UI Guidelines"
+  short_description: "Build Heddle terminal UI cell-grid surfaces"
+  default_prompt: "Use $tui-ui-guidelines for this Heddle TUI change."

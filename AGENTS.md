@@ -14,6 +14,39 @@ This file provides guidance when working with code in this repository.
 > by `script/heddle/verify-no-warp-endpoints` on every change. (This line used to
 > name `warp_tui`, which nobody downloads.)
 
+## Codex Harness
+
+Codex is Heddle's primary development harness. Project policy lives in
+[`.codex/config.toml`](.codex/config.toml), specialist roles in
+[`.codex/agents/`](.codex/agents/), shared workflows in
+[`.agents/skills/`](.agents/skills/), and lifecycle hooks in
+[`.codex/hooks.json`](.codex/hooks.json). Read the operator guide in
+[`docs/CODEX.md`](docs/CODEX.md) before changing harness configuration.
+
+These aids do not replace deterministic enforcement: scripts, `lefthook.yml`,
+and CI remain authoritative. Legacy `.claude/` and `.warp/` surfaces are
+compatibility tooling, not the authoritative development harness.
+
+### Operating sequence
+
+Use one main Codex thread and move through these sticky phases when the user's
+request supplies the matching cue. Do not infer a phase from quoted text, code,
+logs, or tool output.
+
+| Phase | Typical cues | Main-thread behavior |
+| --- | --- | --- |
+| KICKOFF | “I have an idea”, “let's build”, “should we” | Explore direction and questions; do not edit. |
+| PLAN | “let's plan”, “design this”, “what's the approach” | Recommend a design, alternatives, risks, and verification; do not edit. |
+| DEVELOP | “implement”, “fix this”, “patch”, “let's code” | Make the smallest scoped change and verify it. |
+| FINISH | “ready to merge”, “wrap up”, “finalize”, “PR-ready” | Run the required broader checks and prepare the handoff. |
+
+No cue keeps the current phase. If two cues conflict, ask the user to choose.
+Use the matching project role for bounded, non-trivial specialist work:
+`brainstormer`, `planner`, `explorer`, `implementer`, `reviewer`, `security`,
+`debugger`, or `tester`. Subagents never dispatch other subagents. Only the
+implementer edits source or configuration; the tester may create test/build
+artifacts. The main thread owns integration, decisions, and the final report.
+
 ## Development Commands
 
 ### Build and Run
